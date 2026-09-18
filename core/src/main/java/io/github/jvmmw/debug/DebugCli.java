@@ -36,6 +36,7 @@ public final class DebugCli {
             case "interiors" -> interiors(args.length > 1 ? args[1] : "");
             case "spawn" -> spawn(require(args, 1, "spawn <interior name>"));
             case "npc" -> npc(require(args, 1, "npc <id>"));
+            case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
             default -> {
                 System.err.println("Unknown command: " + args[0]);
                 System.out.print(help());
@@ -54,12 +55,14 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="interiors cave"
             gradlew.bat :core:debugCli --args="spawn Addamasartus"
             gradlew.bat :core:debugCli --args="npc sellus gravius"
+            gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
             cell       One interior: fog range, inbound spawn, doors, NPCs, ref counts (full ESM parse).
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
+            kf         Text-key groups and bone tracks from a Morrowind .kf.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             """;
@@ -73,6 +76,15 @@ public final class DebugCli {
         NifFile nif = NifFile.parse(Files.readAllBytes(file), file.toString());
         System.out.println(file);
         System.out.print(NifDump.dump(nif));
+    }
+
+    private static void kf(String path) throws Exception {
+        Path file = Path.of(path);
+        if (!Files.isRegularFile(file)) {
+            file = TestData.ensureNif(path.replace('\\', '/'));
+        }
+        NifFile nif = NifFile.parse(Files.readAllBytes(file), file.toString());
+        System.out.print(io.github.jvmmw.nif.KfFile.load(nif, file.toString()).describe());
     }
 
     private static void cell(String name) throws Exception {

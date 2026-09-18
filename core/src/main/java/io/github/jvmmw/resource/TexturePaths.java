@@ -56,6 +56,10 @@ public final class TexturePaths {
         return xname;
     }
 
+    public static String nifToKf(String nifPath) {
+        return changeExtension(nifPath.replace('\\', '/').toLowerCase(Locale.ROOT), "kf");
+    }
+
     public static boolean fileExists(Path dataRoot, String vfsPath) {
         return Files.isRegularFile(dataRoot.resolve(vfsPath.replace('/', java.io.File.separatorChar)));
     }

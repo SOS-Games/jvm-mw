@@ -22,6 +22,8 @@ public final class MeshGpu {
     public final int vbo;
     public final int ebo;
     public final int indexCount;
+    private final FloatBuffer scratch;
+    private final int vertexBytes;
 
     public int baseTex;
     public int darkTex;
@@ -64,6 +66,10 @@ public final class MeshGpu {
     static final int STRIDE_FLOATS = 12;
 
     public MeshGpu(float[] interleaved, short[] indices) {
+        this(interleaved, indices, false);
+    }
+
+    public MeshGpu(float[] interleaved, short[] indices, boolean dynamic) {
         indexCount = indices.length;
         for (int i = 0; i + 2 < interleaved.length; i += STRIDE_FLOATS) {
             localMin[0] = Math.min(localMin[0], interleaved[i]);
@@ -75,6 +81,8 @@ public final class MeshGpu {
         }
         FloatBuffer fb = ByteBuffer.allocateDirect(interleaved.length * 4).order(ByteOrder.nativeOrder()).asFloatBuffer();
         fb.put(interleaved).flip();
+        scratch = fb;
+        vertexBytes = interleaved.length * 4;
         ShortBuffer sb = ByteBuffer.allocateDirect(indices.length * 2).order(ByteOrder.nativeOrder()).asShortBuffer();
         sb.put(indices).flip();
 
@@ -90,7 +98,8 @@ public final class MeshGpu {
 
         Gdx.gl30.glBindVertexArray(vao);
         Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, vbo);
-        Gdx.gl.glBufferData(GL20.GL_ARRAY_BUFFER, interleaved.length * 4, fb, GL20.GL_STATIC_DRAW);
+        int usage = dynamic ? GL20.GL_DYNAMIC_DRAW : GL20.GL_STATIC_DRAW;
+        Gdx.gl.glBufferData(GL20.GL_ARRAY_BUFFER, vertexBytes, fb, usage);
         Gdx.gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, ebo);
         Gdx.gl.glBufferData(GL20.GL_ELEMENT_ARRAY_BUFFER, indices.length * 2, sb, GL20.GL_STATIC_DRAW);
 
@@ -107,6 +116,24 @@ public final class MeshGpu {
         Gdx.gl30.glBindVertexArray(0);
         Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
         Gdx.gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, 0);
+    }
+
+    public void updateVertices(float[] interleaved) {
+        scratch.clear();
+        scratch.put(interleaved).flip();
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, vbo);
+        Gdx.gl.glBufferSubData(GL20.GL_ARRAY_BUFFER, 0, vertexBytes, scratch);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
+        localMin[0] = localMin[1] = localMin[2] = Float.POSITIVE_INFINITY;
+        localMax[0] = localMax[1] = localMax[2] = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i + 2 < interleaved.length; i += STRIDE_FLOATS) {
+            localMin[0] = Math.min(localMin[0], interleaved[i]);
+            localMin[1] = Math.min(localMin[1], interleaved[i + 1]);
+            localMin[2] = Math.min(localMin[2], interleaved[i + 2]);
+            localMax[0] = Math.max(localMax[0], interleaved[i]);
+            localMax[1] = Math.max(localMax[1], interleaved[i + 1]);
+            localMax[2] = Math.max(localMax[2], interleaved[i + 2]);
+        }
     }
 
     public void expandWorldAabb(Matrix4 world, BoundingBox box) {

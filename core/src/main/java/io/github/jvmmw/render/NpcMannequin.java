@@ -12,11 +12,16 @@ import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmPartRef;
 import io.github.jvmmw.esm.EsmRace;
+import io.github.jvmmw.nif.KfFile;
 import io.github.jvmmw.nif.NifFile;
+import io.github.jvmmw.nif.NiKeyframeController;
+import io.github.jvmmw.nif.NiKeyframeData;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 
 import java.nio.file.Files;
@@ -28,7 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Bind-pose NPC. Rewrite of {@code MWRender::NpcAnimation} without {@code .kf}.
+ * NPC with idle {@code .kf}. Rewrite of {@code MWRender::NpcAnimation} bind-pose plus idle.
  */
 public final class NpcMannequin {
     public static final int PRT_COUNT = 27;
@@ -109,12 +114,20 @@ public final class NpcMannequin {
         {EsmBodyPart.MP_TAIL, PRT_TAIL}
     };
 
+    private static final String XBASE = "meshes/xbase_anim.nif";
+
     private final Path testdata;
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final Map<String, SceneNode> skeletonTemplates = new HashMap<>();
     private final Map<String, PartNif> parts = new HashMap<>();
+    private final Map<String, KfFile> kfs = new HashMap<>();
+    private final List<NpcActor> actors = new ArrayList<>();
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
+    private final Vector3 tmpS = new Vector3();
+    private final Quaternion tmpQ = new Quaternion();
+    private final Quaternion tmpQ2 = new Quaternion();
+    private final Quaternion tmpQ3 = new Quaternion();
 
     public NpcMannequin(Path testdata) {
         this.testdata = testdata;
@@ -127,15 +140,29 @@ public final class NpcMannequin {
         builders.clear();
         skeletonTemplates.clear();
         parts.clear();
+        kfs.clear();
+        actors.clear();
     }
 
     public SceneNode build(EsmNpc npc, CellRef ref, EsmFile.LoadedCell cell) throws Exception {
-        String skelPath = skeletonPath(npc, cell);
-        SceneNode actor = cloneTree(skeleton(skelPath));
-        actor.updateWorld(id);
+        String defaultSkel = defaultSkeletonPath(npc, cell);
+        String smodel = defaultSkel;
+        boolean custom = false;
+        if (!npc.model.isEmpty()) {
+            String mesh = TexturePaths.normalizeMeshPath(npc.model);
+            if (!isDefaultSkeleton(mesh)) {
+                smodel = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
+                custom = true;
+            }
+        }
+        SceneNode skeleton = cloneTree(skeleton(smodel));
+        SceneNode placed = new SceneNode();
+        placed.name = npc.id;
+        placed.addChild(skeleton);
+        skeleton.updateWorld(id);
         Map<String, Matrix4> boneWorld = new HashMap<>();
         Map<String, SceneNode> boneNodes = new HashMap<>();
-        collectBones(actor, boneWorld, boneNodes);
+        collectBones(skeleton, boneWorld, boneNodes);
         int[] priority = new int[PRT_COUNT];
         EsmObject[] equipped = autoEquip(npc, cell);
         for (int[] slot : SLOT_LIST) {
@@ -144,7 +171,7 @@ public final class NpcMannequin {
                 continue;
             }
             int prio = ((slot[1] + 1) << 1) + ("ARMO".equals(item.rec) ? 1 : 0);
-            addPartGroup(npc, cell, item, prio, priority, actor, boneWorld, boneNodes);
+            addPartGroup(npc, cell, item, prio, priority, placed, boneWorld, boneNodes);
             if (slot[0] == SLOT_ROBE) {
                 for (int p : ROBE_RESERVE) {
                     if (prio > priority[p]) {
@@ -166,19 +193,31 @@ public final class NpcMannequin {
         String headMesh = bodyModel(cell, npc.head);
         String hairMesh = bodyModel(cell, npc.hair);
         if (priority[PRT_HEAD] < 1 && !headMesh.isEmpty()) {
-            attachPart(PRT_HEAD, headMesh, actor, boneWorld, boneNodes);
+            attachPart(PRT_HEAD, headMesh, placed, boneWorld, boneNodes);
             priority[PRT_HEAD] = 1;
         }
         if (priority[PRT_HAIR] < 1 && priority[PRT_HEAD] <= 1 && !hairMesh.isEmpty()) {
-            attachPart(PRT_HAIR, hairMesh, actor, boneWorld, boneNodes);
+            attachPart(PRT_HAIR, hairMesh, placed, boneWorld, boneNodes);
             priority[PRT_HAIR] = 1;
         }
         EsmBodyPart[] skins = racialSkin(npc, cell);
         for (int part = PRT_NECK; part < PRT_COUNT; part++) {
             if (priority[part] < 1 && skins[part] != null && !skins[part].model.isEmpty()) {
-                attachPart(part, TexturePaths.normalizeMeshPath(skins[part].model), actor, boneWorld, boneNodes);
+                attachPart(part, TexturePaths.normalizeMeshPath(skins[part].model), placed, boneWorld, boneNodes);
             }
         }
+        NpcActor actor = new NpcActor(placed, skeleton, boneNodes);
+        collectSkins(placed, actor.skins);
+        addAnimSource(actor, XBASE);
+        if (!defaultSkel.equals(XBASE)) {
+            addAnimSource(actor, defaultSkel);
+        }
+        if (custom) {
+            addAnimSource(actor, smodel);
+        }
+        playIdle(actor);
+        pose(actor);
+        actors.add(actor);
         EsmRace race = cell.races.get(npc.race.toLowerCase(Locale.ROOT));
         float weight = 1f;
         float height = 1f;
@@ -187,12 +226,37 @@ public final class NpcMannequin {
             height = npc.female() ? race.femaleHeight : race.maleHeight;
         }
         float s = ref.scale;
-        EsmTransforms.setActorLocal(actor.local, ref.pos, ref.rot[2], s * weight, s * weight, s * height);
-        actor.name = npc.id;
-        return actor;
+        EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s * weight, s * weight, s * height);
+        return placed;
+    }
+
+    public void update(float dt) {
+        for (NpcActor actor : actors) {
+            if (actor.idle == null) {
+                continue;
+            }
+            actor.idle.time += dt;
+            float span = actor.idle.loopStop - actor.idle.loopStart;
+            if (span > 0f && actor.idle.time >= actor.idle.loopStop) {
+                actor.idle.time = actor.idle.loopStart
+                    + ((actor.idle.time - actor.idle.loopStart) % span);
+            }
+            pose(actor);
+        }
     }
 
     public static String skeletonPath(EsmNpc npc, EsmFile.LoadedCell cell) {
+        String def = defaultSkeletonPath(npc, cell);
+        if (!npc.model.isEmpty()) {
+            String custom = TexturePaths.normalizeMeshPath(npc.model);
+            if (!isDefaultSkeleton(custom)) {
+                return TexturePaths.correctActorModelPath(custom, TestData::vfsExists);
+            }
+        }
+        return def;
+    }
+
+    public static String defaultSkeletonPath(EsmNpc npc, EsmFile.LoadedCell cell) {
         EsmRace race = cell.races.get(npc.race.toLowerCase(Locale.ROOT));
         boolean beast = race != null && race.beast();
         String base;
@@ -202,12 +266,6 @@ public final class NpcMannequin {
             base = "meshes/base_anim_female.nif";
         } else {
             base = "meshes/base_anim.nif";
-        }
-        if (!npc.model.isEmpty()) {
-            String custom = TexturePaths.normalizeMeshPath(npc.model);
-            if (!isDefaultSkeleton(custom)) {
-                base = custom;
-            }
         }
         return TexturePaths.correctActorModelPath(base, TestData::vfsExists);
     }
@@ -240,6 +298,7 @@ public final class NpcMannequin {
             }
             sb.append('\n');
         }
+        sb.append("kf=").append(TexturePaths.nifToKf(skeletonPath(npc, cell))).append('\n');
         return sb.toString();
     }
 
@@ -402,6 +461,116 @@ public final class NpcMannequin {
             || path.equals("meshes/base_animkna.nif");
     }
 
+    private void addAnimSource(NpcActor actor, String nifPath) throws Exception {
+        String kfPath = TexturePaths.nifToKf(nifPath);
+        if (!TestData.vfsExists(kfPath)) {
+            return;
+        }
+        KfFile kf = kfs.get(kfPath);
+        if (kf == null) {
+            Path file = TestData.ensureNif(kfPath);
+            NifFile nif = NifFile.parse(Files.readAllBytes(file), kfPath);
+            kf = KfFile.load(nif, kfPath);
+            kfs.put(kfPath, kf);
+        }
+        if (!kf.textKeys.isEmpty() && !kf.tracks.isEmpty()) {
+            actor.sources.add(kf);
+        }
+    }
+
+    private void playIdle(NpcActor actor) {
+        for (int i = actor.sources.size() - 1; i >= 0; i--) {
+            KfFile kf = actor.sources.get(i);
+            KfFile.IdleLoop loop = kf.playIdle();
+            if (loop == null) {
+                continue;
+            }
+            actor.kf = kf;
+            actor.idle = loop;
+            for (KfFile.BoneTrack track : kf.tracks.values()) {
+                SceneNode node = actor.boneNodes.get(track.bone.toLowerCase(Locale.ROOT));
+                if (node == null) {
+                    Gdx.app.log("NpcMannequin", "idle: missing bone " + track.bone);
+                    continue;
+                }
+                BoneBinding bind = new BoneBinding(node, track.controller, track.data);
+                bind.rest.set(node.local);
+                actor.bindings.add(bind);
+            }
+            return;
+        }
+    }
+
+    private void pose(NpcActor actor) {
+        if (actor.idle == null) {
+            return;
+        }
+        float animTime = actor.idle.time;
+        for (BoneBinding bind : actor.bindings) {
+            float time = bind.controller.sampleTime(animTime);
+            bind.rest.getTranslation(tmp);
+            bind.rest.getRotation(tmpQ, true);
+            bind.rest.getScale(tmpS);
+            NiKeyframeData data = bind.data;
+            if (!data.rotations.empty()) {
+                data.rotations.interpQuat(time, tmpQ);
+            } else if (!data.xRot.empty() || !data.yRot.empty() || !data.zRot.empty()) {
+                xyzQuat(data, time, tmpQ);
+            }
+            if (!data.translations.empty()) {
+                data.translations.interpVec3(time, tmp);
+            }
+            if (!data.scales.empty()) {
+                float sc = data.scales.interpFloat(time);
+                tmpS.set(sc, sc, sc);
+            }
+            bind.node.local.set(tmp, tmpQ, tmpS);
+        }
+        actor.boneWorld.clear();
+        actor.skeleton.updateWorld(id);
+        collectWorlds(actor.skeleton, actor.boneWorld);
+        for (MeshInstance skin : actor.skins) {
+            skin.reskin(actor.boneWorld);
+        }
+    }
+
+    private void xyzQuat(NiKeyframeData data, float time, Quaternion out) {
+        float x = data.xRot.empty() ? 0f : data.xRot.interpFloat(time);
+        float y = data.yRot.empty() ? 0f : data.yRot.interpFloat(time);
+        float z = data.zRot.empty() ? 0f : data.zRot.interpFloat(time);
+        tmpQ2.setFromAxisRad(1, 0, 0, x);
+        tmpQ3.setFromAxisRad(0, 1, 0, y);
+        Quaternion zr = new Quaternion().setFromAxisRad(0, 0, 1, z);
+        switch (data.axisOrder) {
+            case 1 -> out.set(tmpQ2).mul(zr).mul(tmpQ3);
+            case 2 -> out.set(tmpQ3).mul(zr).mul(tmpQ2);
+            case 3 -> out.set(tmpQ3).mul(tmpQ2).mul(zr);
+            case 4 -> out.set(zr).mul(tmpQ2).mul(tmpQ3);
+            case 5 -> out.set(zr).mul(tmpQ3).mul(tmpQ2);
+            default -> out.set(tmpQ2).mul(tmpQ3).mul(zr);
+        }
+    }
+
+    private static void collectSkins(SceneNode node, List<MeshInstance> skins) {
+        for (MeshInstance inst : node.meshes) {
+            if (inst.skinNif != null) {
+                skins.add(inst);
+            }
+        }
+        for (SceneNode child : node.children) {
+            collectSkins(child, skins);
+        }
+    }
+
+    private static void collectWorlds(SceneNode node, Map<String, Matrix4> world) {
+        if (!node.name.isEmpty()) {
+            world.putIfAbsent(node.name.toLowerCase(Locale.ROOT), new Matrix4(node.world));
+        }
+        for (SceneNode child : node.children) {
+            collectWorlds(child, world);
+        }
+    }
+
     private SceneNode skeleton(String vfs) throws Exception {
         SceneNode template = skeletonTemplates.get(vfs);
         if (template != null) {
@@ -494,5 +663,36 @@ public final class NpcMannequin {
     }
 
     private record PartNif(NifSceneBuilder builder, SceneNode rigid) {
+    }
+
+    private static final class NpcActor {
+        final SceneNode placed;
+        final SceneNode skeleton;
+        final Map<String, SceneNode> boneNodes;
+        final List<KfFile> sources = new ArrayList<>();
+        final List<BoneBinding> bindings = new ArrayList<>();
+        final List<MeshInstance> skins = new ArrayList<>();
+        final Map<String, Matrix4> boneWorld = new HashMap<>();
+        KfFile kf;
+        KfFile.IdleLoop idle;
+
+        NpcActor(SceneNode placed, SceneNode skeleton, Map<String, SceneNode> boneNodes) {
+            this.placed = placed;
+            this.skeleton = skeleton;
+            this.boneNodes = boneNodes;
+        }
+    }
+
+    private static final class BoneBinding {
+        final SceneNode node;
+        final Matrix4 rest = new Matrix4();
+        final NiKeyframeController controller;
+        final NiKeyframeData data;
+
+        BoneBinding(SceneNode node, NiKeyframeController controller, NiKeyframeData data) {
+            this.node = node;
+            this.controller = controller;
+            this.data = data;
+        }
     }
 }

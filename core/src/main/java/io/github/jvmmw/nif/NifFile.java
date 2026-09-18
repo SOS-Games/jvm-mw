@@ -89,15 +89,20 @@ public final class NifFile {
             case "NiStencilProperty" -> new NiStencilProperty();
             case "NiSkinInstance" -> new NiSkinInstance();
             case "NiSkinData" -> new NiSkinData();
+            case "NiSequenceStreamHelper" -> new NiSequenceStreamHelper();
+            case "NiTextKeyExtraData" -> new NiTextKeyExtraData();
+            case "NiStringExtraData" -> new NiStringExtraData();
+            case "NiKeyframeController" -> new NiKeyframeController();
+            case "NiKeyframeData" -> new NiKeyframeData();
             case "NiWireframeProperty", "NiDitherProperty", "NiFogProperty", "NiShadeProperty" -> new PropertyStub(rec);
-            case "NiStringExtraData", "NiExtraData", "NiTextKeyExtraData", "NiVertWeightsExtraData",
+            case "NiExtraData", "NiVertWeightsExtraData",
                  "NiBinaryExtraData", "NiIntegerExtraData", "NiBooleanExtraData", "NiFloatExtraData",
                  "NiStringsExtraData" -> new ExtraStub(rec);
-            case "NiKeyframeController", "NiVisController", "NiUVController", "NiAlphaController",
+            case "NiVisController", "NiUVController", "NiAlphaController",
                  "NiMaterialColorController", "NiGeomMorpherController", "NiPathController",
                  "NiLookAtController", "NiRollController", "NiParticleSystemController",
                  "NiBSPArrayController" -> new ControllerStub(rec);
-            case "NiKeyframeData", "NiVisData", "NiUVData", "NiFloatData", "NiPosData", "NiColorData",
+            case "NiVisData", "NiUVData", "NiFloatData", "NiPosData", "NiColorData",
                  "NiMorphData" -> new ControllerDataStub(rec);
             case "NiRotatingParticles", "NiParticles", "NiAutoNormalParticles" -> {
                 NiTriBasedGeom g = new NiTriBasedGeom();
@@ -236,6 +241,48 @@ public final class NifFile {
             skin.data = nif.getI32();
             skin.root = nif.getI32();
             readIndexList(nif, skin.bones);
+            return;
+        }
+        if (r instanceof NiSequenceStreamHelper seq) {
+            readObjectNet(nif, seq);
+            return;
+        }
+        if (r instanceof NiTextKeyExtraData text) {
+            text.extra = nif.getI32();
+            nif.getI32();
+            int n = nif.getI32();
+            for (int i = 0; i < n; i++) {
+                text.keys.add(new NiTextKeyExtraData.Key(nif.getF32(), nif.getSizedString()));
+            }
+            return;
+        }
+        if (r instanceof NiStringExtraData str) {
+            str.extra = nif.getI32();
+            nif.getI32();
+            str.data = nif.getSizedString();
+            return;
+        }
+        if (r instanceof NiKeyframeController kf) {
+            kf.next = nif.getI32();
+            kf.flags = nif.getU16();
+            kf.frequency = nif.getF32();
+            kf.phase = nif.getF32();
+            kf.timeStart = nif.getF32();
+            kf.timeStop = nif.getF32();
+            kf.target = nif.getI32();
+            kf.data = nif.getI32();
+            return;
+        }
+        if (r instanceof NiKeyframeData data) {
+            data.rotations = NifKeyMap.read(nif, 4, true);
+            if (data.rotations.interpolation == NifKeyMap.XYZ) {
+                data.axisOrder = nif.getI32();
+                data.xRot = NifKeyMap.read(nif, 1, false);
+                data.yRot = NifKeyMap.read(nif, 1, false);
+                data.zRot = NifKeyMap.read(nif, 1, false);
+            }
+            data.translations = NifKeyMap.read(nif, 3, false);
+            data.scales = NifKeyMap.read(nif, 1, false);
             return;
         }
         if (r instanceof NiSkinData data) {

@@ -52,6 +52,13 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwrender/npcanimation.cpp` | `MWRender::NpcAnimation` | `render.NpcMannequin` | rewrite |
 | `components/sceneutil/attach.cpp` | `SceneUtil::attach` | part attach + left mirror | rewrite |
 | `components/nif/data.hpp` | `Nif::NiSkinInstance` | `nif.NiSkinInstance` | same |
+| `components/nif/node.hpp` | `Nif::NiSequenceStreamHelper` | `nif.NiSequenceStreamHelper` | same |
+| `components/nif/extra.hpp` | `Nif::NiTextKeyExtraData` | `nif.NiTextKeyExtraData` | same |
+| `components/nif/controller.hpp` | `Nif::NiKeyframeController` | `nif.NiKeyframeController` | same |
+| `components/nif/data.hpp` | `Nif::NiKeyframeData` | `nif.NiKeyframeData` | same |
+| `components/nifosg/nifloader.cpp` | `NifOsg::Loader::loadKf` | `nif.KfFile` | rewrite |
+| `apps/openmw/mwrender/animation.cpp` | `MWRender::Animation::play` idle | `render.NpcMannequin` idle | rewrite |
+| `components/nifosg/controller.cpp` | `NifOsg::KeyframeController` | `KfFile` sample → bone `SceneNode.local` | rewrite |
 | `components/sceneutil/riggeometry.cpp` | `SceneUtil::RigGeometry` | skinned mesh on `SceneNode` | rewrite |
 | `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` | same |
 | `components/esm3/loadnpc.hpp` | `ESM::NPC` | `esm.EsmNpc` | same |

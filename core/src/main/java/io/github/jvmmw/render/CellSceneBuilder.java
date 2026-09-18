@@ -100,6 +100,14 @@ public final class CellSceneBuilder {
         return buildingRoot;
     }
 
+    public void update(float dt) {
+        mannequin.update(dt);
+        if (buildingRoot != null) {
+            Matrix4 id = new Matrix4();
+            buildingRoot.updateWorld(id);
+        }
+    }
+
     public int refCount() {
         return cell == null ? 0 : cell.refs.size();
     }

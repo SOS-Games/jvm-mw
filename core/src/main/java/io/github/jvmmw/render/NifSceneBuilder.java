@@ -104,10 +104,10 @@ public final class NifSceneBuilder {
                 continue;
             }
             List<NiAvObject> path = pathTo(geom);
-            MeshGpu gpu = uploadSkinned(geom, data, path, boneWorld);
+            MeshInstance inst = uploadSkinned(geom, data, path, boneWorld);
             SceneNode node = new SceneNode();
             node.name = geom.name;
-            node.meshes.add(new MeshInstance(gpu));
+            node.meshes.add(inst);
             dest.addChild(node);
         }
     }
@@ -168,21 +168,39 @@ public final class NifSceneBuilder {
     }
 
     private MeshGpu upload(NiTriShapeData data, List<NiAvObject> path) {
-        return upload(data, path, data.vertices, data.normals);
+        float[] interleaved = pack(data, data.vertices, data.normals);
+        MeshGpu gpu = new MeshGpu(interleaved, data.triangles);
+        gpus.add(gpu);
+        flattenOnto(gpu, path, data.colors.length == data.numVertices * 4);
+        return gpu;
     }
 
-    private MeshGpu uploadSkinned(NiTriBasedGeom geom, NiTriShapeData data, List<NiAvObject> path,
+    private MeshInstance uploadSkinned(NiTriBasedGeom geom, NiTriShapeData data, List<NiAvObject> path,
         Map<String, Matrix4> boneWorld) {
-        float[] verts = data.vertices.clone();
-        float[] norms = data.normals.length == data.numVertices * 3 ? data.normals.clone() : new float[0];
+        float[] bindVerts = data.vertices.clone();
+        float[] bindNorms = data.normals.length == data.numVertices * 3 ? data.normals.clone() : new float[0];
+        float[] verts = bindVerts.clone();
+        float[] norms = bindNorms.clone();
         int result = Skinning.apply(nif, geom, verts, norms.length == 0 ? null : norms, boneWorld);
         if (result < 0) {
             Gdx.app.error("NifSceneBuilder", "skin " + geom.name + " result=" + result);
         }
-        return upload(data, path, verts, norms);
+        float[] interleaved = pack(data, verts, norms);
+        MeshGpu gpu = new MeshGpu(interleaved, data.triangles, true);
+        gpus.add(gpu);
+        flattenOnto(gpu, path, data.colors.length == data.numVertices * 4);
+        MeshInstance inst = new MeshInstance(gpu);
+        inst.skinNif = nif;
+        inst.skinGeom = geom;
+        inst.bindVerts = bindVerts;
+        inst.bindNorms = bindNorms;
+        inst.workVerts = verts;
+        inst.workNorms = norms;
+        inst.interleaved = interleaved;
+        return inst;
     }
 
-    private MeshGpu upload(NiTriShapeData data, List<NiAvObject> path, float[] vertices, float[] normals) {
+    private static float[] pack(NiTriShapeData data, float[] vertices, float[] normals) {
         int n = data.numVertices;
         boolean hasColors = data.colors.length == n * 4;
         float[] interleaved = new float[n * MeshGpu.STRIDE_FLOATS];
@@ -214,10 +232,7 @@ public final class NifSceneBuilder {
                 interleaved[o + 11] = 1f;
             }
         }
-        MeshGpu mesh = new MeshGpu(interleaved, data.triangles);
-        gpus.add(mesh);
-        flattenOnto(mesh, path, hasColors);
-        return mesh;
+        return interleaved;
     }
 
     private void flattenOnto(MeshGpu mesh, List<NiAvObject> path, boolean hasColors) {

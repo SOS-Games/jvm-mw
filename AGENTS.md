@@ -29,6 +29,7 @@ gradlew.bat :core:debugCli --args="cell Addamasartus"
 gradlew.bat :core:debugCli --args="interiors cave"
 gradlew.bat :core:debugCli --args="spawn Addamasartus"
 gradlew.bat :core:debugCli --args="npc sellus gravius"
+gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
 ```
 
 | Command | Use when |
@@ -38,6 +39,7 @@ gradlew.bat :core:debugCli --args="npc sellus gravius"
 | `interiors` | Pick a cell large enough to see fog (`fogStart = 7168 * (1 - density)`) |
 | `spawn` | Confirm the exterior-door arrival point |
 | `npc` | Race/head/hair/skeleton/equipped parts for one `NPC_` |
+| `kf` | Idle groups / bone tracks from a `.kf` |
 
 In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-snapshot.txt`.
 
@@ -50,6 +52,6 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus.
-- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`.
+- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 
 Core: `core/src/main/java/io/github/jvmmw/`. NAME_MAP: [docs/NAME_MAP.md](docs/NAME_MAP.md).

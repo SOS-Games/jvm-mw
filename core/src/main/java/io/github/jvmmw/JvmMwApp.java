@@ -484,6 +484,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         CellLighting mood = (cellBuilder != null && !isLoading()) ? cellBuilder.lighting : null;
         if (mood != null) {
             mood.updateFlicker(Gdx.graphics.getDeltaTime());
+            cellBuilder.update(Gdx.graphics.getDeltaTime());
             Gdx.gl.glClearColor(mood.fogColor[0], mood.fogColor[1], mood.fogColor[2], 1f);
         } else {
             Gdx.gl.glClearColor(0.08f, 0.09f, 0.12f, 1f);
