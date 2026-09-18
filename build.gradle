@@ -1,0 +1,30 @@
+buildscript {
+  repositories {
+    mavenCentral()
+    gradlePluginPortal()
+  }
+}
+
+allprojects {
+  apply plugin: 'eclipse'
+  apply plugin: 'idea'
+}
+
+configure(subprojects) {
+  apply plugin: 'java-library'
+  java.sourceCompatibility = 21
+  compileJava {
+    options.incremental = true
+    options.encoding = 'UTF-8'
+  }
+}
+
+subprojects {
+  version = "$projectVersion"
+  ext.appName = 'jvm-mw'
+  repositories {
+    mavenCentral()
+  }
+}
+
+eclipse.project.name = 'jvm-mw-parent'

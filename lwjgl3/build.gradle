@@ -1,0 +1,37 @@
+plugins {
+  id "application"
+}
+
+sourceSets.main.resources.srcDirs += [ rootProject.file('assets').path ]
+application.mainClass = 'io.github.jvmmw.lwjgl3.Lwjgl3Launcher'
+application.applicationName = appName
+eclipse.project.name = appName + '-lwjgl3'
+java.sourceCompatibility = 21
+java.targetCompatibility = 21
+if (JavaVersion.current().isJava9Compatible()) {
+  compileJava.options.release.set(21)
+}
+
+dependencies {
+  implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+  implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+  implementation project(':core')
+}
+
+def os = System.properties['os.name'].toLowerCase(Locale.ROOT)
+
+run {
+  workingDir = rootProject.projectDir
+  if (os.contains('mac')) jvmArgs += "-XstartOnFirstThread"
+}
+
+jar {
+  archiveFileName.set("${appName}-${projectVersion}.jar")
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  dependsOn configurations.runtimeClasspath
+  from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+  exclude('META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
+  manifest {
+    attributes 'Main-Class': application.mainClass, 'Enable-Native-Access': 'ALL-UNNAMED'
+  }
+}
