@@ -43,6 +43,19 @@ public final class TexturePaths {
         return dds;
     }
 
+    public static String correctActorModelPath(String resPath, Predicate<String> exists) {
+        String mdl = resPath.replace('\\', '/').toLowerCase(Locale.ROOT);
+        int slash = mdl.lastIndexOf('/');
+        String xname = slash >= 0
+            ? mdl.substring(0, slash + 1) + "x" + mdl.substring(slash + 1)
+            : "x" + mdl;
+        String kf = changeExtension(xname, "kf");
+        if (!exists.test(kf)) {
+            return mdl;
+        }
+        return xname;
+    }
+
     public static boolean fileExists(Path dataRoot, String vfsPath) {
         return Files.isRegularFile(dataRoot.resolve(vfsPath.replace('/', java.io.File.separatorChar)));
     }

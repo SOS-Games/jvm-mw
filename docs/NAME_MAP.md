@@ -10,6 +10,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/nif/niffile.hpp` | `Nif::NIFFile` / `Reader` | `io.github.jvmmw.nif.NifFile` | same |
 | `components/nif/niftypes.hpp` | `Nif::NiTransform` | `io.github.jvmmw.nif.NiTransform` | same |
 | `components/nif/niftypes.hpp` | `Nif::NiTransform::toMatrix` | `NiTransform.toMatrix` | same (GL layout) |
+| `components/nif/nifstream.cpp` | `NIFStream::read<NiTransform>` | `NiTransform.readPacked` | same (rotation then translation; `NiAVObject` uses `read`) |
 | `components/nifosg/matrixtransform.cpp` | `NifOsg::MatrixTransform` | `SceneNode.local` from `toMatrix` | rewrite |
 | `components/nif/node.hpp` | `Nif::NiNode` | `io.github.jvmmw.nif.NiNode` | same |
 | `components/nif/node.hpp` | `Nif::NiTriShape` | `io.github.jvmmw.nif.NiTriBasedGeom` | same |
@@ -46,3 +47,13 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwrender/fogmanager.cpp` | `FogManager::configure` | `CellLighting.configureFog` | rewrite |
 | `files/shaders/compatibility/fog.glsl` | `applyFogAtDist` | `ForwardRenderer` GLSL fog | rewrite |
 | `components/sceneutil/lightcontroller.cpp` | `LightController` | `CellLighting.updateFlicker` | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `makeActorOsgQuat` | `EsmTransforms.setActorLocal` | rewrite |
+| `apps/openmw/mwclass/npc.cpp` | `Npc::adjustScale` | race height/weight on instance scale | rewrite |
+| `apps/openmw/mwrender/npcanimation.cpp` | `MWRender::NpcAnimation` | `render.NpcMannequin` | rewrite |
+| `components/sceneutil/attach.cpp` | `SceneUtil::attach` | part attach + left mirror | rewrite |
+| `components/nif/data.hpp` | `Nif::NiSkinInstance` | `nif.NiSkinInstance` | same |
+| `components/sceneutil/riggeometry.cpp` | `SceneUtil::RigGeometry` | skinned mesh on `SceneNode` | rewrite |
+| `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` | same |
+| `components/esm3/loadnpc.hpp` | `ESM::NPC` | `esm.EsmNpc` | same |
+| `components/esm3/loadrace.hpp` | `ESM::Race` | `esm.EsmRace` | same |
+| `components/esm3/loadbody.hpp` | `ESM::BodyPart` | `esm.EsmBodyPart` | same |

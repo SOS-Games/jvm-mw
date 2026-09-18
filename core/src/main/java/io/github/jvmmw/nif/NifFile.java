@@ -87,6 +87,8 @@ public final class NifFile {
             case "NiZBufferProperty" -> new NiZBufferProperty();
             case "NiSpecularProperty" -> new NiSpecularProperty();
             case "NiStencilProperty" -> new NiStencilProperty();
+            case "NiSkinInstance" -> new NiSkinInstance();
+            case "NiSkinData" -> new NiSkinData();
             case "NiWireframeProperty", "NiDitherProperty", "NiFogProperty", "NiShadeProperty" -> new PropertyStub(rec);
             case "NiStringExtraData", "NiExtraData", "NiTextKeyExtraData", "NiVertWeightsExtraData",
                  "NiBinaryExtraData", "NiIntegerExtraData", "NiBooleanExtraData", "NiFloatExtraData",
@@ -228,6 +230,30 @@ public final class NifFile {
             nif.getI32(); // zfail
             nif.getI32(); // pass
             st.drawMode = nif.getI32();
+            return;
+        }
+        if (r instanceof NiSkinInstance skin) {
+            skin.data = nif.getI32();
+            skin.root = nif.getI32();
+            readIndexList(nif, skin.bones);
+            return;
+        }
+        if (r instanceof NiSkinData data) {
+            data.transform.readPacked(nif);
+            int numBones = nif.getI32();
+            if (nif.version >= NifStream.VER_MW && nif.version <= NifStream.generateVersion(10, 1, 0, 0)) {
+                nif.getI32(); // partition ptr
+            }
+            for (int i = 0; i < numBones; i++) {
+                NiSkinData.Bone bone = new NiSkinData.Bone();
+                bone.transform.readPacked(nif);
+                nif.skip(16); // bound sphere
+                int n = nif.getU16();
+                for (int w = 0; w < n; w++) {
+                    bone.weights.add(new NiSkinData.Weight(nif.getU16(), nif.getF32()));
+                }
+                data.bones.add(bone);
+            }
             return;
         }
         if (r instanceof PropertyStub stub) {
@@ -532,7 +558,7 @@ public final class NifFile {
             case "NiMorphData" -> {
                 int numMorphs = nif.getI32();
                 int numVerts = nif.getI32();
-                nif.getBool();
+                nif.getI8(); // relative targets (uint8, not NIF bool)
                 for (int i = 0; i < numMorphs; i++) {
                     skipKeyMap(nif, 1, true, true);
                     nif.skip(numVerts * 12);

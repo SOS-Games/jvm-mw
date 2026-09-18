@@ -29,4 +29,13 @@ public final class EsmTransforms {
         out.mul(rotM);
         out.scale(scale, scale, scale);
     }
+
+    /** Actors: yaw-only {@code makeActorOsgQuat} plus non-uniform race scale. */
+    public static void setActorLocal(Matrix4 out, float[] pos, float yaw, float sx, float sy, float sz) {
+        QZ.setFromAxisRad(0f, 0f, -1f, yaw);
+        out.idt();
+        out.translate(pos[0], pos[1], pos[2]);
+        out.mul(new Matrix4().set(QZ));
+        out.scale(sx, sy, sz);
+    }
 }

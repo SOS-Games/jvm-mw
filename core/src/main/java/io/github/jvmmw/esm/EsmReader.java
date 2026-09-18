@@ -41,6 +41,10 @@ public final class EsmReader {
         return buf.position();
     }
 
+    public int leftSub() {
+        return leftSub;
+    }
+
     public boolean hasMoreRecs() {
         return leftFile > 0;
     }
@@ -128,6 +132,18 @@ public final class EsmReader {
         return readString(leftSub);
     }
 
+    public int getU8() {
+        int v = buf.get() & 0xFF;
+        leftSub -= 1;
+        return v;
+    }
+
+    public int getU16() {
+        int v = buf.getShort() & 0xFFFF;
+        leftSub -= 2;
+        return v;
+    }
+
     public int getI32() {
         int v = buf.getInt();
         leftSub -= 4;
@@ -138,6 +154,12 @@ public final class EsmReader {
         float v = buf.getFloat();
         leftSub -= 4;
         return v;
+    }
+
+    public String takeString(int size) {
+        String s = readString(size);
+        leftSub -= size;
+        return s;
     }
 
     public int getHNTInt(String name) {

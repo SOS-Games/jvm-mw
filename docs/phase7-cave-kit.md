@@ -61,6 +61,8 @@ F3 writes `build/debug-snapshot.txt`.
 - Census office still looks like Phase 6.
 - Chair HUD unfogged. `glError=0`.
 
+NPCs (body parts / `baseanim` / skinning) are **not** this phase — [docs/phase8-npc-mannequins.md](phase8-npc-mannequins.md).
+
 ## Other-LLM claims (held 2026-09-18)
 
 Pin: `openmw-0.51.0` (`f4bec41444214a7903bebd178389ca22ca13f646`).

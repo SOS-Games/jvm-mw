@@ -28,6 +28,7 @@ gradlew.bat :core:debugCli --args="nif meshes/d/door_cavern_doors00.nif"
 gradlew.bat :core:debugCli --args="cell Addamasartus"
 gradlew.bat :core:debugCli --args="interiors cave"
 gradlew.bat :core:debugCli --args="spawn Addamasartus"
+gradlew.bat :core:debugCli --args="npc sellus gravius"
 ```
 
 | Command | Use when |
@@ -36,6 +37,7 @@ gradlew.bat :core:debugCli --args="spawn Addamasartus"
 | `cell` | Fog, inbound spawn, door DODT/DNAM for one interior |
 | `interiors` | Pick a cell large enough to see fog (`fogStart = 7168 * (1 - density)`) |
 | `spawn` | Confirm the exterior-door arrival point |
+| `npc` | Race/head/hair/skeleton/equipped parts for one `NPC_` |
 
 In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-snapshot.txt`.
 
@@ -44,8 +46,10 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - Cell root is **one** −90° X (Z-up → Y-up). Instance NIFs `build(false)`.
 - Root `NiNode` (record 0, not `bip01`) is identity, matching OpenMW `NiNode::read`.
 - `NiTransform.toMatrix` copies the NIF 3x3 into libGDX (`GL(row,col) = mValues[row][col] * scale`). OpenMW’s `toMatrix` transpose is OSG-only; do not apply it twice. Kit pieces like `in_moldcave_doorway00` have a local +90° X; transposing that opens wall seams.
+- `NiSkinData` transforms use packed order (rotation, translation, scale), not `NiAVObject` (translation, rotation, scale). Wrong order flattens skinned parts onto the ground.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus.
+- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`.
 
 Core: `core/src/main/java/io/github/jvmmw/`. NAME_MAP: [docs/NAME_MAP.md](docs/NAME_MAP.md).

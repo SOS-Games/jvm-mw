@@ -5,6 +5,7 @@ import io.github.jvmmw.nif.NiAvObject;
 import io.github.jvmmw.nif.NiMaterialProperty;
 import io.github.jvmmw.nif.NiNode;
 import io.github.jvmmw.nif.NiSourceTexture;
+import io.github.jvmmw.nif.Skinning;
 import io.github.jvmmw.nif.NiSpecularProperty;
 import io.github.jvmmw.nif.NiStencilProperty;
 import io.github.jvmmw.nif.NiTexturingProperty;
@@ -39,6 +40,7 @@ public final class NifSceneBuilder {
     private final Map<String, DdsTexture> textures = new HashMap<>();
     private final List<MeshGpu> gpus = new ArrayList<>();
     private int whiteTex;
+    private boolean bonesOnly;
 
     public NifSceneBuilder(NifFile nif, Path testdata, Predicate<String> exists) {
         this.nif = nif;
@@ -51,6 +53,15 @@ public final class NifSceneBuilder {
     }
 
     public SceneNode build(boolean convertZUp) {
+        return build(convertZUp, false);
+    }
+
+    public SceneNode buildBones() {
+        return build(false, true);
+    }
+
+    public SceneNode build(boolean convertZUp, boolean bonesOnly) {
+        this.bonesOnly = bonesOnly;
         ensureWhite();
         flattenLog.setLength(0);
         SceneNode root = new SceneNode();
@@ -68,6 +79,51 @@ public final class NifSceneBuilder {
         Matrix4 id = new Matrix4();
         root.updateWorld(id);
         return root;
+    }
+
+    public boolean isSkeleton() {
+        for (NifRecord rec : nif.records) {
+            if (rec instanceof NiTriBasedGeom geom && geom.skin >= 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void copyMatchingSkinned(String filter, Map<String, Matrix4> boneWorld, SceneNode dest) {
+        ensureWhite();
+        for (NifRecord rec : nif.records) {
+            if (!(rec instanceof NiTriBasedGeom geom) || geom.skin < 0 || geom.skipMeshes) {
+                continue;
+            }
+            if (!filterMatches(geom.name, filter)) {
+                continue;
+            }
+            NifRecord dataRec = nif.get(geom.data);
+            if (!(dataRec instanceof NiTriShapeData data) || data.vertices.length == 0 || data.triangles.length < 3) {
+                continue;
+            }
+            List<NiAvObject> path = pathTo(geom);
+            MeshGpu gpu = uploadSkinned(geom, data, path, boneWorld);
+            SceneNode node = new SceneNode();
+            node.name = geom.name;
+            node.meshes.add(new MeshInstance(gpu));
+            dest.addChild(node);
+        }
+    }
+
+    public static boolean filterMatches(String name, String filter) {
+        if (startsWithIgnoreCase(name, filter)) {
+            return true;
+        }
+        if (startsWithIgnoreCase(name, "tri ")) {
+            return startsWithIgnoreCase(name.substring(4), filter);
+        }
+        return false;
+    }
+
+    private static boolean startsWithIgnoreCase(String name, String prefix) {
+        return name.regionMatches(true, 0, prefix, 0, prefix.length());
     }
 
     public void dispose() {
@@ -93,7 +149,7 @@ public final class NifSceneBuilder {
         node.skipMeshes = skipHere;
         List<NiAvObject> path = new ArrayList<>(ancestors);
         path.add(av);
-        if (av instanceof NiTriBasedGeom geom && !skipHere) {
+        if (av instanceof NiTriBasedGeom geom && !skipHere && !bonesOnly && geom.skin < 0) {
             NifRecord dataRec = nif.get(geom.data);
             if (dataRec instanceof NiTriShapeData data && data.vertices.length > 0 && data.triangles.length >= 3) {
                 MeshGpu gpu = upload(data, path);
@@ -112,18 +168,33 @@ public final class NifSceneBuilder {
     }
 
     private MeshGpu upload(NiTriShapeData data, List<NiAvObject> path) {
+        return upload(data, path, data.vertices, data.normals);
+    }
+
+    private MeshGpu uploadSkinned(NiTriBasedGeom geom, NiTriShapeData data, List<NiAvObject> path,
+        Map<String, Matrix4> boneWorld) {
+        float[] verts = data.vertices.clone();
+        float[] norms = data.normals.length == data.numVertices * 3 ? data.normals.clone() : new float[0];
+        int result = Skinning.apply(nif, geom, verts, norms.length == 0 ? null : norms, boneWorld);
+        if (result < 0) {
+            Gdx.app.error("NifSceneBuilder", "skin " + geom.name + " result=" + result);
+        }
+        return upload(data, path, verts, norms);
+    }
+
+    private MeshGpu upload(NiTriShapeData data, List<NiAvObject> path, float[] vertices, float[] normals) {
         int n = data.numVertices;
         boolean hasColors = data.colors.length == n * 4;
         float[] interleaved = new float[n * MeshGpu.STRIDE_FLOATS];
         for (int i = 0; i < n; i++) {
             int o = i * MeshGpu.STRIDE_FLOATS;
-            interleaved[o] = data.vertices[i * 3];
-            interleaved[o + 1] = data.vertices[i * 3 + 1];
-            interleaved[o + 2] = data.vertices[i * 3 + 2];
-            if (data.normals.length == n * 3) {
-                interleaved[o + 3] = data.normals[i * 3];
-                interleaved[o + 4] = data.normals[i * 3 + 1];
-                interleaved[o + 5] = data.normals[i * 3 + 2];
+            interleaved[o] = vertices[i * 3];
+            interleaved[o + 1] = vertices[i * 3 + 1];
+            interleaved[o + 2] = vertices[i * 3 + 2];
+            if (normals.length == n * 3) {
+                interleaved[o + 3] = normals[i * 3];
+                interleaved[o + 4] = normals[i * 3 + 1];
+                interleaved[o + 5] = normals[i * 3 + 2];
             } else {
                 interleaved[o + 4] = 1f;
             }
@@ -359,6 +430,37 @@ public final class NifSceneBuilder {
             case 10 -> GL20.GL_SRC_ALPHA_SATURATE;
             default -> GL20.GL_SRC_ALPHA;
         };
+    }
+
+    private List<NiAvObject> pathTo(NiAvObject target) {
+        List<NiAvObject> path = new ArrayList<>();
+        for (int idx : nif.roots) {
+            if (walkPath(idx, target, path)) {
+                return path;
+            }
+        }
+        path.add(target);
+        return path;
+    }
+
+    private boolean walkPath(int idx, NiAvObject target, List<NiAvObject> path) {
+        NifRecord rec = nif.get(idx);
+        if (!(rec instanceof NiAvObject av)) {
+            return false;
+        }
+        path.add(av);
+        if (av == target) {
+            return true;
+        }
+        if (av instanceof NiNode node) {
+            for (int child : node.children) {
+                if (walkPath(child, target, path)) {
+                    return true;
+                }
+            }
+        }
+        path.remove(path.size() - 1);
+        return false;
     }
 
     private void ensureWhite() {

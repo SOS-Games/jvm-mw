@@ -18,6 +18,9 @@ public final class EsmFile {
     public static final int CELL_INTERIOR = 0x01;
 
     public final Map<String, EsmObject> objects = new LinkedHashMap<>();
+    public final Map<String, EsmNpc> npcs = new LinkedHashMap<>();
+    public final Map<String, EsmRace> races = new LinkedHashMap<>();
+    public final Map<String, EsmBodyPart> bodies = new LinkedHashMap<>();
     public final Set<String> actorIds = new HashSet<>();
     public final List<String> interiorNames = new ArrayList<>();
     public final Map<String, CellRef> inboundSpawns = new LinkedHashMap<>();
@@ -58,8 +61,14 @@ public final class EsmFile {
             esm.getRecHeader();
             if (isPlaceable(rec)) {
                 file.readObject(esm, rec);
-            } else if ("NPC_".equals(rec) || "CREA".equals(rec)) {
+            } else if ("NPC_".equals(rec)) {
+                file.readNpc(esm);
+            } else if ("CREA".equals(rec)) {
                 file.readActor(esm);
+            } else if ("RACE".equals(rec)) {
+                file.readRace(esm);
+            } else if ("BODY".equals(rec)) {
+                file.readBody(esm);
             } else if ("CELL".equals(rec)) {
                 LoadedCell cell = file.readCell(esm, wanted);
                 if (cell != null) {
@@ -86,6 +95,9 @@ public final class EsmFile {
                 + ". Interiors matching Census/Prison: " + file.hintNames());
         }
         found.objects = file.objects;
+        found.npcs = file.npcs;
+        found.races = file.races;
+        found.bodies = file.bodies;
         found.actorIds = file.actorIds;
         file.applySpawn(found);
         return found;
@@ -177,6 +189,37 @@ public final class EsmFile {
                     }
                     esm.skipRestOfSub();
                 }
+                case "CTDT" -> {
+                    esm.getSubHeader();
+                    if ("CLOT".equals(rec)) {
+                        obj.clothType = esm.getI32();
+                        esm.getF32();
+                        obj.value = esm.getU16();
+                    }
+                    esm.skipRestOfSub();
+                }
+                case "AODT" -> {
+                    esm.getSubHeader();
+                    if ("ARMO".equals(rec)) {
+                        obj.armorType = esm.getI32();
+                        esm.getF32();
+                        obj.value = esm.getI32();
+                    }
+                    esm.skipRestOfSub();
+                }
+                case "INDX" -> {
+                    EsmPartRef part = new EsmPartRef();
+                    esm.getSubHeader();
+                    part.part = esm.getU8();
+                    esm.skipRestOfSub();
+                    if (esm.isNextSub("BNAM")) {
+                        part.male = esm.getHString();
+                    }
+                    if (esm.isNextSub("CNAM")) {
+                        part.female = esm.getHString();
+                    }
+                    obj.parts.add(part);
+                }
                 default -> esm.skipHSub();
             }
         }
@@ -203,6 +246,90 @@ public final class EsmFile {
         }
         if (!id.isEmpty()) {
             actorIds.add(id.toLowerCase(Locale.ROOT));
+        }
+    }
+
+    private void readNpc(EsmReader esm) {
+        EsmNpc npc = new EsmNpc();
+        while (esm.hasMoreSubs()) {
+            String sub = esm.getSubName();
+            switch (sub) {
+                case "NAME" -> npc.id = esm.getHString();
+                case "FNAM" -> npc.name = esm.getHString();
+                case "MODL" -> npc.model = esm.getHString();
+                case "RNAM" -> npc.race = esm.getHString();
+                case "BNAM" -> npc.head = esm.getHString();
+                case "KNAM" -> npc.hair = esm.getHString();
+                case "FLAG" -> {
+                    esm.getSubHeader();
+                    npc.flags = esm.getI32() & 0xFF;
+                    esm.skipRestOfSub();
+                }
+                case "NPCO" -> {
+                    esm.getSubHeader();
+                    esm.getI32();
+                    int n = Math.min(esm.leftSub(), 32);
+                    String item = n > 0 ? esm.takeString(n) : "";
+                    esm.skipRestOfSub();
+                    if (!item.isEmpty()) {
+                        npc.inventory.add(item);
+                    }
+                }
+                default -> esm.skipHSub();
+            }
+        }
+        if (!npc.id.isEmpty()) {
+            String key = npc.id.toLowerCase(Locale.ROOT);
+            npcs.put(key, npc);
+            actorIds.add(key);
+        }
+    }
+
+    private void readRace(EsmReader esm) {
+        EsmRace race = new EsmRace();
+        while (esm.hasMoreSubs()) {
+            String sub = esm.getSubName();
+            switch (sub) {
+                case "NAME" -> race.id = esm.getHString();
+                case "RADT" -> {
+                    esm.getSubHeader();
+                    esm.skip(7 * 8 + 16 * 4);
+                    race.maleHeight = esm.getF32();
+                    race.femaleHeight = esm.getF32();
+                    race.maleWeight = esm.getF32();
+                    race.femaleWeight = esm.getF32();
+                    race.flags = esm.getI32();
+                    esm.skipRestOfSub();
+                }
+                default -> esm.skipHSub();
+            }
+        }
+        if (!race.id.isEmpty()) {
+            races.put(race.id.toLowerCase(Locale.ROOT), race);
+        }
+    }
+
+    private void readBody(EsmReader esm) {
+        EsmBodyPart body = new EsmBodyPart();
+        while (esm.hasMoreSubs()) {
+            String sub = esm.getSubName();
+            switch (sub) {
+                case "NAME" -> body.id = esm.getHString();
+                case "MODL" -> body.model = esm.getHString();
+                case "FNAM" -> body.race = esm.getHString();
+                case "BYDT" -> {
+                    esm.getSubHeader();
+                    body.part = esm.getU8();
+                    body.vampire = esm.getU8();
+                    body.flags = esm.getU8();
+                    body.type = esm.getU8();
+                    esm.skipRestOfSub();
+                }
+                default -> esm.skipHSub();
+            }
+        }
+        if (!body.id.isEmpty()) {
+            bodies.put(body.id.toLowerCase(Locale.ROOT), body);
         }
     }
 
@@ -428,6 +555,9 @@ public final class EsmFile {
         public boolean hasSpawn;
         public final List<CellRef> refs = new ArrayList<>();
         public Map<String, EsmObject> objects = Map.of();
+        public Map<String, EsmNpc> npcs = Map.of();
+        public Map<String, EsmRace> races = Map.of();
+        public Map<String, EsmBodyPart> bodies = Map.of();
         public Set<String> actorIds = Set.of();
         public final float[] ambient = {0.35f, 0.35f, 0.35f};
         public final float[] sunlight = {1f, 1f, 1f};

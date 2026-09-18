@@ -119,6 +119,7 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform1i(uGlow, 3);
         drawNode(cam, root, false, lighting);
         drawNode(cam, root, true, lighting);
+        Gdx.gl.glFrontFace(GL20.GL_CCW);
         Gdx.gl.glUseProgram(0);
         Gdx.gl30.glBindVertexArray(0);
     }
@@ -156,6 +157,7 @@ public final class ForwardRenderer {
                 } else {
                     Gdx.gl.glDisable(GL20.GL_CULL_FACE);
                 }
+                Gdx.gl.glFrontFace(inst.frontClockwise ? GL20.GL_CW : GL20.GL_CCW);
                 if (mesh.depthTest || mesh.depthWrite) {
                     Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
                     Gdx.gl.glDepthFunc(mesh.depthTest ? GL20.GL_LEQUAL : GL20.GL_ALWAYS);
@@ -256,6 +258,7 @@ public final class ForwardRenderer {
         Gdx.gl.glDisable(GL20.GL_CULL_FACE);
         Gdx.gl.glDepthMask(false);
         Gdx.gl.glDisable(GL20.GL_BLEND);
+        Gdx.gl.glFrontFace(GL20.GL_CCW);
         Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
         Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
         Gdx.gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, 0);

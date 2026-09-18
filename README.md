@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 7 (current)
+## Phase 8 (current)
 
-Cave kit seams in Addamasartus — NIF node matrices so `in_moldcave_*` chunks and hide doors meet. See [docs/phase7-cave-kit.md](docs/phase7-cave-kit.md). Phase 6: [docs/phase6-fog-flicker.md](docs/phase6-fog-flicker.md).
+NPC mannequins in interiors — bind-pose people on `base_anim` with BODY/CLOT/ARMO parts. See [docs/phase8-npc-mannequins.md](docs/phase8-npc-mannequins.md). Phase 7 cave kit: [docs/phase7-cave-kit.md](docs/phase7-cave-kit.md). Phase 6: [docs/phase6-fog-flicker.md](docs/phase6-fog-flicker.md).
 
 ```bat
 gradlew.bat lwjgl3:run

@@ -2,10 +2,12 @@ package io.github.jvmmw.debug;
 
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
+import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
+import io.github.jvmmw.render.NpcMannequin;
 import io.github.jvmmw.resource.TestData;
 
 import java.nio.file.Files;
@@ -33,6 +35,7 @@ public final class DebugCli {
             case "cell" -> cell(require(args, 1, "cell <interior name>"));
             case "interiors" -> interiors(args.length > 1 ? args[1] : "");
             case "spawn" -> spawn(require(args, 1, "spawn <interior name>"));
+            case "npc" -> npc(require(args, 1, "npc <id>"));
             default -> {
                 System.err.println("Unknown command: " + args[0]);
                 System.out.print(help());
@@ -50,11 +53,13 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="cell Addamasartus"
             gradlew.bat :core:debugCli --args="interiors cave"
             gradlew.bat :core:debugCli --args="spawn Addamasartus"
+            gradlew.bat :core:debugCli --args="npc sellus gravius"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
-            cell       One interior: fog range, inbound spawn, doors, ref counts (full ESM parse).
+            cell       One interior: fog range, inbound spawn, doors, NPCs, ref counts (full ESM parse).
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
+            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             """;
@@ -87,11 +92,25 @@ public final class DebugCli {
         System.out.println("fogColor=" + xyz(cell.fogColor));
         int doors = 0;
         int kit = 0;
+        int npcs = 0;
         for (CellRef ref : cell.refs) {
             if (ref.deleted) {
                 continue;
             }
-            EsmObject obj = cell.objects.get(ref.refId.toLowerCase(Locale.ROOT));
+            String key = ref.refId.toLowerCase(Locale.ROOT);
+            EsmNpc npc = cell.npcs.get(key);
+            if (npc != null) {
+                npcs++;
+                System.out.println("npc " + npc.id
+                    + " tes=" + xyz(ref.pos)
+                    + " yaw=" + ref.rot[2]
+                    + " female=" + npc.female()
+                    + " race=" + npc.race
+                    + " head=" + npc.head
+                    + " hair=" + npc.hair);
+                continue;
+            }
+            EsmObject obj = cell.objects.get(key);
             if (obj == null) {
                 continue;
             }
@@ -116,7 +135,26 @@ public final class DebugCli {
                 }
             }
         }
-        System.out.println("doors=" + doors + " kit=" + kit);
+        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs);
+    }
+
+    private static void npc(String id) throws Exception {
+        EsmFile.LoadedCell cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), TestData.CENSUS_CELL);
+        String key = id.toLowerCase(Locale.ROOT);
+        EsmNpc npc = cell.npcs.get(key);
+        if (npc == null) {
+            for (EsmNpc candidate : cell.npcs.values()) {
+                if (candidate.id.toLowerCase(Locale.ROOT).contains(key)
+                    || candidate.name.toLowerCase(Locale.ROOT).contains(key)) {
+                    npc = candidate;
+                    break;
+                }
+            }
+        }
+        if (npc == null) {
+            throw new IllegalStateException("No NPC_ matching " + id);
+        }
+        System.out.print(NpcMannequin.describe(npc, cell));
     }
 
     private static void interiors(String filter) throws Exception {

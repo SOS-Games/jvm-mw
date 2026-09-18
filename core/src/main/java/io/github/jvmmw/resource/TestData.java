@@ -71,6 +71,19 @@ public final class TestData {
         return Path.of("testdata");
     }
 
+    public static boolean vfsExists(String vfsPath) {
+        String n = vfsPath.replace('\\', '/').toLowerCase();
+        if (Files.isRegularFile(localNif(n))) {
+            return true;
+        }
+        try {
+            BsaArchive archive = bsa(dataRoot());
+            return archive != null && archive.contains(n);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static Path localNif(String vfsPath) {
         return testdataRoot().resolve(vfsPath.replace('/', java.io.File.separatorChar));
     }

@@ -59,4 +59,16 @@ public final class NiTransform {
         }
         scale = nif.getF32();
     }
+
+    /**
+     * Packed {@code NIFStream::read&lt;NiTransform&gt;} used by {@code NiSkinData}:
+     * rotation, then translation, then scale.
+     */
+    public void readPacked(NifStream nif) {
+        for (int i = 0; i < 9; i++) {
+            rotation[i] = nif.getF32();
+        }
+        translation.set(nif.getF32(), nif.getF32(), nif.getF32());
+        scale = nif.getF32();
+    }
 }

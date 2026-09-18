@@ -2,13 +2,17 @@ package io.github.jvmmw.debug;
 
 import io.github.jvmmw.nif.NiAvObject;
 import io.github.jvmmw.nif.NiNode;
+import io.github.jvmmw.nif.NiSkinInstance;
 import io.github.jvmmw.nif.NiStencilProperty;
 import io.github.jvmmw.nif.NiTriBasedGeom;
 import io.github.jvmmw.nif.NiTriShapeData;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.nif.NifRecord;
+import io.github.jvmmw.nif.Skinning;
 
 import com.badlogic.gdx.math.Matrix4;
+
+import java.util.Map;
 
 /** Pretty-print a Morrowind NIF for agents. */
 public final class NifDump {
@@ -20,6 +24,62 @@ public final class NifDump {
         sb.append("records=").append(nif.records.size()).append(" roots=").append(nif.roots).append('\n');
         for (int root : nif.roots) {
             dumpRec(nif, root, 0, sb);
+        }
+        Map<String, Matrix4> rest = Skinning.restBoneWorlds(nif);
+        boolean anySkin = false;
+        for (NifRecord rec : nif.records) {
+            if (rec instanceof NiSkinInstance skin) {
+                anySkin = true;
+                sb.append(Skinning.describe(nif, skin)).append('\n');
+            }
+            if (rec instanceof NiTriBasedGeom geom && geom.skin >= 0) {
+                NifRecord dataRec = nif.get(geom.data);
+                if (!(dataRec instanceof NiTriShapeData data) || data.vertices.length < 3) {
+                    continue;
+                }
+                float[] verts = data.vertices.clone();
+                int result = Skinning.apply(nif, geom, verts, null, rest);
+                float minx = Float.POSITIVE_INFINITY, miny = Float.POSITIVE_INFINITY, minz = Float.POSITIVE_INFINITY;
+                float maxx = Float.NEGATIVE_INFINITY, maxy = Float.NEGATIVE_INFINITY, maxz = Float.NEGATIVE_INFINITY;
+                for (int i = 0; i + 2 < verts.length; i += 3) {
+                    minx = Math.min(minx, verts[i]);
+                    miny = Math.min(miny, verts[i + 1]);
+                    minz = Math.min(minz, verts[i + 2]);
+                    maxx = Math.max(maxx, verts[i]);
+                    maxy = Math.max(maxy, verts[i + 1]);
+                    maxz = Math.max(maxz, verts[i + 2]);
+                }
+                sb.append("skinned ").append(geom.name).append(" result=").append(result)
+                    .append(" aabb=(").append(fmt(minx)).append("..").append(fmt(maxx)).append(',')
+                    .append(fmt(miny)).append("..").append(fmt(maxy)).append(',')
+                    .append(fmt(minz)).append("..").append(fmt(maxz)).append(")\n");
+                if (nif.get(geom.skin) instanceof NiSkinInstance skin0
+                    && nif.get(skin0.data) instanceof io.github.jvmmw.nif.NiSkinData data0
+                    && !skin0.bones.isEmpty()) {
+                    NifRecord br = nif.get(skin0.bones.get(0));
+                    String bn = br instanceof NiAvObject av ? av.name : "?";
+                    Matrix4 world = rest.get(bn.toLowerCase(java.util.Locale.ROOT));
+                    Matrix4 inv = new Matrix4();
+                    data0.bones.get(0).transform.toMatrix(inv);
+                    sb.append("  bone0=").append(bn);
+                    if (world != null) {
+                        sb.append(" worldT=(")
+                            .append(fmt(world.val[Matrix4.M03])).append(',')
+                            .append(fmt(world.val[Matrix4.M13])).append(',')
+                            .append(fmt(world.val[Matrix4.M23])).append(')');
+                    }
+                    sb.append(" invT=(")
+                        .append(fmt(inv.val[Matrix4.M03])).append(',')
+                        .append(fmt(inv.val[Matrix4.M13])).append(',')
+                        .append(fmt(inv.val[Matrix4.M23])).append(") nifInvT=(")
+                        .append(fmt(data0.bones.get(0).transform.translation.x)).append(',')
+                        .append(fmt(data0.bones.get(0).transform.translation.y)).append(',')
+                        .append(fmt(data0.bones.get(0).transform.translation.z)).append(")\n");
+                }
+            }
+        }
+        if (!anySkin) {
+            sb.append("skins=0\n");
         }
         return sb.toString();
     }
@@ -58,6 +118,9 @@ public final class NifDump {
             if (av instanceof NiTriBasedGeom geom) {
                 if (geom.strips) {
                     sb.append(" strips");
+                }
+                if (geom.skin >= 0) {
+                    sb.append(" skin=").append(geom.skin);
                 }
                 NifRecord dataRec = nif.get(geom.data);
                 if (dataRec instanceof NiTriShapeData data && data.vertices.length >= 3) {
