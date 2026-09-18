@@ -6,25 +6,42 @@
 package io.github.jvmmw.esm;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
-/** Load STAT definitions and one interior CELL's refs from Morrowind.esm. */
+/** Load placeable NAME+MODL records and one interior CELL's refs from Morrowind.esm. */
 public final class EsmFile {
     public static final int CELL_INTERIOR = 0x01;
 
-    public final Map<String, EsmStatic> statics = new LinkedHashMap<>();
+    public final Map<String, EsmObject> objects = new LinkedHashMap<>();
+    public final Set<String> actorIds = new HashSet<>();
     public final List<String> interiorNames = new ArrayList<>();
+
+    public static boolean isHiddenMarker(String id) {
+        String s = id.toLowerCase(Locale.ROOT);
+        return s.equals("prisonmarker") || s.equals("divinemarker") || s.equals("templemarker")
+            || s.equals("northmarker");
+    }
+
+    public static boolean isPlaceable(String rec) {
+        return switch (rec) {
+            case "STAT", "DOOR", "CONT", "MISC", "BOOK", "LIGH", "ACTI", "ALCH", "INGR", "WEAP", "APPA", "ARMO", "CLOT",
+                 "LOCK", "PROB", "REPA" -> true;
+            default -> false;
+        };
+    }
 
     public static EsmFile load(EsmReader esm) {
         EsmFile file = new EsmFile();
         while (esm.hasMoreRecs()) {
             String rec = esm.getRecName();
             esm.getRecHeader();
-            if ("STAT".equals(rec)) {
-                file.readStat(esm);
+            if (isPlaceable(rec)) {
+                file.readObject(esm, rec);
             } else {
                 esm.skipRecord();
             }
@@ -38,21 +55,23 @@ public final class EsmFile {
         while (esm.hasMoreRecs()) {
             String rec = esm.getRecName();
             esm.getRecHeader();
-            switch (rec) {
-                case "STAT" -> file.readStat(esm);
-                case "CELL" -> {
-                    String[] stillWanted = hits[0] != null ? new String[0] : wanted;
-                    LoadedCell cell = file.readCell(esm, stillWanted);
-                    if (cell != null) {
-                        for (int i = 0; i < wanted.length; i++) {
-                            if (wanted[i].equalsIgnoreCase(cell.name)) {
-                                hits[i] = cell;
-                                break;
-                            }
+            if (isPlaceable(rec)) {
+                file.readObject(esm, rec);
+            } else if ("NPC_".equals(rec) || "CREA".equals(rec)) {
+                file.readActor(esm);
+            } else if ("CELL".equals(rec)) {
+                String[] stillWanted = hits[0] != null ? new String[0] : wanted;
+                LoadedCell cell = file.readCell(esm, stillWanted);
+                if (cell != null) {
+                    for (int i = 0; i < wanted.length; i++) {
+                        if (wanted[i].equalsIgnoreCase(cell.name)) {
+                            hits[i] = cell;
+                            break;
                         }
                     }
                 }
-                default -> esm.skipRecord();
+            } else {
+                esm.skipRecord();
             }
         }
         LoadedCell found = null;
@@ -66,7 +85,8 @@ public final class EsmFile {
             throw new IllegalStateException("No interior CELL matching " + java.util.Arrays.toString(wanted)
                 + ". Interiors matching Census/Prison: " + file.hintNames());
         }
-        found.statics = file.statics;
+        found.objects = file.objects;
+        found.actorIds = file.actorIds;
         return found;
     }
 
@@ -90,18 +110,34 @@ public final class EsmFile {
         return hints.toString();
     }
 
-    private void readStat(EsmReader esm) {
-        EsmStatic st = new EsmStatic();
+    private void readObject(EsmReader esm, String rec) {
+        EsmObject obj = new EsmObject();
+        obj.rec = rec;
         while (esm.hasMoreSubs()) {
             String sub = esm.getSubName();
             switch (sub) {
-                case "NAME" -> st.id = esm.getHString();
-                case "MODL" -> st.model = esm.getHString();
+                case "NAME" -> obj.id = esm.getHString();
+                case "MODL" -> obj.model = esm.getHString();
                 default -> esm.skipHSub();
             }
         }
-        if (!st.id.isEmpty()) {
-            statics.put(st.id.toLowerCase(Locale.ROOT), st);
+        if (!obj.id.isEmpty()) {
+            objects.put(obj.id.toLowerCase(Locale.ROOT), obj);
+        }
+    }
+
+    private void readActor(EsmReader esm) {
+        String id = "";
+        while (esm.hasMoreSubs()) {
+            if (esm.isNextSub("NAME")) {
+                id = esm.getHString();
+            } else {
+                esm.getSubName();
+                esm.skipHSub();
+            }
+        }
+        if (!id.isEmpty()) {
+            actorIds.add(id.toLowerCase(Locale.ROOT));
         }
     }
 
@@ -213,6 +249,7 @@ public final class EsmFile {
         public String name = "";
         public boolean interior;
         public final List<CellRef> refs = new ArrayList<>();
-        public Map<String, EsmStatic> statics = Map.of();
+        public Map<String, EsmObject> objects = Map.of();
+        public Set<String> actorIds = Set.of();
     }
 }

@@ -5,8 +5,9 @@
  */
 package io.github.jvmmw.esm;
 
-/** Maps to {@code ESM::Static}. */
-public final class EsmStatic {
+/** NAME + MODL for a placeable TES3 record. Rewrite of {@code MWClass::getClassModel}. */
+public final class EsmObject {
     public String id = "";
     public String model = "";
+    public String rec = "";
 }

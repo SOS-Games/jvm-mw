@@ -2,7 +2,7 @@ package io.github.jvmmw.render;
 
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
-import io.github.jvmmw.esm.EsmStatic;
+import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
@@ -17,59 +17,129 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 
-/** Place STAT refs from one interior. Rewrite of {@code MWWorld::Scene} insert for statics. */
+/** Place cell refs that have a MODL. Rewrite of {@code MWWorld::Scene} insert for non-actors. */
 public final class CellSceneBuilder {
     public final StringBuilder log = new StringBuilder();
     public int placed;
     public int skippedUnknown;
+    public int skippedEmpty;
+    public int skippedActor;
     public int skippedDeleted;
     public int skippedNif;
+    public int placedStat;
     public String cellName = "";
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final Map<String, SceneNode> templates = new HashMap<>();
+    private EsmFile.LoadedCell cell;
+    private SceneNode buildingRoot;
+    private Map<String, Integer> byRec;
+    private int refIndex;
+    private boolean finished;
 
     public SceneNode build(EsmFile.LoadedCell cell) {
+        begin(cell);
+        while (!step(Long.MAX_VALUE)) {
+            // place remaining refs
+        }
+        return end();
+    }
+
+    public void begin(EsmFile.LoadedCell cell) {
+        this.cell = cell;
         cellName = cell.name;
-        placed = skippedUnknown = skippedDeleted = skippedNif = 0;
+        placed = skippedUnknown = skippedEmpty = skippedActor = skippedDeleted = skippedNif = placedStat = 0;
         log.setLength(0);
-        SceneNode root = new SceneNode();
-        root.name = "cell-root:" + cell.name;
-        root.local.setToRotation(1, 0, 0, -90);
-        for (CellRef ref : cell.refs) {
-            if (ref.deleted) {
-                skippedDeleted++;
-                continue;
-            }
-            if (ref.refId.isEmpty()) {
-                skippedUnknown++;
-                continue;
-            }
-            EsmStatic st = cell.statics.get(ref.refId.toLowerCase(Locale.ROOT));
-            if (st == null || st.model.isEmpty()) {
-                skippedUnknown++;
-                log.append("skip id=").append(ref.refId).append('\n');
-                continue;
-            }
-            try {
-                SceneNode inst = instance(st.model);
-                EsmTransforms.setLocal(inst.local, ref.pos, ref.rot, ref.scale);
-                inst.name = ref.refId;
-                root.addChild(inst);
-                placed++;
-            } catch (Exception e) {
-                skippedNif++;
-                log.append("nif fail ").append(ref.refId).append(' ').append(st.model).append(" ")
-                    .append(e.getMessage()).append('\n');
-                Gdx.app.error("CellSceneBuilder", "STAT " + ref.refId, e);
+        byRec = new TreeMap<>();
+        buildingRoot = new SceneNode();
+        buildingRoot.name = "cell-root:" + cell.name;
+        buildingRoot.local.setToRotation(1, 0, 0, -90);
+        refIndex = 0;
+        finished = false;
+    }
+
+    /** Place refs until {@code budgetNanos} elapses. Returns true when the cell is done. */
+    public boolean step(long budgetNanos) {
+        if (finished) {
+            return true;
+        }
+        long start = System.nanoTime();
+        while (refIndex < cell.refs.size()) {
+            place(cell.refs.get(refIndex++));
+            if (System.nanoTime() - start >= budgetNanos) {
+                return false;
             }
         }
         Matrix4 id = new Matrix4();
-        root.updateWorld(id);
+        buildingRoot.updateWorld(id);
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
+            + " byRec=" + byRec + " empty=" + skippedEmpty + " actor=" + skippedActor
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif + '\n');
-        return root;
+        finished = true;
+        return true;
+    }
+
+    public SceneNode end() {
+        return buildingRoot;
+    }
+
+    public int refCount() {
+        return cell == null ? 0 : cell.refs.size();
+    }
+
+    public int refIndex() {
+        return refIndex;
+    }
+
+    private void place(CellRef ref) {
+        if (ref.deleted) {
+            skippedDeleted++;
+            return;
+        }
+        if (ref.refId.isEmpty()) {
+            skippedUnknown++;
+            return;
+        }
+        String key = ref.refId.toLowerCase(Locale.ROOT);
+        if (EsmFile.isHiddenMarker(ref.refId)) {
+            skippedUnknown++;
+            log.append("skip marker=").append(ref.refId).append('\n');
+            return;
+        }
+        if (cell.actorIds.contains(key)) {
+            skippedActor++;
+            log.append("skip actor=").append(ref.refId).append('\n');
+            return;
+        }
+        EsmObject obj = cell.objects.get(key);
+        if (obj == null) {
+            skippedUnknown++;
+            log.append("skip id=").append(ref.refId).append('\n');
+            return;
+        }
+        if (obj.model.isEmpty()) {
+            skippedEmpty++;
+            log.append("skip empty=").append(obj.rec).append(' ').append(ref.refId).append('\n');
+            return;
+        }
+        try {
+            SceneNode inst = instance(obj.model);
+            EsmTransforms.setLocal(inst.local, ref.pos, ref.rot, ref.scale);
+            inst.name = ref.refId;
+            buildingRoot.addChild(inst);
+            placed++;
+            if ("STAT".equals(obj.rec)) {
+                placedStat++;
+            }
+            byRec.merge(obj.rec, 1, Integer::sum);
+        } catch (Exception e) {
+            skippedNif++;
+            log.append("nif fail ").append(obj.rec).append(' ').append(ref.refId).append(' ').append(obj.model)
+                .append(" ").append(e.getMessage()).append('\n');
+            Gdx.app.error("CellSceneBuilder", obj.rec + " " + ref.refId, e);
+        }
     }
 
     public void dispose() {

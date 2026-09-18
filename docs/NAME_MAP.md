@@ -30,6 +30,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/esmreader.hpp` | `ESM::ESMReader` | `io.github.jvmmw.esm.EsmReader` | same |
 | `components/esm3/loadcell.hpp` | `ESM::Cell` | `io.github.jvmmw.esm.EsmFile` / `LoadedCell` | same |
 | `components/esm3/cellref.hpp` | `ESM::CellRef` | `io.github.jvmmw.esm.CellRef` | same |
-| `components/esm3/loadstat.hpp` | `ESM::Static` | `io.github.jvmmw.esm.EsmStatic` | same |
+| `components/esm3/loadstat.hpp` | `ESM::Static` | `io.github.jvmmw.esm.EsmObject` | rewrite |
 | `components/misc/convert.hpp` | `Misc::Convert::makeOsgQuat` | `io.github.jvmmw.render.EsmTransforms` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | insert static | `io.github.jvmmw.render.CellSceneBuilder` | rewrite |
+| `apps/openmw/mwclass/classmodel.hpp` | `getClassModel` | `esm.EsmObject` lookup | rewrite |
+| `components/misc/resourcehelpers.cpp` | `isHiddenMarker` | `EsmFile.isHiddenMarker` | same |

@@ -16,9 +16,12 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton.TextButtonStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Window;
@@ -54,6 +57,10 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Stage stage;
     private Skin skin;
     private Label status;
+    private Table loader;
+    private Image loaderImage;
+    private Texture loaderTexture;
+    private String loaderCaption = "Loading…";
     private float yaw = START_YAW;
     private float pitch = START_PITCH;
     private float moveScale = 180f;
@@ -70,6 +77,11 @@ public final class JvmMwApp extends ApplicationAdapter {
     private int autoIndex;
     private String currentVfs = "";
     private float scrollAccum;
+    private String pendingKey;
+    private boolean pendingKeepAuto;
+    private int pendingVisibleFrames;
+    private boolean cellStepping;
+    private boolean windowFocused;
 
     @Override
     public void create() {
@@ -78,12 +90,16 @@ public final class JvmMwApp extends ApplicationAdapter {
         camera.far = 8000f;
         renderer = new ForwardRenderer();
         buildUi();
-        load(AUTO[0], true);
+        requestLoad(AUTO[0], true);
         InputAdapter look = new InputAdapter() {
             @Override
             public boolean keyDown(int keycode) {
                 if (keycode == Input.Keys.ESCAPE) {
-                    Gdx.input.setCursorCatched(!Gdx.input.isCursorCatched());
+                    if (isLoading()) {
+                        Gdx.input.setCursorCatched(false);
+                    } else {
+                        Gdx.input.setCursorCatched(!Gdx.input.isCursorCatched());
+                    }
                     return true;
                 }
                 return false;
@@ -100,7 +116,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         InputAdapter lockOnClick = new InputAdapter() {
             @Override
             public boolean touchDown(int screenX, int screenY, int pointer, int button) {
-                if (Gdx.input.isCursorCatched() || button != Input.Buttons.LEFT) {
+                if (isLoading() || Gdx.input.isCursorCatched() || button != Input.Buttons.LEFT) {
                     return false;
                 }
                 Vector2 at = stage.screenToStageCoordinates(tmpScreen.set(screenX, screenY));
@@ -112,7 +128,98 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
         };
         Gdx.input.setInputProcessor(new InputMultiplexer(look, lockOnClick, stage));
-        Gdx.input.setCursorCatched(true);
+        Gdx.input.setCursorCatched(false);
+    }
+
+    public void setWindowFocused(boolean focused) {
+        windowFocused = focused;
+        if (!focused && Gdx.input != null) {
+            Gdx.input.setCursorCatched(false);
+        }
+    }
+
+    private boolean isCellKey(String key) {
+        return key != null && key.startsWith(CELL_PREFIX);
+    }
+
+    private boolean isLoading() {
+        return cellStepping || isCellKey(pendingKey);
+    }
+
+    private void requestLoad(String key, boolean keepAuto) {
+        pendingKey = key;
+        pendingKeepAuto = keepAuto;
+        pendingVisibleFrames = 0;
+        cellStepping = false;
+        lastError = "";
+        currentVfs = key.startsWith(CELL_PREFIX) ? key.substring(CELL_PREFIX.length()) : key;
+        if (!keepAuto) {
+            autoCycling = false;
+        }
+    }
+
+    private void pumpLoad() {
+        if (cellStepping && cellBuilder != null) {
+            try {
+                if (cellBuilder.step(12_000_000L)) {
+                    root = cellBuilder.end();
+                    frameCamera();
+                    Gdx.app.log("JVM-MW", cellBuilder.log.toString());
+                    cellStepping = false;
+                }
+            } catch (Exception e) {
+                lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+                Gdx.app.error("JVM-MW", "Cell failed", e);
+                cellStepping = false;
+            }
+            return;
+        }
+        if (pendingKey == null) {
+            return;
+        }
+        if (isCellKey(pendingKey) && pendingVisibleFrames < 2) {
+            pendingVisibleFrames++;
+            return;
+        }
+        String key = pendingKey;
+        boolean keep = pendingKeepAuto;
+        pendingKey = null;
+        load(key, keep);
+    }
+
+    private void updateLoader() {
+        if (loader == null) {
+            return;
+        }
+        boolean show = isLoading();
+        loader.setVisible(show);
+        if (!show) {
+            return;
+        }
+        String name = currentVfs.isEmpty() ? "…" : currentVfs.substring(currentVfs.lastIndexOf('/') + 1);
+        int tick = (int) (System.currentTimeMillis() / 400 % 4);
+        String dots = ".".repeat(tick);
+        if (cellStepping && cellBuilder != null) {
+            setLoaderCaption("Loading " + name + dots + "\n" + cellBuilder.refIndex() + " / "
+                + cellBuilder.refCount());
+        } else {
+            setLoaderCaption("Loading " + name + dots);
+        }
+    }
+
+    private void setLoaderCaption(String text) {
+        if (text.equals(loaderCaption) && loaderTexture != null) {
+            return;
+        }
+        loaderCaption = text;
+        if (loaderTexture != null) {
+            loaderTexture.dispose();
+        }
+        Pixmap pm = AwtText.render(text, 42);
+        loaderTexture = new Texture(pm);
+        pm.dispose();
+        loaderImage.setDrawable(new TextureRegionDrawable(loaderTexture));
+        loaderImage.pack();
     }
 
     private void load(String key, boolean keepAuto) {
@@ -180,13 +287,13 @@ public final class JvmMwApp extends ApplicationAdapter {
                     TestData.CENSUS_CELL, TestData.PRISON_SHIP);
             }
             cellBuilder = new CellSceneBuilder();
-            root = cellBuilder.build(loadedCell);
+            cellBuilder.begin(loadedCell);
             currentVfs = loadedCell.name;
-            frameCamera();
-            Gdx.app.log("JVM-MW", cellBuilder.log.toString());
+            cellStepping = true;
         } catch (Exception e) {
             lastError = e.getMessage() == null ? e.toString() : e.getMessage();
             Gdx.app.error("JVM-MW", "Cell failed: " + wanted, e);
+            cellStepping = false;
         }
     }
 
@@ -219,6 +326,13 @@ public final class JvmMwApp extends ApplicationAdapter {
         pm.dispose();
         TextureRegionDrawable panel = new TextureRegionDrawable(tex);
 
+        Pixmap dimPm = new Pixmap(8, 8, Pixmap.Format.RGBA8888);
+        dimPm.setColor(0.05f, 0.06f, 0.08f, 0.78f);
+        dimPm.fill();
+        Texture dimTex = new Texture(dimPm);
+        dimPm.dispose();
+        TextureRegionDrawable dim = new TextureRegionDrawable(dimTex);
+
         skin = new Skin();
         skin.add("default", font);
         LabelStyle ls = new LabelStyle(font, Color.WHITE);
@@ -233,12 +347,12 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 3", skin);
+        Window win = new Window("JVM-MW Phase 4", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk, mouse look (Esc unlock, click lock), Space/Ctrl up-down, scroll dolly.", skin))
+        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, scroll dolly.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
@@ -258,6 +372,15 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.pack();
         win.setPosition(12, Gdx.graphics.getHeight() - win.getHeight() - 12);
         stage.addActor(win);
+
+        loaderImage = new Image();
+        loader = new Table();
+        loader.setFillParent(true);
+        loader.setTouchable(Touchable.enabled);
+        loader.setBackground(dim);
+        loader.add(loaderImage);
+        loader.setVisible(false);
+        stage.addActor(loader);
     }
 
     private TextButton meshButton(String label, String vfs) {
@@ -265,7 +388,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         b.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                load(vfs, false);
+                requestLoad(vfs, false);
             }
         });
         return b;
@@ -273,6 +396,7 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     @Override
     public void render() {
+        pumpLoad();
         handleCamera();
         camera.viewportWidth = Gdx.graphics.getWidth();
         camera.viewportHeight = Gdx.graphics.getHeight();
@@ -289,18 +413,24 @@ public final class JvmMwApp extends ApplicationAdapter {
         }
         lastGlError = Gdx.gl.glGetError();
         ForwardRenderer.resetForScene2d();
+        updateLoader();
         if (status != null) {
             String err = lastError.isEmpty() ? "" : " err=" + lastError;
             String shortName = currentVfs.isEmpty() ? "?" : currentVfs.substring(currentVfs.lastIndexOf('/') + 1);
             String extra = "";
             if (cellBuilder != null) {
                 extra = " placed=" + cellBuilder.placed + " skip=" + cellBuilder.skippedUnknown
+                    + "+" + cellBuilder.skippedEmpty + "+" + cellBuilder.skippedActor
                     + "+" + cellBuilder.skippedNif;
             }
-            status.setText(shortName + "  clicks=" + hudClicks + " glError=" + lastGlError + extra + err);
+                status.setText(isLoading() ? loaderCaption.replace('\n', ' ')
+                    : shortName + "  clicks=" + hudClicks + " glError=" + lastGlError + extra + err);
         }
         stage.act(Gdx.graphics.getDeltaTime());
         stage.draw();
+        if (isLoading()) {
+            return;
+        }
         framesOnMesh++;
         if (!dumpedFrame && framesOnMesh == 20) {
             dumpedFrame = true;
@@ -308,7 +438,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             if (autoCycling) {
                 autoIndex++;
                 if (autoIndex < AUTO.length) {
-                    load(AUTO[autoIndex], true);
+                    requestLoad(AUTO[autoIndex], true);
                 } else {
                     autoCycling = false;
                 }
@@ -322,7 +452,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             stem = stem.substring(0, stem.length() - 4);
         }
         stem = stem.replace(',', ' ').replace("  ", " ").trim();
-        String path = (cellBuilder != null ? "build/phase3-" : "build/phase2-") + stem + ".png";
+        String path = (cellBuilder != null ? "build/phase4-" : "build/phase2-") + stem + ".png";
         int w = Gdx.graphics.getWidth();
         int h = Gdx.graphics.getHeight();
         Pixmap pm = Pixmap.createFromFrameBuffer(0, 0, w, h);
@@ -353,7 +483,7 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     private void handleCamera() {
         stage.setKeyboardFocus(null);
-        if (Gdx.input.isCursorCatched()) {
+        if (Gdx.input.isCursorCatched() && windowFocused && !isLoading()) {
             yaw -= Gdx.input.getDeltaX() * 0.4f / 3f;
             pitch = Math.max(-89f, Math.min(89f, pitch - Gdx.input.getDeltaY() * 0.4f));
         }
@@ -403,6 +533,13 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     @Override
+    public void pause() {
+        if (Gdx.input != null) {
+            Gdx.input.setCursorCatched(false);
+        }
+    }
+
+    @Override
     public void dispose() {
         if (builder != null) {
             builder.dispose();
@@ -412,6 +549,10 @@ public final class JvmMwApp extends ApplicationAdapter {
         }
         if (renderer != null) {
             renderer.dispose();
+        }
+        if (loaderTexture != null) {
+            loaderTexture.dispose();
+            loaderTexture = null;
         }
         if (stage != null) {
             stage.dispose();

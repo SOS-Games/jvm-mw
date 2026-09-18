@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 3 (current)
+## Phase 4 (current)
 
-One interior cell of STAT meshes from `Morrowind.esm`. See [docs/phase3-interior-cell.md](docs/phase3-interior-cell.md). Phase 2: [docs/phase2-nif-materials.md](docs/phase2-nif-materials.md).
+Placed meshes (STAT, doors, misc, lights, …) in one interior from `Morrowind.esm`. See [docs/phase4-placed-objects.md](docs/phase4-placed-objects.md). Phase 3: [docs/phase3-interior-cell.md](docs/phase3-interior-cell.md).
 
 ```bat
 gradlew.bat lwjgl3:run

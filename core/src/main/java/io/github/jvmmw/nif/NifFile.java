@@ -36,7 +36,11 @@ public final class NifFile {
             NifRecord r = create(rec);
             r.recordName = rec;
             r.recordIndex = i;
-            readRecord(nif, r);
+            try {
+                readRecord(nif, r);
+            } catch (RuntimeException e) {
+                throw new IllegalStateException("NIF record " + i + " " + rec + " in " + filename, e);
+            }
             file.records.add(r);
         }
         int rootsCount = nif.getI32();
@@ -89,9 +93,20 @@ public final class NifFile {
                  "NiStringsExtraData" -> new ExtraStub(rec);
             case "NiKeyframeController", "NiVisController", "NiUVController", "NiAlphaController",
                  "NiMaterialColorController", "NiGeomMorpherController", "NiPathController",
-                 "NiLookAtController", "NiRollController" -> new ControllerStub(rec);
+                 "NiLookAtController", "NiRollController", "NiParticleSystemController",
+                 "NiBSPArrayController" -> new ControllerStub(rec);
             case "NiKeyframeData", "NiVisData", "NiUVData", "NiFloatData", "NiPosData", "NiColorData",
                  "NiMorphData" -> new ControllerDataStub(rec);
+            case "NiRotatingParticles", "NiParticles", "NiAutoNormalParticles" -> {
+                NiTriBasedGeom g = new NiTriBasedGeom();
+                g.skipMeshes = true;
+                yield g;
+            }
+            case "NiRotatingParticlesData", "NiParticlesData", "NiAutoNormalParticlesData" ->
+                new ParticlesDataStub(rec);
+            case "NiGravity", "NiParticleBomb", "NiParticleColorModifier", "NiParticleGrowFade",
+                 "NiParticleRotation", "NiPlanarCollider", "NiSphericalCollider" ->
+                new ParticleModifierStub(rec);
             case "NiAlphaAccumulator", "NiClusterAccumulator" -> new AccumulatorStub();
             default -> throw new IllegalArgumentException("Unknown record type " + rec);
         };
@@ -118,6 +133,18 @@ public final class NifFile {
             readAvObject(nif, geom);
             geom.data = nif.getI32();
             geom.skin = nif.getI32();
+            if ("NiRotatingParticles".equals(geom.recordName) || "NiParticles".equals(geom.recordName)
+                || "NiAutoNormalParticles".equals(geom.recordName)) {
+                geom.skipMeshes = true;
+            }
+            return;
+        }
+        if (r instanceof ParticlesDataStub pdata) {
+            readParticlesData(nif, pdata);
+            return;
+        }
+        if (r instanceof ParticleModifierStub mod) {
+            readParticleModifier(nif, mod);
             return;
         }
         if (r instanceof NiTriShapeData data) {
@@ -426,6 +453,7 @@ public final class NifFile {
                 nif.getI8();
             }
             case "NiLookAtController" -> nif.getI32();
+            case "NiParticleSystemController", "NiBSPArrayController" -> readParticleSystemController(nif);
             case "NiPathController" -> {
                 nif.getI32();
                 nif.getF32();
@@ -547,6 +575,109 @@ public final class NifFile {
         }
     }
 
+    private static void readParticlesData(NifStream nif, ParticlesDataStub data) {
+        int n = nif.getU16();
+        if (nif.getBool()) {
+            nif.skip(n * 12);
+        }
+        if (nif.getBool()) {
+            nif.skip(n * 12);
+        }
+        nif.skip(16);
+        if (nif.getBool()) {
+            nif.skip(n * 16);
+        }
+        int numUVs = nif.getU16();
+        if (!nif.getBool()) {
+            numUVs = 0;
+        }
+        nif.skip(n * 8 * numUVs);
+        nif.getU16(); // numParticles
+        nif.getF32(); // radius
+        nif.getU16(); // activeCount
+        if (nif.getBool()) {
+            nif.skip(n * 4);
+        }
+        if ("NiRotatingParticlesData".equals(data.kind) && nif.getBool()) {
+            nif.skip(n * 16);
+        }
+    }
+
+    private static void readParticleModifier(NifStream nif, ParticleModifierStub mod) {
+        nif.getI32(); // next
+        nif.getI32(); // controller
+        switch (mod.kind) {
+            case "NiParticleGrowFade" -> {
+                nif.getF32();
+                nif.getF32();
+            }
+            case "NiGravity" -> {
+                nif.getF32();
+                nif.getF32();
+                nif.getI32();
+                nif.skip(24);
+            }
+            case "NiParticleColorModifier" -> nif.getI32();
+            case "NiParticleRotation" -> {
+                nif.getI8();
+                nif.skip(12);
+                nif.getF32();
+            }
+            case "NiParticleBomb" -> {
+                nif.getF32();
+                nif.getF32();
+                nif.getF32();
+                nif.getF32();
+                nif.getI32();
+                nif.getI32();
+                nif.skip(24);
+            }
+            case "NiPlanarCollider" -> {
+                nif.getF32();
+                nif.skip(8 + 12 * 4 + 4);
+            }
+            case "NiSphericalCollider" -> {
+                nif.getF32();
+                nif.getF32();
+                nif.skip(12);
+            }
+            default -> throw new IllegalArgumentException("Particle modifier stub " + mod.kind);
+        }
+    }
+
+    private static void readParticleSystemController(NifStream nif) {
+        nif.getF32(); // speed
+        nif.getF32();
+        nif.getF32();
+        nif.getF32();
+        nif.getF32();
+        nif.getF32();
+        nif.skip(12); // initial normal
+        nif.skip(16); // initial color
+        nif.getF32();
+        nif.getF32();
+        nif.getF32();
+        nif.getI8();
+        nif.getF32();
+        nif.getF32();
+        nif.getF32();
+        nif.getU16();
+        nif.skip(12); // emitter dimensions
+        nif.getI32(); // emitter
+        nif.getU16();
+        nif.getF32();
+        nif.getU16();
+        nif.getF32();
+        nif.getF32();
+        int numParticles = nif.getU16() & 0xFFFF;
+        nif.getU16();
+        nif.skip(numParticles * 40);
+        nif.skip(4); // emitter modifier
+        nif.getI32();
+        nif.getI32();
+        nif.getI8(); // static target bound (uint8)
+    }
+
     public String debugSummary() {
         StringBuilder sb = new StringBuilder();
         sb.append("records=").append(records.size()).append(" roots=").append(roots).append('\n');
@@ -588,6 +719,22 @@ public final class NifFile {
         final String kind;
 
         ControllerDataStub(String kind) {
+            this.kind = kind;
+        }
+    }
+
+    static final class ParticlesDataStub extends NifRecord {
+        final String kind;
+
+        ParticlesDataStub(String kind) {
+            this.kind = kind;
+        }
+    }
+
+    static final class ParticleModifierStub extends NifRecord {
+        final String kind;
+
+        ParticleModifierStub(String kind) {
             this.kind = kind;
         }
     }
