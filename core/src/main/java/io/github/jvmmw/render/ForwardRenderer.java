@@ -4,17 +4,27 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.BufferUtils;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.util.Arrays;
+import java.util.List;
 
 public final class ForwardRenderer {
+    public static final int MAX_LIGHTS = 8;
+
     private final int program;
     private final int uMvp;
     private final int uModel;
     private final int uLightDir;
     private final int uAmbientLight;
+    private final int uSunDiffuse;
+    private final int uPointCount;
+    private final int uPointPos;
+    private final int uPointDiffuse;
+    private final int uPointAtten;
     private final int uBase;
     private final int uDark;
     private final int uDetail;
@@ -31,6 +41,12 @@ public final class ForwardRenderer {
     private final int uAlphaFunc;
     private final int uAlphaRef;
     private final FloatBuffer matBuf = BufferUtils.newFloatBuffer(16);
+    private final FloatBuffer pointPosBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 3);
+    private final FloatBuffer pointDiffBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 3);
+    private final FloatBuffer pointAttenBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 4);
+    private final int[] pickIdx = new int[MAX_LIGHTS];
+    private final float[] pickD2 = new float[MAX_LIGHTS];
+    private final Vector3 meshCenter = new Vector3();
     private final Matrix4 mvp = new Matrix4();
 
     public ForwardRenderer() {
@@ -39,6 +55,11 @@ public final class ForwardRenderer {
         uModel = Gdx.gl.glGetUniformLocation(program, "u_model");
         uLightDir = Gdx.gl.glGetUniformLocation(program, "u_lightDir");
         uAmbientLight = Gdx.gl.glGetUniformLocation(program, "u_ambientLight");
+        uSunDiffuse = Gdx.gl.glGetUniformLocation(program, "u_sunDiffuse");
+        uPointCount = Gdx.gl.glGetUniformLocation(program, "u_pointCount");
+        uPointPos = Gdx.gl.glGetUniformLocation(program, "u_pointPos");
+        uPointDiffuse = Gdx.gl.glGetUniformLocation(program, "u_pointDiffuse");
+        uPointAtten = Gdx.gl.glGetUniformLocation(program, "u_pointAtten");
         uBase = Gdx.gl.glGetUniformLocation(program, "u_base");
         uDark = Gdx.gl.glGetUniformLocation(program, "u_dark");
         uDetail = Gdx.gl.glGetUniformLocation(program, "u_detail");
@@ -57,29 +78,44 @@ public final class ForwardRenderer {
     }
 
     public void render(PerspectiveCamera cam, SceneNode root) {
+        render(cam, root, null);
+    }
+
+    public void render(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glDepthMask(true);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
         Gdx.gl.glCullFace(GL20.GL_BACK);
         Gdx.gl.glUseProgram(program);
-        Gdx.gl.glUniform3f(uLightDir, 0.35f, 0.8f, 0.45f);
-        Gdx.gl.glUniform1f(uAmbientLight, 0.35f);
+        if (lighting == null) {
+            Gdx.gl.glUniform3f(uLightDir, 0.35f, 0.8f, 0.45f);
+            Gdx.gl.glUniform3f(uAmbientLight, 0.35f, 0.35f, 0.35f);
+            Gdx.gl.glUniform3f(uSunDiffuse, 1f, 1f, 1f);
+            Gdx.gl.glUniform1i(uPointCount, 0);
+        } else {
+            Gdx.gl.glUniform3f(uLightDir, lighting.sunDir[0], lighting.sunDir[1], lighting.sunDir[2]);
+            Gdx.gl.glUniform3f(uAmbientLight, lighting.ambient[0], lighting.ambient[1], lighting.ambient[2]);
+            Gdx.gl.glUniform3f(uSunDiffuse, lighting.sunDiffuse[0], lighting.sunDiffuse[1], lighting.sunDiffuse[2]);
+        }
         Gdx.gl.glUniform1i(uBase, 0);
         Gdx.gl.glUniform1i(uDark, 1);
         Gdx.gl.glUniform1i(uDetail, 2);
         Gdx.gl.glUniform1i(uGlow, 3);
-        drawNode(cam, root, false);
-        drawNode(cam, root, true);
+        drawNode(cam, root, false, lighting);
+        drawNode(cam, root, true, lighting);
         Gdx.gl.glUseProgram(0);
         Gdx.gl30.glBindVertexArray(0);
     }
 
-    private void drawNode(PerspectiveCamera cam, SceneNode node, boolean blendPass) {
+    private void drawNode(PerspectiveCamera cam, SceneNode node, boolean blendPass, CellLighting lighting) {
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 MeshGpu mesh = inst.mesh;
                 if (mesh.alphaBlend != blendPass) {
                     continue;
+                }
+                if (lighting != null) {
+                    bindClosestLights(node, mesh, lighting.lights);
                 }
                 mvp.set(cam.combined).mul(node.world);
                 upload(uMvp, mvp);
@@ -123,7 +159,61 @@ public final class ForwardRenderer {
             }
         }
         for (SceneNode child : node.children) {
-            drawNode(cam, child, blendPass);
+            drawNode(cam, child, blendPass, lighting);
+        }
+    }
+
+    private void bindClosestLights(SceneNode node, MeshGpu mesh, List<CellLight> lights) {
+        if (mesh.localMin[0] > mesh.localMax[0]) {
+            node.world.getTranslation(meshCenter);
+        } else {
+            meshCenter.set(
+                (mesh.localMin[0] + mesh.localMax[0]) * 0.5f,
+                (mesh.localMin[1] + mesh.localMax[1]) * 0.5f,
+                (mesh.localMin[2] + mesh.localMax[2]) * 0.5f);
+            meshCenter.mul(node.world);
+        }
+        Arrays.fill(pickD2, Float.POSITIVE_INFINITY);
+        Arrays.fill(pickIdx, -1);
+        for (int i = 0; i < lights.size(); i++) {
+            CellLight light = lights.get(i);
+            float dx = light.pos[0] - meshCenter.x;
+            float dy = light.pos[1] - meshCenter.y;
+            float dz = light.pos[2] - meshCenter.z;
+            float d2 = dx * dx + dy * dy + dz * dz;
+            int worst = 0;
+            for (int s = 1; s < MAX_LIGHTS; s++) {
+                if (pickD2[s] > pickD2[worst]) {
+                    worst = s;
+                }
+            }
+            if (d2 < pickD2[worst]) {
+                pickD2[worst] = d2;
+                pickIdx[worst] = i;
+            }
+        }
+        pointPosBuf.clear();
+        pointDiffBuf.clear();
+        pointAttenBuf.clear();
+        int count = 0;
+        for (int s = 0; s < MAX_LIGHTS; s++) {
+            if (pickIdx[s] < 0) {
+                continue;
+            }
+            CellLight light = lights.get(pickIdx[s]);
+            pointPosBuf.put(light.pos);
+            pointDiffBuf.put(light.diffuse);
+            pointAttenBuf.put(light.constant).put(light.linear).put(light.quadratic).put(light.radius);
+            count++;
+        }
+        Gdx.gl.glUniform1i(uPointCount, count);
+        if (count > 0) {
+            pointPosBuf.flip();
+            pointDiffBuf.flip();
+            pointAttenBuf.flip();
+            Gdx.gl.glUniform3fv(uPointPos, count, pointPosBuf);
+            Gdx.gl.glUniform3fv(uPointDiffuse, count, pointDiffBuf);
+            Gdx.gl.glUniform4fv(uPointAtten, count, pointAttenBuf);
         }
     }
 
@@ -202,11 +292,14 @@ public final class ForwardRenderer {
         uniform mat4 u_mvp;
         uniform mat4 u_model;
         out vec3 v_normal;
+        out vec3 v_worldPos;
         out vec2 v_uv;
         out vec4 v_color;
         void main() {
             v_uv = a_uv;
             v_color = a_color;
+            vec4 world = u_model * vec4(a_pos, 1.0);
+            v_worldPos = world.xyz;
             v_normal = mat3(u_model) * a_normal;
             gl_Position = u_mvp * vec4(a_pos, 1.0);
         }
@@ -215,6 +308,7 @@ public final class ForwardRenderer {
     private static final String FRAG = """
         #version 330
         in vec3 v_normal;
+        in vec3 v_worldPos;
         in vec2 v_uv;
         in vec4 v_color;
         uniform sampler2D u_base;
@@ -225,7 +319,12 @@ public final class ForwardRenderer {
         uniform int u_useDetail;
         uniform int u_useGlow;
         uniform vec3 u_lightDir;
-        uniform float u_ambientLight;
+        uniform vec3 u_ambientLight;
+        uniform vec3 u_sunDiffuse;
+        uniform int u_pointCount;
+        uniform vec3 u_pointPos[8];
+        uniform vec3 u_pointDiffuse[8];
+        uniform vec4 u_pointAtten[8];
         uniform vec3 u_ambient;
         uniform vec3 u_diffuse;
         uniform vec3 u_emissive;
@@ -235,6 +334,12 @@ public final class ForwardRenderer {
         uniform int u_alphaFunc;
         uniform float u_alphaRef;
         out vec4 frag;
+        float quickstep(float x) {
+            x = clamp(x, 0.0, 1.0);
+            x = 1.0 - x * x;
+            x = 1.0 - x * x;
+            return x;
+        }
         bool alphaPass(float a, float r, int f) {
             if (f == 0) return true;
             if (f == 1) return a < r;
@@ -268,9 +373,23 @@ public final class ForwardRenderer {
                 tex.rgb *= texture(u_detail, v_uv).rgb * 2.0;
             }
             vec3 n = normalize(v_normal);
-            float ndl = max(dot(n, normalize(u_lightDir)), 0.0);
-            // objects.frag: tex * (diffuseLight + ambientLight + emission), then +glow
-            vec3 lighting = amb * u_ambientLight + diff * ndl + emi;
+            vec3 sunDir = normalize(u_lightDir);
+            float ndl = max(dot(n, sunDir), 0.0);
+            vec3 lighting = amb * u_ambientLight + diff * ndl * u_sunDiffuse + emi;
+            for (int i = 0; i < u_pointCount; ++i) {
+                vec3 lightPos = u_pointPos[i] - v_worldPos;
+                float dist = length(lightPos);
+                float radius = u_pointAtten[i].w;
+                if (dist > radius * 2.0) {
+                    continue;
+                }
+                vec3 lightDir = lightPos / max(dist, 1e-5);
+                float illumination = 1.0 / (u_pointAtten[i].x + u_pointAtten[i].y * dist
+                    + u_pointAtten[i].z * dist * dist);
+                illumination *= 1.0 - quickstep(dist / radius - 1.0);
+                lighting += diff * max(dot(n, lightDir), 0.0) * u_pointDiffuse[i] * illumination;
+            }
+            lighting = max(lighting, vec3(0.0));
             tex.rgb *= lighting;
             if (u_useGlow != 0) {
                 tex.rgb += texture(u_glow, v_uv).rgb;

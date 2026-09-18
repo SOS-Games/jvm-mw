@@ -35,3 +35,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/scene.cpp` | insert static | `io.github.jvmmw.render.CellSceneBuilder` | rewrite |
 | `apps/openmw/mwclass/classmodel.hpp` | `getClassModel` | `esm.EsmObject` lookup | rewrite |
 | `components/misc/resourcehelpers.cpp` | `isHiddenMarker` | `EsmFile.isHiddenMarker` | same |
+| `components/esm3/loadligh.hpp` | `ESM::Light::LHDTstruct` | `esm.EsmObject` light fields | same |
+| `components/sceneutil/lightutil.cpp` | `addLight` / `createLightSource` | `render.CellSceneBuilder` + `CellLight` | rewrite |
+| `components/sceneutil/lightutil.cpp` | `configureLight` | `CellLight` attenuation | rewrite |
+| `apps/openmw/mwrender/renderingmanager.cpp` | `configureAmbient` | `CellLighting` from cell `AMBI` | rewrite |
+| `files/shaders/lib/light/lighting.glsl` | `lcalcIllumination` | `ForwardRenderer` GLSL | rewrite |

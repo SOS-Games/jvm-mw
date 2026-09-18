@@ -9,6 +9,7 @@ import io.github.jvmmw.resource.TexturePaths;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Vector3;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +31,7 @@ public final class CellSceneBuilder {
     public int skippedNif;
     public int placedStat;
     public String cellName = "";
+    public final CellLighting lighting = new CellLighting();
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final Map<String, SceneNode> templates = new HashMap<>();
@@ -38,6 +40,8 @@ public final class CellSceneBuilder {
     private Map<String, Integer> byRec;
     private int refIndex;
     private boolean finished;
+    private final List<PendingLight> pendingLights = new ArrayList<>();
+    private final Vector3 tmpPos = new Vector3();
 
     public SceneNode build(EsmFile.LoadedCell cell) {
         begin(cell);
@@ -58,6 +62,10 @@ public final class CellSceneBuilder {
         buildingRoot.local.setToRotation(1, 0, 0, -90);
         refIndex = 0;
         finished = false;
+        pendingLights.clear();
+        lighting.lights.clear();
+        System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
+        System.arraycopy(cell.sunlight, 0, lighting.sunDiffuse, 0, 3);
     }
 
     /** Place refs until {@code budgetNanos} elapses. Returns true when the cell is done. */
@@ -74,9 +82,11 @@ public final class CellSceneBuilder {
         }
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
+        finishLights();
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
             + " byRec=" + byRec + " empty=" + skippedEmpty + " actor=" + skippedActor
-            + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif + '\n');
+            + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
+            + " lights=" + lighting.lights.size() + '\n');
         finished = true;
         return true;
     }
@@ -122,6 +132,13 @@ public final class CellSceneBuilder {
         if (obj.model.isEmpty()) {
             skippedEmpty++;
             log.append("skip empty=").append(obj.rec).append(' ').append(ref.refId).append('\n');
+            if (isEmittingLight(obj)) {
+                SceneNode inst = new SceneNode();
+                inst.name = ref.refId;
+                EsmTransforms.setLocal(inst.local, ref.pos, ref.rot, ref.scale);
+                buildingRoot.addChild(inst);
+                pendingLights.add(new PendingLight(inst, obj, ref.refId));
+            }
             return;
         }
         try {
@@ -134,12 +151,85 @@ public final class CellSceneBuilder {
                 placedStat++;
             }
             byRec.merge(obj.rec, 1, Integer::sum);
+            if (isEmittingLight(obj)) {
+                pendingLights.add(new PendingLight(inst, obj, ref.refId));
+            }
         } catch (Exception e) {
             skippedNif++;
             log.append("nif fail ").append(obj.rec).append(' ').append(ref.refId).append(' ').append(obj.model)
                 .append(" ").append(e.getMessage()).append('\n');
             Gdx.app.error("CellSceneBuilder", obj.rec + " " + ref.refId, e);
+            if (isEmittingLight(obj)) {
+                SceneNode inst = new SceneNode();
+                inst.name = ref.refId;
+                EsmTransforms.setLocal(inst.local, ref.pos, ref.rot, ref.scale);
+                buildingRoot.addChild(inst);
+                pendingLights.add(new PendingLight(inst, obj, ref.refId));
+            }
         }
+    }
+
+    private static boolean isEmittingLight(EsmObject obj) {
+        return obj.hasLight && (obj.lightFlags & EsmObject.LIGH_OFF_DEFAULT) == 0;
+    }
+
+    private void finishLights() {
+        tmpPos.set(1f, (float) -Math.toRadians(45), (float) -Math.toRadians(45));
+        tmpPos.rot(buildingRoot.world);
+        tmpPos.nor();
+        lighting.sunDir[0] = tmpPos.x;
+        lighting.sunDir[1] = tmpPos.y;
+        lighting.sunDir[2] = tmpPos.z;
+        for (PendingLight pending : pendingLights) {
+            SceneNode attach = findAttachLight(pending.node);
+            if (attach == null) {
+                attach = pending.node;
+            }
+            attach.world.getTranslation(tmpPos);
+            CellLight light = new CellLight();
+            light.pos[0] = tmpPos.x;
+            light.pos[1] = tmpPos.y;
+            light.pos[2] = tmpPos.z;
+            float radius = Math.max(pending.obj.lightRadius, 16f);
+            EsmFile.colourFromRgb(pending.obj.lightColor, light.diffuse);
+            if ((pending.obj.lightFlags & EsmObject.LIGH_NEGATIVE) != 0) {
+                light.diffuse[0] *= -1f;
+                light.diffuse[1] *= -1f;
+                light.diffuse[2] *= -1f;
+            }
+            light.radius = radius;
+            light.constant = 0f;
+            light.linear = 3f / radius;
+            light.quadratic = 0f;
+            lighting.lights.add(light);
+            log.append("light ").append(pending.refId).append(" r=").append((int) radius)
+                .append(" rgb=").append(light.diffuse[0]).append(',').append(light.diffuse[1]).append(',')
+                .append(light.diffuse[2]);
+            if (attach != pending.node) {
+                log.append(" attach=").append(attach.name);
+            }
+            int ignored = pending.obj.lightFlags & EsmObject.LIGH_IGNORABLE;
+            if (ignored != 0) {
+                log.append(" ignoreFlags=0x").append(Integer.toHexString(ignored));
+            }
+            log.append('\n');
+        }
+    }
+
+    private static SceneNode findAttachLight(SceneNode node) {
+        if ("AttachLight".equals(node.name)) {
+            return node;
+        }
+        for (SceneNode child : node.children) {
+            SceneNode found = findAttachLight(child);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private record PendingLight(SceneNode node, EsmObject obj, String refId) {
     }
 
     public void dispose() {

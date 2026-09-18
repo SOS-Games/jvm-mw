@@ -10,4 +10,12 @@ public final class EsmObject {
     public String id = "";
     public String model = "";
     public String rec = "";
+    public boolean hasLight;
+    public int lightRadius;
+    public int lightColor;
+    public int lightFlags;
+
+    public static final int LIGH_NEGATIVE = 0x004;
+    public static final int LIGH_OFF_DEFAULT = 0x020;
+    public static final int LIGH_IGNORABLE = 0x001 | 0x002 | 0x008 | 0x010 | 0x040 | 0x080 | 0x100;
 }

@@ -163,6 +163,12 @@ public final class EsmReader {
         leftSub -= n;
     }
 
+    public void skipRestOfSub() {
+        if (leftSub > 0) {
+            skip(leftSub);
+        }
+    }
+
     private void expectSub(String name) {
         String got = getSubName();
         if (!got.equals(name)) {

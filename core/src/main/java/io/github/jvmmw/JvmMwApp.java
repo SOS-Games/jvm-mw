@@ -33,6 +33,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.nif.NifFile;
+import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
 import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.NifSceneBuilder;
@@ -347,7 +348,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 4", skin);
+        Window win = new Window("JVM-MW Phase 5", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -409,7 +410,8 @@ public final class JvmMwApp extends ApplicationAdapter {
         Gdx.gl.glClearColor(0.08f, 0.09f, 0.12f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         if (root != null) {
-            renderer.render(camera, root);
+            CellLighting mood = (cellBuilder != null && !isLoading()) ? cellBuilder.lighting : null;
+            renderer.render(camera, root, mood);
         }
         lastGlError = Gdx.gl.glGetError();
         ForwardRenderer.resetForScene2d();
@@ -419,7 +421,8 @@ public final class JvmMwApp extends ApplicationAdapter {
             String shortName = currentVfs.isEmpty() ? "?" : currentVfs.substring(currentVfs.lastIndexOf('/') + 1);
             String extra = "";
             if (cellBuilder != null) {
-                extra = " placed=" + cellBuilder.placed + " skip=" + cellBuilder.skippedUnknown
+                extra = " placed=" + cellBuilder.placed + " lights=" + cellBuilder.lighting.lights.size()
+                    + " skip=" + cellBuilder.skippedUnknown
                     + "+" + cellBuilder.skippedEmpty + "+" + cellBuilder.skippedActor
                     + "+" + cellBuilder.skippedNif;
             }
@@ -452,13 +455,14 @@ public final class JvmMwApp extends ApplicationAdapter {
             stem = stem.substring(0, stem.length() - 4);
         }
         stem = stem.replace(',', ' ').replace("  ", " ").trim();
-        String path = (cellBuilder != null ? "build/phase4-" : "build/phase2-") + stem + ".png";
+        String path = (cellBuilder != null ? "build/phase5-" : "build/phase2-") + stem + ".png";
         int w = Gdx.graphics.getWidth();
         int h = Gdx.graphics.getHeight();
         Pixmap pm = Pixmap.createFromFrameBuffer(0, 0, w, h);
         com.badlogic.gdx.graphics.PixmapIO.writePNG(Gdx.files.local(path), pm);
         pm.dispose();
         Gdx.app.log("JVM-MW", "mesh=" + currentVfs + " glError=" + lastGlError + " meshes=" + countMeshes(root)
+            + (cellBuilder != null ? " lights=" + cellBuilder.lighting.lights.size() : "")
             + " screenshot=" + path
             + (lastError.isEmpty() ? "" : " err=" + lastError));
     }

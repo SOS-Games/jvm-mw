@@ -118,12 +118,31 @@ public final class EsmFile {
             switch (sub) {
                 case "NAME" -> obj.id = esm.getHString();
                 case "MODL" -> obj.model = esm.getHString();
+                case "LHDT" -> {
+                    esm.getSubHeader();
+                    if ("LIGH".equals(rec)) {
+                        esm.getF32();
+                        esm.getI32();
+                        esm.getI32();
+                        obj.lightRadius = esm.getI32();
+                        obj.lightColor = esm.getI32();
+                        obj.lightFlags = esm.getI32();
+                        obj.hasLight = true;
+                    }
+                    esm.skipRestOfSub();
+                }
                 default -> esm.skipHSub();
             }
         }
         if (!obj.id.isEmpty()) {
             objects.put(obj.id.toLowerCase(Locale.ROOT), obj);
         }
+    }
+
+    public static void colourFromRgb(int clr, float[] rgb) {
+        rgb[0] = (clr & 0xFF) / 255f;
+        rgb[1] = ((clr >> 8) & 0xFF) / 255f;
+        rgb[2] = ((clr >> 16) & 0xFF) / 255f;
     }
 
     private void readActor(EsmReader esm) {
@@ -160,8 +179,17 @@ public final class EsmFile {
             }
         }
         boolean cellHeaderDone = false;
+        int ambiAmbient = 0;
+        int ambiSun = 0;
         while (!cellHeaderDone && esm.hasMoreSubs()) {
-            if (esm.isNextSub("INTV") || esm.isNextSub("WHGT") || esm.isNextSub("AMBI") || esm.isNextSub("RGNN")
+            if (esm.isNextSub("AMBI")) {
+                esm.getSubHeader();
+                ambiAmbient = esm.getI32();
+                ambiSun = esm.getI32();
+                esm.getI32();
+                esm.getF32();
+                esm.skipRestOfSub();
+            } else if (esm.isNextSub("INTV") || esm.isNextSub("WHGT") || esm.isNextSub("RGNN")
                 || esm.isNextSub("NAM5") || esm.isNextSub("NAM0")) {
                 esm.skipHSub();
             } else {
@@ -179,6 +207,8 @@ public final class EsmFile {
         LoadedCell cell = new LoadedCell();
         cell.name = name;
         cell.interior = true;
+        colourFromRgb(ambiAmbient, cell.ambient);
+        colourFromRgb(ambiSun, cell.sunlight);
         while (esm.hasMoreSubs()) {
             while (esm.isNextSub("MVRF")) {
                 esm.skipHSub();
@@ -251,5 +281,7 @@ public final class EsmFile {
         public final List<CellRef> refs = new ArrayList<>();
         public Map<String, EsmObject> objects = Map.of();
         public Set<String> actorIds = Set.of();
+        public final float[] ambient = {0.35f, 0.35f, 0.35f};
+        public final float[] sunlight = {1f, 1f, 1f};
     }
 }
