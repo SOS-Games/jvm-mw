@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 2 (current)
+## Phase 3 (current)
 
-Static NIFs flatten inherited materials and Morrowind texture layers (base / dark / detail / glow). See [docs/phase2-nif-materials.md](docs/phase2-nif-materials.md). Phase 1: [docs/phase1-static-nif.md](docs/phase1-static-nif.md).
+One interior cell of STAT meshes from `Morrowind.esm`. See [docs/phase3-interior-cell.md](docs/phase3-interior-cell.md). Phase 2: [docs/phase2-nif-materials.md](docs/phase2-nif-materials.md).
 
 ```bat
 gradlew.bat lwjgl3:run

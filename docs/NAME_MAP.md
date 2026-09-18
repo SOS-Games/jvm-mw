@@ -27,3 +27,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/nif/property.hpp` | `Nif::NiStencilProperty` | `io.github.jvmmw.nif.NiStencilProperty` (draw-mode cull only) | same (partial) |
 | `components/nifosg/nifloader.cpp` | `collectDrawableProperties` / `applyDrawableProperties` | `NifSceneBuilder` flatten | rewrite |
 | `files/shaders/compatibility/objects.frag` | dark / detail / glow | `io.github.jvmmw.render.ForwardRenderer` | rewrite |
+| `components/esm3/esmreader.hpp` | `ESM::ESMReader` | `io.github.jvmmw.esm.EsmReader` | same |
+| `components/esm3/loadcell.hpp` | `ESM::Cell` | `io.github.jvmmw.esm.EsmFile` / `LoadedCell` | same |
+| `components/esm3/cellref.hpp` | `ESM::CellRef` | `io.github.jvmmw.esm.CellRef` | same |
+| `components/esm3/loadstat.hpp` | `ESM::Static` | `io.github.jvmmw.esm.EsmStatic` | same |
+| `components/misc/convert.hpp` | `Misc::Convert::makeOsgQuat` | `io.github.jvmmw.render.EsmTransforms` | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | insert static | `io.github.jvmmw.render.CellSceneBuilder` | rewrite |

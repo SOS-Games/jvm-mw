@@ -21,6 +21,8 @@ public final class TestData {
     public static final String GLASS_STAFF = "meshes/w/w_staff_glass.nif";
     public static final String BANNER = "meshes/f/furn_6th_banner.nif";
     public static final String DWRV = "meshes/i/in_dwrv_corr1_00.nif";
+    public static final String CENSUS_CELL = "Seyda Neen, Census and Excise Office";
+    public static final String PRISON_SHIP = "Imperial Prison Ship";
 
     private static BsaArchive cachedBsa;
 
@@ -58,6 +60,10 @@ public final class TestData {
             }
         }
         return null;
+    }
+
+    public static Path esmPath() {
+        return dataRoot().resolve("Morrowind.esm");
     }
 
     public static Path testdataRoot() {

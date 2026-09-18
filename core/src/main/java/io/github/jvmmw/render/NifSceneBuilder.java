@@ -47,12 +47,18 @@ public final class NifSceneBuilder {
     }
 
     public SceneNode build() {
+        return build(true);
+    }
+
+    public SceneNode build(boolean convertZUp) {
         ensureWhite();
         flattenLog.setLength(0);
         SceneNode root = new SceneNode();
         root.name = "nif-root";
-        // Morrowind Z-up → OpenGL Y-up
-        root.local.setToRotation(1, 0, 0, -90);
+        if (convertZUp) {
+            // Morrowind Z-up → OpenGL Y-up
+            root.local.setToRotation(1, 0, 0, -90);
+        }
         for (int idx : nif.roots) {
             NifRecord rec = nif.get(idx);
             if (rec instanceof NiAvObject av) {
