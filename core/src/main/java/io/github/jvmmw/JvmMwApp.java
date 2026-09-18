@@ -35,7 +35,9 @@ import io.github.jvmmw.resource.TestData;
 import java.nio.file.Files;
 
 public final class JvmMwApp extends ApplicationAdapter {
-    private static final String[] AUTO = {TestData.SHACK, TestData.TREE};
+    private static final String[] AUTO = {
+        TestData.CHAIR, TestData.TREE, TestData.BANNER, TestData.DWRV
+    };
 
     private PerspectiveCamera camera;
     private SceneNode root;
@@ -98,7 +100,12 @@ public final class JvmMwApp extends ApplicationAdapter {
                 Files.isRegularFile(TestData.testdataRoot().resolve(p.replace('/', java.io.File.separatorChar))));
             root = builder.build();
             frameCamera();
-            Gdx.app.log("JVM-MW", nif.debugSummary());
+            if (nif.records.size() < 80) {
+                Gdx.app.log("JVM-MW", nif.debugSummary());
+            } else {
+                Gdx.app.log("JVM-MW", "records=" + nif.records.size() + " roots=" + nif.roots.size());
+            }
+            Gdx.app.log("JVM-MW", "flatten\n" + builder.flattenLog);
         } catch (Exception e) {
             lastError = e.getMessage() == null ? e.toString() : e.getMessage();
             Gdx.app.error("JVM-MW", "Load failed: " + vfsPath, e);
@@ -144,7 +151,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 1", skin);
+        Window win = new Window("JVM-MW Phase 2", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -153,6 +160,9 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
         win.add(meshButton("Tree", TestData.TREE)).row();
+        win.add(meshButton("Glass", TestData.GLASS_DAGGER));
+        win.add(meshButton("Banner", TestData.BANNER));
+        win.add(meshButton("Dwrv", TestData.DWRV)).row();
         TextButton click = new TextButton("Click me", skin);
         click.addListener(new ClickListener() {
             @Override
@@ -227,7 +237,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         if (stem.endsWith(".nif")) {
             stem = stem.substring(0, stem.length() - 4);
         }
-        String path = "build/phase1-" + stem + ".png";
+        String path = "build/phase2-" + stem + ".png";
         int w = Gdx.graphics.getWidth();
         int h = Gdx.graphics.getHeight();
         Pixmap pm = Pixmap.createFromFrameBuffer(0, 0, w, h);

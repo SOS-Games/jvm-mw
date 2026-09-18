@@ -19,5 +19,13 @@ public class NiTexturingProperty extends NifRecord {
         public int clamp;
         public int filter;
         public int uvSet;
+
+        public boolean wrapT() {
+            return (clamp & 1) != 0;
+        }
+
+        public boolean wrapS() {
+            return (clamp & 2) != 0;
+        }
     }
 }

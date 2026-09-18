@@ -2,11 +2,16 @@ package io.github.jvmmw.render;
 
 import io.github.jvmmw.nif.NiAlphaProperty;
 import io.github.jvmmw.nif.NiAvObject;
+import io.github.jvmmw.nif.NiMaterialProperty;
 import io.github.jvmmw.nif.NiNode;
 import io.github.jvmmw.nif.NiSourceTexture;
+import io.github.jvmmw.nif.NiSpecularProperty;
+import io.github.jvmmw.nif.NiStencilProperty;
 import io.github.jvmmw.nif.NiTexturingProperty;
 import io.github.jvmmw.nif.NiTriBasedGeom;
 import io.github.jvmmw.nif.NiTriShapeData;
+import io.github.jvmmw.nif.NiVertexColorProperty;
+import io.github.jvmmw.nif.NiZBufferProperty;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.nif.NifRecord;
 import io.github.jvmmw.resource.DdsTexture;
@@ -26,6 +31,8 @@ import java.util.function.Predicate;
 
 /** Rewrite of {@code NifOsg::Loader} onto {@link SceneNode}. */
 public final class NifSceneBuilder {
+    public final StringBuilder flattenLog = new StringBuilder();
+
     private final NifFile nif;
     private final Path testdata;
     private final Predicate<String> exists;
@@ -41,6 +48,7 @@ public final class NifSceneBuilder {
 
     public SceneNode build() {
         ensureWhite();
+        flattenLog.setLength(0);
         SceneNode root = new SceneNode();
         root.name = "nif-root";
         // Morrowind Z-up → OpenGL Y-up
@@ -48,7 +56,7 @@ public final class NifSceneBuilder {
         for (int idx : nif.roots) {
             NifRecord rec = nif.get(idx);
             if (rec instanceof NiAvObject av) {
-                root.addChild(buildAv(av, false));
+                root.addChild(buildAv(av, false, List.of()));
             }
         }
         Matrix4 id = new Matrix4();
@@ -71,16 +79,18 @@ public final class NifSceneBuilder {
         }
     }
 
-    private SceneNode buildAv(NiAvObject av, boolean skip) {
+    private SceneNode buildAv(NiAvObject av, boolean skip, List<NiAvObject> ancestors) {
         SceneNode node = new SceneNode();
         node.name = av.name;
         av.transform.toMatrix(node.local);
         boolean skipHere = skip || av.skipMeshes || av instanceof NiNode n && n.rootCollision;
         node.skipMeshes = skipHere;
+        List<NiAvObject> path = new ArrayList<>(ancestors);
+        path.add(av);
         if (av instanceof NiTriBasedGeom geom && !skipHere) {
             NifRecord dataRec = nif.get(geom.data);
             if (dataRec instanceof NiTriShapeData data && data.vertices.length > 0 && data.triangles.length >= 3) {
-                MeshGpu gpu = upload(data, geom);
+                MeshGpu gpu = upload(data, path);
                 node.meshes.add(new MeshInstance(gpu));
             }
         }
@@ -88,77 +98,261 @@ public final class NifSceneBuilder {
             for (int childIdx : group.children) {
                 NifRecord rec = nif.get(childIdx);
                 if (rec instanceof NiAvObject child) {
-                    node.addChild(buildAv(child, skipHere));
+                    node.addChild(buildAv(child, skipHere, path));
                 }
             }
         }
         return node;
     }
 
-    private MeshGpu upload(NiTriShapeData data, NiTriBasedGeom geom) {
+    private MeshGpu upload(NiTriShapeData data, List<NiAvObject> path) {
         int n = data.numVertices;
-        float[] interleaved = new float[n * 8];
+        boolean hasColors = data.colors.length == n * 4;
+        float[] interleaved = new float[n * MeshGpu.STRIDE_FLOATS];
         for (int i = 0; i < n; i++) {
-            interleaved[i * 8] = data.vertices[i * 3];
-            interleaved[i * 8 + 1] = data.vertices[i * 3 + 1];
-            interleaved[i * 8 + 2] = data.vertices[i * 3 + 2];
+            int o = i * MeshGpu.STRIDE_FLOATS;
+            interleaved[o] = data.vertices[i * 3];
+            interleaved[o + 1] = data.vertices[i * 3 + 1];
+            interleaved[o + 2] = data.vertices[i * 3 + 2];
             if (data.normals.length == n * 3) {
-                interleaved[i * 8 + 3] = data.normals[i * 3];
-                interleaved[i * 8 + 4] = data.normals[i * 3 + 1];
-                interleaved[i * 8 + 5] = data.normals[i * 3 + 2];
+                interleaved[o + 3] = data.normals[i * 3];
+                interleaved[o + 4] = data.normals[i * 3 + 1];
+                interleaved[o + 5] = data.normals[i * 3 + 2];
             } else {
-                interleaved[i * 8 + 4] = 1f;
+                interleaved[o + 4] = 1f;
             }
             if (data.uvs.length == n * 2) {
-                interleaved[i * 8 + 6] = data.uvs[i * 2];
-                interleaved[i * 8 + 7] = data.uvs[i * 2 + 1];
+                interleaved[o + 6] = data.uvs[i * 2];
+                interleaved[o + 7] = data.uvs[i * 2 + 1];
+            }
+            if (hasColors) {
+                interleaved[o + 8] = data.colors[i * 4];
+                interleaved[o + 9] = data.colors[i * 4 + 1];
+                interleaved[o + 10] = data.colors[i * 4 + 2];
+                interleaved[o + 11] = data.colors[i * 4 + 3];
+            } else {
+                interleaved[o + 8] = 1f;
+                interleaved[o + 9] = 1f;
+                interleaved[o + 10] = 1f;
+                interleaved[o + 11] = 1f;
             }
         }
         MeshGpu mesh = new MeshGpu(interleaved, data.triangles);
         gpus.add(mesh);
-        mesh.textureId = resolveTexture(geom);
-        for (int propIdx : geom.properties) {
-            NifRecord p = nif.get(propIdx);
-            if (p instanceof NiAlphaProperty a) {
-                mesh.alphaBlend = (a.flags & 0x0001) != 0;
-                mesh.alphaTest = (a.flags & 0x0200) != 0;
-                mesh.alphaRef = a.threshold / 255f;
-            }
-        }
+        flattenOnto(mesh, path, hasColors);
         return mesh;
     }
 
-    private int resolveTexture(NiTriBasedGeom geom) {
-        for (int propIdx : geom.properties) {
-            NifRecord p = nif.get(propIdx);
-            if (p instanceof NiTexturingProperty tex && !tex.textures.isEmpty()) {
-                NiTexturingProperty.TextureSlot slot = tex.textures.get(0);
-                if (slot.enabled) {
-                    NifRecord src = nif.get(slot.source);
-                    if (src instanceof NiSourceTexture st && !st.file.isEmpty()) {
-                        String vfs = TexturePaths.correctTexturePath(st.file, exists);
-                        Path resolved = testdata.resolve(vfs.replace('/', testdata.getFileSystem().getSeparator().charAt(0)));
-                        if (!Files.isRegularFile(resolved)) {
-                            resolved = testdata.resolve(vfs.replace('/', java.io.File.separatorChar));
-                        }
-                        final Path file = resolved;
-                        try {
-                            DdsTexture dds = textures.computeIfAbsent(vfs, k -> {
-                                try {
-                                    return DdsTexture.load(file);
-                                } catch (Exception e) {
-                                    throw new RuntimeException(e);
-                                }
-                            });
-                            return dds.textureId;
-                        } catch (Exception e) {
-                            Gdx.app.error("NifSceneBuilder", "Texture failed: " + vfs + " " + e.getMessage());
-                        }
-                    }
+    private void flattenOnto(MeshGpu mesh, List<NiAvObject> path, boolean hasColors) {
+        NiTexturingProperty tex = null;
+        NiZBufferProperty z = null;
+        NiStencilProperty stencil = null;
+        List<NifRecord> drawable = new ArrayList<>();
+        for (NiAvObject node : path) {
+            for (int idx : node.properties) {
+                NifRecord p = nif.get(idx);
+                if (p instanceof NiTexturingProperty t) {
+                    tex = t;
+                } else if (p instanceof NiZBufferProperty zz) {
+                    z = zz;
+                } else if (p instanceof NiStencilProperty st) {
+                    stencil = st;
+                } else if (p instanceof NiMaterialProperty || p instanceof NiVertexColorProperty
+                    || p instanceof NiSpecularProperty || p instanceof NiAlphaProperty) {
+                    drawable.add(p);
                 }
             }
         }
+
+        mesh.colorMode = hasColors ? MeshGpu.COLOR_AMB_DIFF : MeshGpu.COLOR_NONE;
+        mesh.ambient[0] = mesh.ambient[1] = mesh.ambient[2] = 1f;
+        mesh.diffuse[0] = mesh.diffuse[1] = mesh.diffuse[2] = 1f;
+        mesh.emissive[0] = mesh.emissive[1] = mesh.emissive[2] = 0f;
+        mesh.matAlpha = 1f;
+        int lightingMode = NiVertexColorProperty.LIGHT_EMI_AMB_DIFF;
+        for (NifRecord p : drawable) {
+            if (p instanceof NiSpecularProperty) {
+                // Morrowind forces specular off regardless of this flag.
+            } else if (p instanceof NiMaterialProperty mat) {
+                System.arraycopy(mat.ambient, 0, mesh.ambient, 0, 3);
+                System.arraycopy(mat.diffuse, 0, mesh.diffuse, 0, 3);
+                System.arraycopy(mat.emissive, 0, mesh.emissive, 0, 3);
+                mesh.matAlpha = mat.alpha;
+            } else if (p instanceof NiVertexColorProperty vc) {
+                switch (vc.vertexMode) {
+                    case NiVertexColorProperty.VERT_IGNORE -> mesh.colorMode = MeshGpu.COLOR_NONE;
+                    case NiVertexColorProperty.VERT_EMISSIVE -> mesh.colorMode = MeshGpu.COLOR_EMISSION;
+                    case NiVertexColorProperty.VERT_AMB_DIFF -> {
+                        lightingMode = vc.lightingMode;
+                        if (lightingMode == NiVertexColorProperty.LIGHT_EMISSIVE) {
+                            mesh.colorMode = MeshGpu.COLOR_NONE;
+                        } else {
+                            mesh.colorMode = MeshGpu.COLOR_AMB_DIFF;
+                        }
+                    }
+                    default -> {
+                    }
+                }
+            } else if (p instanceof NiAlphaProperty a) {
+                mesh.alphaBlend = a.blending();
+                mesh.alphaTest = a.testing();
+                mesh.noSorter = a.noSorter();
+                mesh.blendSrc = glBlend(a.sourceBlend());
+                mesh.blendDst = glBlend(a.destBlend());
+                if (mesh.blendDst == GL20.GL_DST_ALPHA) {
+                    mesh.blendDst = GL20.GL_ONE;
+                }
+                mesh.alphaFunc = a.testMode();
+                if (mesh.alphaFunc < 0 || mesh.alphaFunc > 7) {
+                    mesh.alphaFunc = 3;
+                }
+                mesh.alphaRef = a.threshold / 255f;
+            }
+        }
+        if (lightingMode == NiVertexColorProperty.LIGHT_EMISSIVE) {
+            mesh.diffuse[0] = mesh.diffuse[1] = mesh.diffuse[2] = 0f;
+            mesh.ambient[0] = mesh.ambient[1] = mesh.ambient[2] = 0f;
+        }
+        if (!hasColors) {
+            switch (mesh.colorMode) {
+                case MeshGpu.COLOR_AMB_DIFF -> {
+                    mesh.ambient[0] = mesh.ambient[1] = mesh.ambient[2] = 1f;
+                    mesh.diffuse[0] = mesh.diffuse[1] = mesh.diffuse[2] = 1f;
+                }
+                case MeshGpu.COLOR_EMISSION -> {
+                    mesh.emissive[0] = mesh.emissive[1] = mesh.emissive[2] = 1f;
+                }
+                default -> {
+                }
+            }
+            mesh.colorMode = MeshGpu.COLOR_NONE;
+        }
+
+        if (z != null) {
+            mesh.depthTest = z.depthTest();
+            mesh.depthWrite = z.depthWrite();
+        }
+        boolean stencilBoth = stencil != null && stencil.drawMode == NiStencilProperty.DRAW_BOTH;
+        boolean twoSided = mesh.alphaTest || mesh.alphaBlend;
+        mesh.cull = !twoSided && !stencilBoth;
+
+        bindTextures(mesh, tex, path.get(path.size() - 1).name);
+
+        flattenLog.append(path.get(path.size() - 1).name)
+            .append(" colorMode=").append(mesh.colorMode)
+            .append(" hasVCol=").append(hasColors)
+            .append(" dark=").append(mesh.useDark)
+            .append(" detail=").append(mesh.useDetail)
+            .append(" glow=").append(mesh.useGlow)
+            .append(" blend=").append(mesh.alphaBlend)
+            .append(" test=").append(mesh.alphaTest)
+            .append(" func=").append(mesh.alphaFunc)
+            .append('\n');
+    }
+
+    private void bindTextures(MeshGpu mesh, NiTexturingProperty tex, String nodeName) {
+        mesh.baseTex = whiteTex;
+        mesh.darkTex = whiteTex;
+        mesh.detailTex = whiteTex;
+        mesh.glowTex = whiteTex;
+        mesh.textureId = whiteTex;
+        if (tex == null) {
+            return;
+        }
+        if (tex.applyMode != 2) {
+            Gdx.app.log("NifSceneBuilder", "ApplyMode " + tex.applyMode + " on " + nodeName + " (still modulate)");
+        }
+        for (int i = 0; i < tex.textures.size(); i++) {
+            NiTexturingProperty.TextureSlot slot = tex.textures.get(i);
+            if (!slot.enabled) {
+                continue;
+            }
+            if (i == 3 || i == 5 || i == 6) {
+                Gdx.app.log("NifSceneBuilder", "Unused texture stage " + i + " on " + nodeName);
+                continue;
+            }
+            if (i != 0 && i != 1 && i != 2 && i != 4) {
+                Gdx.app.log("NifSceneBuilder", "Unhandled texture stage " + i + " on " + nodeName);
+                continue;
+            }
+            int id = resolveSource(slot);
+            int wrapS = wrapGl(slot.wrapS());
+            int wrapT = wrapGl(slot.wrapT());
+            switch (i) {
+                case 0 -> {
+                    mesh.baseTex = id;
+                    mesh.textureId = id;
+                    mesh.baseWrapS = wrapS;
+                    mesh.baseWrapT = wrapT;
+                }
+                case 1 -> {
+                    mesh.darkTex = id;
+                    mesh.darkWrapS = wrapS;
+                    mesh.darkWrapT = wrapT;
+                    mesh.useDark = true;
+                }
+                case 2 -> {
+                    mesh.detailTex = id;
+                    mesh.detailWrapS = wrapS;
+                    mesh.detailWrapT = wrapT;
+                    mesh.useDetail = true;
+                }
+                case 4 -> {
+                    mesh.glowTex = id;
+                    mesh.glowWrapS = wrapS;
+                    mesh.glowWrapT = wrapT;
+                    mesh.useGlow = true;
+                }
+                default -> {
+                }
+            }
+        }
+    }
+
+    private int resolveSource(NiTexturingProperty.TextureSlot slot) {
+        NifRecord src = nif.get(slot.source);
+        if (src instanceof NiSourceTexture st && !st.file.isEmpty()) {
+            String vfs = TexturePaths.correctTexturePath(st.file, exists);
+            Path resolved = testdata.resolve(vfs.replace('/', testdata.getFileSystem().getSeparator().charAt(0)));
+            if (!Files.isRegularFile(resolved)) {
+                resolved = testdata.resolve(vfs.replace('/', java.io.File.separatorChar));
+            }
+            final Path file = resolved;
+            try {
+                DdsTexture dds = textures.computeIfAbsent(vfs, k -> {
+                    try {
+                        return DdsTexture.load(file);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+                return dds.textureId;
+            } catch (Exception e) {
+                Gdx.app.error("NifSceneBuilder", "Texture failed: " + vfs + " " + e.getMessage());
+            }
+        }
         return whiteTex;
+    }
+
+    private static int wrapGl(boolean wrap) {
+        return wrap ? GL20.GL_REPEAT : GL20.GL_CLAMP_TO_EDGE;
+    }
+
+    private static int glBlend(int mode) {
+        return switch (mode) {
+            case 0 -> GL20.GL_ONE;
+            case 1 -> GL20.GL_ZERO;
+            case 2 -> GL20.GL_SRC_COLOR;
+            case 3 -> GL20.GL_ONE_MINUS_SRC_COLOR;
+            case 4 -> GL20.GL_DST_COLOR;
+            case 5 -> GL20.GL_ONE_MINUS_DST_COLOR;
+            case 6 -> GL20.GL_SRC_ALPHA;
+            case 7 -> GL20.GL_ONE_MINUS_SRC_ALPHA;
+            case 8 -> GL20.GL_DST_ALPHA;
+            case 9 -> GL20.GL_ONE_MINUS_DST_ALPHA;
+            case 10 -> GL20.GL_SRC_ALPHA_SATURATE;
+            default -> GL20.GL_SRC_ALPHA;
+        };
     }
 
     private void ensureWhite() {
@@ -172,6 +366,8 @@ public final class NifSceneBuilder {
         Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL20.GL_RGBA, 1, 1, 0, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, px);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_NEAREST);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, GL20.GL_NEAREST);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_REPEAT);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_REPEAT);
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, 0);
     }
 }

@@ -20,3 +20,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/misc/resourcehelpers.cpp` | `correctTexturePath` | `io.github.jvmmw.resource.TexturePaths` | same |
 | `apps/openmw/mwrender/*` | OSG draw | `io.github.jvmmw.render.ForwardRenderer` | rewrite |
 | `apps/openmw/mwgui/*` | MyGUI | Scene2D HUD (Phase 1 debug only) | rewrite |
+| `components/nif/property.hpp` | `Nif::NiVertexColorProperty` | `io.github.jvmmw.nif.NiVertexColorProperty` | same |
+| `components/nif/property.hpp` | `Nif::NiMaterialProperty` | `io.github.jvmmw.nif.NiMaterialProperty` | same |
+| `components/nif/property.hpp` | `Nif::NiAlphaProperty` | `io.github.jvmmw.nif.NiAlphaProperty` (full bitfield) | same |
+| `components/nif/property.hpp` | `Nif::NiZBufferProperty` | `io.github.jvmmw.nif.NiZBufferProperty` | same |
+| `components/nif/property.hpp` | `Nif::NiStencilProperty` | `io.github.jvmmw.nif.NiStencilProperty` (draw-mode cull only) | same (partial) |
+| `components/nifosg/nifloader.cpp` | `collectDrawableProperties` / `applyDrawableProperties` | `NifSceneBuilder` flatten | rewrite |
+| `files/shaders/compatibility/objects.frag` | dark / detail / glow | `io.github.jvmmw.render.ForwardRenderer` | rewrite |

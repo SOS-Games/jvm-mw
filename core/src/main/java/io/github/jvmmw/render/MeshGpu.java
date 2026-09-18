@@ -14,21 +14,58 @@ import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 
 public final class MeshGpu {
+    public static final int COLOR_NONE = 0;
+    public static final int COLOR_EMISSION = 1;
+    public static final int COLOR_AMB_DIFF = 2;
+
     public final int vao;
     public final int vbo;
     public final int ebo;
     public final int indexCount;
-    public int textureId;
+
+    public int baseTex;
+    public int darkTex;
+    public int detailTex;
+    public int glowTex;
+    public int baseWrapS = GL20.GL_REPEAT;
+    public int baseWrapT = GL20.GL_REPEAT;
+    public int darkWrapS = GL20.GL_REPEAT;
+    public int darkWrapT = GL20.GL_REPEAT;
+    public int detailWrapS = GL20.GL_REPEAT;
+    public int detailWrapT = GL20.GL_REPEAT;
+    public int glowWrapS = GL20.GL_REPEAT;
+    public int glowWrapT = GL20.GL_REPEAT;
+    public boolean useDark;
+    public boolean useDetail;
+    public boolean useGlow;
+
+    public final float[] ambient = {1, 1, 1};
+    public final float[] diffuse = {1, 1, 1};
+    public final float[] emissive = {0, 0, 0};
+    public float matAlpha = 1f;
+    public int colorMode = COLOR_NONE;
+
     public boolean alphaBlend;
     public boolean alphaTest;
+    public boolean noSorter;
+    public int blendSrc = GL20.GL_SRC_ALPHA;
+    public int blendDst = GL20.GL_ONE_MINUS_SRC_ALPHA;
+    public int alphaFunc = 3;
     public float alphaRef = 0.5f;
+    public boolean depthTest = true;
+    public boolean depthWrite = true;
+    public boolean cull = true;
+
+    public int textureId;
+
     public final float[] localMin = {Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY};
     public final float[] localMax = {Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY};
     private static final Vector3 corner = new Vector3();
+    static final int STRIDE_FLOATS = 12;
 
     public MeshGpu(float[] interleaved, short[] indices) {
         indexCount = indices.length;
-        for (int i = 0; i + 7 < interleaved.length; i += 8) {
+        for (int i = 0; i + 2 < interleaved.length; i += STRIDE_FLOATS) {
             localMin[0] = Math.min(localMin[0], interleaved[i]);
             localMin[1] = Math.min(localMin[1], interleaved[i + 1]);
             localMin[2] = Math.min(localMin[2], interleaved[i + 2]);
@@ -57,13 +94,15 @@ public final class MeshGpu {
         Gdx.gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, ebo);
         Gdx.gl.glBufferData(GL20.GL_ELEMENT_ARRAY_BUFFER, indices.length * 2, sb, GL20.GL_STATIC_DRAW);
 
-        int stride = 8 * 4; // pos3 + n3 + uv2
+        int stride = STRIDE_FLOATS * 4;
         Gdx.gl.glEnableVertexAttribArray(0);
         Gdx.gl.glVertexAttribPointer(0, 3, GL20.GL_FLOAT, false, stride, 0);
         Gdx.gl.glEnableVertexAttribArray(1);
         Gdx.gl.glVertexAttribPointer(1, 3, GL20.GL_FLOAT, false, stride, 12);
         Gdx.gl.glEnableVertexAttribArray(2);
         Gdx.gl.glVertexAttribPointer(2, 2, GL20.GL_FLOAT, false, stride, 24);
+        Gdx.gl.glEnableVertexAttribArray(3);
+        Gdx.gl.glVertexAttribPointer(3, 4, GL20.GL_FLOAT, false, stride, 32);
 
         Gdx.gl30.glBindVertexArray(0);
         Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);

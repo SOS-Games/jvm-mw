@@ -70,6 +70,10 @@ public final class BsaArchive {
         return entries.containsKey(normalize(path));
     }
 
+    public java.util.Set<String> paths() {
+        return java.util.Collections.unmodifiableSet(entries.keySet());
+    }
+
     public void extract(String path, Path dest) throws IOException {
         Entry e = entries.get(normalize(path));
         if (e == null) {

@@ -79,11 +79,19 @@ public final class NifFile {
             case "NiSourceTexture" -> new NiSourceTexture();
             case "NiMaterialProperty" -> new NiMaterialProperty();
             case "NiAlphaProperty" -> new NiAlphaProperty();
-            case "NiVertexColorProperty", "NiZBufferProperty", "NiSpecularProperty", "NiWireframeProperty",
-                 "NiDitherProperty", "NiFogProperty", "NiShadeProperty", "NiStencilProperty" -> new PropertyStub(rec);
+            case "NiVertexColorProperty" -> new NiVertexColorProperty();
+            case "NiZBufferProperty" -> new NiZBufferProperty();
+            case "NiSpecularProperty" -> new NiSpecularProperty();
+            case "NiStencilProperty" -> new NiStencilProperty();
+            case "NiWireframeProperty", "NiDitherProperty", "NiFogProperty", "NiShadeProperty" -> new PropertyStub(rec);
             case "NiStringExtraData", "NiExtraData", "NiTextKeyExtraData", "NiVertWeightsExtraData",
                  "NiBinaryExtraData", "NiIntegerExtraData", "NiBooleanExtraData", "NiFloatExtraData",
                  "NiStringsExtraData" -> new ExtraStub(rec);
+            case "NiKeyframeController", "NiVisController", "NiUVController", "NiAlphaController",
+                 "NiMaterialColorController", "NiGeomMorpherController", "NiPathController",
+                 "NiLookAtController", "NiRollController" -> new ControllerStub(rec);
+            case "NiKeyframeData", "NiVisData", "NiUVData", "NiFloatData", "NiPosData", "NiColorData",
+                 "NiMorphData" -> new ControllerDataStub(rec);
             case "NiAlphaAccumulator", "NiClusterAccumulator" -> new AccumulatorStub();
             default -> throw new IllegalArgumentException("Unknown record type " + rec);
         };
@@ -165,8 +173,46 @@ public final class NifFile {
             alpha.threshold = nif.getI8() & 0xFF;
             return;
         }
+        if (r instanceof NiVertexColorProperty vc) {
+            readObjectNet(nif, vc);
+            vc.flags = nif.getU16();
+            vc.vertexMode = nif.getI32();
+            vc.lightingMode = nif.getI32();
+            return;
+        }
+        if (r instanceof NiZBufferProperty z) {
+            readObjectNet(nif, z);
+            z.flags = nif.getU16();
+            return;
+        }
+        if (r instanceof NiSpecularProperty spec) {
+            readObjectNet(nif, spec);
+            spec.enable = (nif.getU16() & 1) != 0;
+            return;
+        }
+        if (r instanceof NiStencilProperty st) {
+            readObjectNet(nif, st);
+            st.flags = nif.getU16();
+            st.enabled = nif.getI8() != 0;
+            nif.getI32(); // test function
+            nif.getI32(); // ref
+            nif.getI32(); // mask
+            nif.getI32(); // fail
+            nif.getI32(); // zfail
+            nif.getI32(); // pass
+            st.drawMode = nif.getI32();
+            return;
+        }
         if (r instanceof PropertyStub stub) {
             readPropertyStub(nif, stub);
+            return;
+        }
+        if (r instanceof ControllerStub ctrl) {
+            readControllerStub(nif, ctrl);
+            return;
+        }
+        if (r instanceof ControllerDataStub data) {
+            readControllerDataStub(nif, data);
             return;
         }
         if (r instanceof ExtraStub extra) {
@@ -346,33 +392,125 @@ public final class NifFile {
     private static void readPropertyStub(NifStream nif, PropertyStub stub) {
         readObjectNet(nif, stub);
         switch (stub.kind) {
-            case "NiVertexColorProperty" -> {
-                nif.getU16();
-                nif.getI32();
-                nif.getI32();
-            }
-            case "NiZBufferProperty" -> {
-                nif.getU16();
-                // 4.0.0.2 < 4.1.0.12 so no extra test function uint32
-            }
-            case "NiSpecularProperty", "NiWireframeProperty", "NiDitherProperty", "NiShadeProperty" -> nif.getU16();
+            case "NiWireframeProperty", "NiDitherProperty", "NiShadeProperty" -> nif.getU16();
             case "NiFogProperty" -> {
                 nif.getU16();
                 nif.getF32();
                 nif.skip(12);
             }
-            case "NiStencilProperty" -> {
+            default -> throw new IllegalArgumentException("Property stub " + stub.kind);
+        }
+    }
+
+    private static void skipTimeController(NifStream nif) {
+        nif.getI32(); // next
+        nif.getU16(); // flags
+        nif.getF32(); // frequency
+        nif.getF32(); // phase
+        nif.getF32(); // start
+        nif.getF32(); // stop
+        nif.getI32(); // target
+    }
+
+    private static void readControllerStub(NifStream nif, ControllerStub stub) {
+        skipTimeController(nif);
+        switch (stub.kind) {
+            case "NiKeyframeController", "NiVisController", "NiAlphaController", "NiMaterialColorController",
+                 "NiRollController" -> nif.getI32();
+            case "NiUVController" -> {
                 nif.getU16();
+                nif.getI32();
+            }
+            case "NiGeomMorpherController" -> {
+                nif.getI32();
                 nif.getI8();
+            }
+            case "NiLookAtController" -> nif.getI32();
+            case "NiPathController" -> {
                 nif.getI32();
-                nif.getI32();
-                nif.getI32();
-                nif.getI32();
-                nif.getI32();
+                nif.getF32();
+                nif.getF32();
+                nif.getU16();
                 nif.getI32();
                 nif.getI32();
             }
-            default -> throw new IllegalArgumentException("Property stub " + stub.kind);
+            default -> throw new IllegalArgumentException("Controller stub " + stub.kind);
+        }
+    }
+
+    private static final int INTERP_LINEAR = 1;
+    private static final int INTERP_QUADRATIC = 2;
+    private static final int INTERP_TCB = 3;
+    private static final int INTERP_XYZ = 4;
+    private static final int INTERP_CONSTANT = 5;
+
+    private static int skipKeyMap(NifStream nif, int valueFloats, boolean quadraticTangents, boolean morph) {
+        int count = nif.getI32();
+        if (count == 0 && !morph) {
+            return 0;
+        }
+        int interp = nif.getI32();
+        if (interp == INTERP_XYZ) {
+            return interp;
+        }
+        boolean tangents = quadraticTangents && interp == INTERP_QUADRATIC;
+        boolean tcb = interp == INTERP_TCB;
+        if (count != 0 && interp != INTERP_LINEAR && interp != INTERP_QUADRATIC && interp != INTERP_TCB
+            && interp != INTERP_CONSTANT && interp != 0) {
+            throw new IllegalArgumentException("Unhandled interpolation type " + interp);
+        }
+        int valueBytes = valueFloats * 4;
+        for (int i = 0; i < count; i++) {
+            nif.getF32();
+            nif.skip(valueBytes);
+            if (tangents) {
+                nif.skip(valueBytes * 2);
+            }
+            if (tcb) {
+                nif.skip(12);
+            }
+        }
+        return interp;
+    }
+
+    private static void readControllerDataStub(NifStream nif, ControllerDataStub data) {
+        switch (data.kind) {
+            case "NiKeyframeData" -> {
+                int rotInterp = skipKeyMap(nif, 4, false, false);
+                if (rotInterp == INTERP_XYZ) {
+                    nif.getI32();
+                    skipKeyMap(nif, 1, true, false);
+                    skipKeyMap(nif, 1, true, false);
+                    skipKeyMap(nif, 1, true, false);
+                }
+                skipKeyMap(nif, 3, true, false);
+                skipKeyMap(nif, 1, true, false);
+            }
+            case "NiVisData" -> {
+                int n = nif.getI32();
+                for (int i = 0; i < n; i++) {
+                    nif.getF32();
+                    nif.getI8();
+                }
+            }
+            case "NiUVData" -> {
+                for (int i = 0; i < 4; i++) {
+                    skipKeyMap(nif, 1, true, false);
+                }
+            }
+            case "NiFloatData" -> skipKeyMap(nif, 1, true, false);
+            case "NiPosData" -> skipKeyMap(nif, 3, true, false);
+            case "NiColorData" -> skipKeyMap(nif, 4, true, false);
+            case "NiMorphData" -> {
+                int numMorphs = nif.getI32();
+                int numVerts = nif.getI32();
+                nif.getBool();
+                for (int i = 0; i < numMorphs; i++) {
+                    skipKeyMap(nif, 1, true, true);
+                    nif.skip(numVerts * 12);
+                }
+            }
+            default -> throw new IllegalArgumentException("Controller data stub " + data.kind);
         }
     }
 
@@ -436,5 +574,21 @@ public final class NifFile {
     }
 
     static final class AccumulatorStub extends NifRecord {
+    }
+
+    static final class ControllerStub extends NifRecord {
+        final String kind;
+
+        ControllerStub(String kind) {
+            this.kind = kind;
+        }
+    }
+
+    static final class ControllerDataStub extends NifRecord {
+        final String kind;
+
+        ControllerDataStub(String kind) {
+            this.kind = kind;
+        }
     }
 }

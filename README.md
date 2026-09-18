@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 1 (current)
+## Phase 2 (current)
 
-Load one static Morrowind NIF with a custom OpenGL forward pass and a Scene2D HUD. See [docs/phase1-static-nif.md](docs/phase1-static-nif.md).
+Static NIFs flatten inherited materials and Morrowind texture layers (base / dark / detail / glow). See [docs/phase2-nif-materials.md](docs/phase2-nif-materials.md). Phase 1: [docs/phase1-static-nif.md](docs/phase1-static-nif.md).
 
 ```bat
 gradlew.bat lwjgl3:run

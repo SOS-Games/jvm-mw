@@ -17,6 +17,10 @@ public final class TestData {
     public static final String CHAIR = "meshes/f/furn_de_chair_01.nif";
     public static final String SHACK = "meshes/x/ex_de_shack_01.nif";
     public static final String TREE = "meshes/f/flora_bc_tree_01.nif";
+    public static final String GLASS_DAGGER = "meshes/w/w_dagger_glass.nif";
+    public static final String GLASS_STAFF = "meshes/w/w_staff_glass.nif";
+    public static final String BANNER = "meshes/f/furn_6th_banner.nif";
+    public static final String DWRV = "meshes/i/in_dwrv_corr1_00.nif";
 
     private static BsaArchive cachedBsa;
 
