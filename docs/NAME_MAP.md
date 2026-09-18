@@ -9,6 +9,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/nif/nifstream.hpp` | `Nif::NIFStream` | `io.github.jvmmw.nif.NifStream` | same |
 | `components/nif/niffile.hpp` | `Nif::NIFFile` / `Reader` | `io.github.jvmmw.nif.NifFile` | same |
 | `components/nif/niftypes.hpp` | `Nif::NiTransform` | `io.github.jvmmw.nif.NiTransform` | same |
+| `components/nif/niftypes.hpp` | `Nif::NiTransform::toMatrix` | `NiTransform.toMatrix` | same (GL layout) |
+| `components/nifosg/matrixtransform.cpp` | `NifOsg::MatrixTransform` | `SceneNode.local` from `toMatrix` | rewrite |
 | `components/nif/node.hpp` | `Nif::NiNode` | `io.github.jvmmw.nif.NiNode` | same |
 | `components/nif/node.hpp` | `Nif::NiTriShape` | `io.github.jvmmw.nif.NiTriBasedGeom` | same |
 | `components/nif/data.hpp` | `Nif::NiTriShapeData` | `io.github.jvmmw.nif.NiTriShapeData` | same |
@@ -33,6 +35,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/loadstat.hpp` | `ESM::Static` | `io.github.jvmmw.esm.EsmObject` | rewrite |
 | `components/misc/convert.hpp` | `Misc::Convert::makeOsgQuat` | `io.github.jvmmw.render.EsmTransforms` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | insert static | `io.github.jvmmw.render.CellSceneBuilder` | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `makeDirectNodeRotation` | `EsmTransforms.setLocal` | rewrite |
 | `apps/openmw/mwclass/classmodel.hpp` | `getClassModel` | `esm.EsmObject` lookup | rewrite |
 | `components/misc/resourcehelpers.cpp` | `isHiddenMarker` | `EsmFile.isHiddenMarker` | same |
 | `components/esm3/loadligh.hpp` | `ESM::Light::LHDTstruct` | `esm.EsmObject` light fields | same |

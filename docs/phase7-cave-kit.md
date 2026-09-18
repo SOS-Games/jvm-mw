@@ -2,7 +2,7 @@
 
 OpenMW pin: **openmw-0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-Align with `components/nif/niftypes.hpp` (`NiTransform::toMatrix`, `Matrix3::toOsgMatrix`), `components/nifosg/matrixtransform.cpp`, `components/nifosg/nifloader.cpp` (`createNode` / `handleNode`), `components/nif/node.cpp` (`NiNode::read` root identity), `components/misc/convert.hpp` (`makeOsgQuat`), `apps/openmw/mwworld/scene.cpp` (`addObject` / `makeDirectNodeRotation`). Other-LLM checks of those three claims: **pending**.
+Align with `components/nif/niftypes.hpp` (`NiTransform::toMatrix`, `Matrix3::toOsgMatrix`), `components/nifosg/matrixtransform.cpp`, `components/nifosg/nifloader.cpp` (`createNode` / `handleNode`), `components/nif/node.cpp` (`NiNode::read` root identity), `components/misc/convert.hpp` (`makeOsgQuat`), `apps/openmw/mwworld/scene.cpp` (`addObject` / `makeDirectNodeRotation`). Other-LLM checks of those three claims **held** (2026-09-18).
 
 ## Goal
 
@@ -61,7 +61,7 @@ F3 writes `build/debug-snapshot.txt`.
 - Census office still looks like Phase 6.
 - Chair HUD unfogged. `glError=0`.
 
-## Other-LLM claims (pending)
+## Other-LLM claims (held 2026-09-18)
 
 Pin: `openmw-0.51.0` (`f4bec41444214a7903bebd178389ca22ca13f646`).
 

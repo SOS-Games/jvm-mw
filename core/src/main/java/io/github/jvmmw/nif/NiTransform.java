@@ -28,16 +28,19 @@ public final class NiTransform {
 
     public void toMatrix(Matrix4 out) {
         out.idt();
-        // OpenMW NiTransform::toMatrix: osg(j,i) = mRotation.mValues[i][j] * mScale
+        // OpenMW NiTransform::toMatrix writes OSG(j,i) = mValues[i][j] * scale (transpose
+        // into OSG's row-major table). glLoadMatrix then reads that table as GL
+        // column-major, so the GPU 3x3 is GL(row,col) = mValues[row][col] * scale.
+        // libGDX is that GL layout — copy the NIF 3x3, do not transpose again.
         float s = scale;
         out.val[Matrix4.M00] = rotation[0] * s;
-        out.val[Matrix4.M10] = rotation[1] * s;
-        out.val[Matrix4.M20] = rotation[2] * s;
-        out.val[Matrix4.M01] = rotation[3] * s;
+        out.val[Matrix4.M01] = rotation[1] * s;
+        out.val[Matrix4.M02] = rotation[2] * s;
+        out.val[Matrix4.M10] = rotation[3] * s;
         out.val[Matrix4.M11] = rotation[4] * s;
-        out.val[Matrix4.M21] = rotation[5] * s;
-        out.val[Matrix4.M02] = rotation[6] * s;
-        out.val[Matrix4.M12] = rotation[7] * s;
+        out.val[Matrix4.M12] = rotation[5] * s;
+        out.val[Matrix4.M20] = rotation[6] * s;
+        out.val[Matrix4.M21] = rotation[7] * s;
         out.val[Matrix4.M22] = rotation[8] * s;
         out.val[Matrix4.M03] = translation.x;
         out.val[Matrix4.M13] = translation.y;

@@ -86,21 +86,37 @@ public final class DebugCli {
         }
         System.out.println("fogColor=" + xyz(cell.fogColor));
         int doors = 0;
+        int kit = 0;
         for (CellRef ref : cell.refs) {
             if (ref.deleted) {
                 continue;
             }
             EsmObject obj = cell.objects.get(ref.refId.toLowerCase(Locale.ROOT));
-            if (obj == null || !"DOOR".equals(obj.rec)) {
+            if (obj == null) {
                 continue;
             }
-            doors++;
-            System.out.println("door " + ref.refId
-                + " tes=" + xyz(ref.pos)
-                + " rotZ=" + ref.rot[2]
-                + (ref.teleport ? " dest=" + ref.destCell + " dodt=" + xyz(ref.destPos) : ""));
+            if ("DOOR".equals(obj.rec)) {
+                doors++;
+                System.out.println("door " + ref.refId
+                    + " tes=" + xyz(ref.pos)
+                    + " rot=" + xyz(ref.rot)
+                    + " scl=" + ref.scale
+                    + " modl=" + obj.model
+                    + (ref.teleport ? " dest=" + ref.destCell + " dodt=" + xyz(ref.destPos) : ""));
+            }
+            String model = obj.model.toLowerCase(Locale.ROOT);
+            if (model.contains("moldcave") || model.contains("cavern_door")) {
+                kit++;
+                if (kit <= 40) {
+                    System.out.println("kit " + obj.rec + " " + ref.refId
+                        + " tes=" + xyz(ref.pos)
+                        + " rot=" + xyz(ref.rot)
+                        + " scl=" + ref.scale
+                        + " " + obj.model);
+                }
+            }
         }
-        System.out.println("doors=" + doors);
+        System.out.println("doors=" + doors + " kit=" + kit);
     }
 
     private static void interiors(String filter) throws Exception {

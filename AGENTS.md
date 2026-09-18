@@ -43,6 +43,7 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 
 - Cell root is **one** −90° X (Z-up → Y-up). Instance NIFs `build(false)`.
 - Root `NiNode` (record 0, not `bip01`) is identity, matching OpenMW `NiNode::read`.
+- `NiTransform.toMatrix` copies the NIF 3x3 into libGDX (`GL(row,col) = mValues[row][col] * scale`). OpenMW’s `toMatrix` transpose is OSG-only; do not apply it twice. Kit pieces like `in_moldcave_doorway00` have a local +90° X; transposing that opens wall seams.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus.

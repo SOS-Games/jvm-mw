@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 6 (current)
+## Phase 7 (current)
 
-Interior fog and candle flicker in one cell from `Morrowind.esm`. See [docs/phase6-fog-flicker.md](docs/phase6-fog-flicker.md). Next: [docs/phase7-cave-kit.md](docs/phase7-cave-kit.md) (Addamasartus wall seams). Phase 5: [docs/phase5-cell-lights.md](docs/phase5-cell-lights.md).
+Cave kit seams in Addamasartus — NIF node matrices so `in_moldcave_*` chunks and hide doors meet. See [docs/phase7-cave-kit.md](docs/phase7-cave-kit.md). Phase 6: [docs/phase6-fog-flicker.md](docs/phase6-fog-flicker.md).
 
 ```bat
 gradlew.bat lwjgl3:run
