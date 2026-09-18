@@ -18,9 +18,14 @@ public final class ForwardRenderer {
     private final int program;
     private final int uMvp;
     private final int uModel;
+    private final int uView;
     private final int uLightDir;
     private final int uAmbientLight;
     private final int uSunDiffuse;
+    private final int uFogEnabled;
+    private final int uFogStart;
+    private final int uFogScale;
+    private final int uFogColor;
     private final int uPointCount;
     private final int uPointPos;
     private final int uPointDiffuse;
@@ -53,9 +58,14 @@ public final class ForwardRenderer {
         program = compile(VERT, FRAG);
         uMvp = Gdx.gl.glGetUniformLocation(program, "u_mvp");
         uModel = Gdx.gl.glGetUniformLocation(program, "u_model");
+        uView = Gdx.gl.glGetUniformLocation(program, "u_view");
         uLightDir = Gdx.gl.glGetUniformLocation(program, "u_lightDir");
         uAmbientLight = Gdx.gl.glGetUniformLocation(program, "u_ambientLight");
         uSunDiffuse = Gdx.gl.glGetUniformLocation(program, "u_sunDiffuse");
+        uFogEnabled = Gdx.gl.glGetUniformLocation(program, "u_fogEnabled");
+        uFogStart = Gdx.gl.glGetUniformLocation(program, "u_fogStart");
+        uFogScale = Gdx.gl.glGetUniformLocation(program, "u_fogScale");
+        uFogColor = Gdx.gl.glGetUniformLocation(program, "u_fogColor");
         uPointCount = Gdx.gl.glGetUniformLocation(program, "u_pointCount");
         uPointPos = Gdx.gl.glGetUniformLocation(program, "u_pointPos");
         uPointDiffuse = Gdx.gl.glGetUniformLocation(program, "u_pointDiffuse");
@@ -87,15 +97,21 @@ public final class ForwardRenderer {
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
         Gdx.gl.glCullFace(GL20.GL_BACK);
         Gdx.gl.glUseProgram(program);
+        upload(uView, cam.view);
         if (lighting == null) {
             Gdx.gl.glUniform3f(uLightDir, 0.35f, 0.8f, 0.45f);
             Gdx.gl.glUniform3f(uAmbientLight, 0.35f, 0.35f, 0.35f);
             Gdx.gl.glUniform3f(uSunDiffuse, 1f, 1f, 1f);
             Gdx.gl.glUniform1i(uPointCount, 0);
+            Gdx.gl.glUniform1i(uFogEnabled, 0);
         } else {
             Gdx.gl.glUniform3f(uLightDir, lighting.sunDir[0], lighting.sunDir[1], lighting.sunDir[2]);
             Gdx.gl.glUniform3f(uAmbientLight, lighting.ambient[0], lighting.ambient[1], lighting.ambient[2]);
             Gdx.gl.glUniform3f(uSunDiffuse, lighting.sunDiffuse[0], lighting.sunDiffuse[1], lighting.sunDiffuse[2]);
+            Gdx.gl.glUniform1i(uFogEnabled, lighting.fogEnabled ? 1 : 0);
+            Gdx.gl.glUniform1f(uFogStart, lighting.fogStart);
+            Gdx.gl.glUniform1f(uFogScale, lighting.fogScale);
+            Gdx.gl.glUniform3f(uFogColor, lighting.fogColor[0], lighting.fogColor[1], lighting.fogColor[2]);
         }
         Gdx.gl.glUniform1i(uBase, 0);
         Gdx.gl.glUniform1i(uDark, 1);
@@ -291,8 +307,10 @@ public final class ForwardRenderer {
         layout(location = 3) in vec4 a_color;
         uniform mat4 u_mvp;
         uniform mat4 u_model;
+        uniform mat4 u_view;
         out vec3 v_normal;
         out vec3 v_worldPos;
+        out float v_viewZ;
         out vec2 v_uv;
         out vec4 v_color;
         void main() {
@@ -300,6 +318,7 @@ public final class ForwardRenderer {
             v_color = a_color;
             vec4 world = u_model * vec4(a_pos, 1.0);
             v_worldPos = world.xyz;
+            v_viewZ = (u_view * world).z;
             v_normal = mat3(u_model) * a_normal;
             gl_Position = u_mvp * vec4(a_pos, 1.0);
         }
@@ -309,6 +328,7 @@ public final class ForwardRenderer {
         #version 330
         in vec3 v_normal;
         in vec3 v_worldPos;
+        in float v_viewZ;
         in vec2 v_uv;
         in vec4 v_color;
         uniform sampler2D u_base;
@@ -325,6 +345,10 @@ public final class ForwardRenderer {
         uniform vec3 u_pointPos[8];
         uniform vec3 u_pointDiffuse[8];
         uniform vec4 u_pointAtten[8];
+        uniform int u_fogEnabled;
+        uniform float u_fogStart;
+        uniform float u_fogScale;
+        uniform vec3 u_fogColor;
         uniform vec3 u_ambient;
         uniform vec3 u_diffuse;
         uniform vec3 u_emissive;
@@ -393,6 +417,10 @@ public final class ForwardRenderer {
             tex.rgb *= lighting;
             if (u_useGlow != 0) {
                 tex.rgb += texture(u_glow, v_uv).rgb;
+            }
+            if (u_fogEnabled != 0) {
+                float fogValue = clamp((abs(v_viewZ) - u_fogStart) * u_fogScale, 0.0, 1.0);
+                tex.rgb = mix(tex.rgb, u_fogColor, fogValue);
             }
             frag = tex;
         }

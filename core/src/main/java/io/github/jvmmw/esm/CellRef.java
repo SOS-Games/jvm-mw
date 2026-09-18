@@ -11,6 +11,10 @@ public final class CellRef {
     public String refId = "";
     public float scale = 1f;
     public boolean deleted;
+    public boolean teleport;
+    public String destCell = "";
     public final float[] pos = new float[3];
     public final float[] rot = new float[3];
+    public final float[] destPos = new float[3];
+    public final float[] destRot = new float[3];
 }

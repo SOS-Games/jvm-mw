@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 5 (current)
+## Phase 6 (current)
 
-Point lights and interior `AMBI` in one cell from `Morrowind.esm`. See [docs/phase5-cell-lights.md](docs/phase5-cell-lights.md). Phase 4: [docs/phase4-placed-objects.md](docs/phase4-placed-objects.md).
+Interior fog and candle flicker in one cell from `Morrowind.esm`. See [docs/phase6-fog-flicker.md](docs/phase6-fog-flicker.md). Next: [docs/phase7-cave-kit.md](docs/phase7-cave-kit.md) (Addamasartus wall seams). Phase 5: [docs/phase5-cell-lights.md](docs/phase5-cell-lights.md).
 
 ```bat
 gradlew.bat lwjgl3:run
@@ -25,6 +25,14 @@ Point at your Morrowind `Data Files` folder (not committed) with one of:
 - gitignored `local.properties` with `jvmmw.data=...`
 
 Vanilla meshes are extracted from `Morrowind.bsa` into gitignored `testdata/` on first run. Do not commit `testdata/`, `build/`, or `.gradle/`.
+
+Headless dumps for agents (NIF tree, interior fog/spawn, inbound door):
+
+```bat
+gradlew.bat :core:debugCli --args="help"
+```
+
+In the viewer, **F3** writes `build/debug-snapshot.txt`. See [AGENTS.md](AGENTS.md).
 
 ## License
 

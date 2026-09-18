@@ -23,6 +23,7 @@ public final class TestData {
     public static final String DWRV = "meshes/i/in_dwrv_corr1_00.nif";
     public static final String CENSUS_CELL = "Seyda Neen, Census and Excise Office";
     public static final String PRISON_SHIP = "Imperial Prison Ship";
+    public static final String ADDAMASARTUS = "Addamasartus";
 
     private static BsaArchive cachedBsa;
 

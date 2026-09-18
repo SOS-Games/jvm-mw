@@ -20,6 +20,7 @@ public final class EsmFile {
     public final Map<String, EsmObject> objects = new LinkedHashMap<>();
     public final Set<String> actorIds = new HashSet<>();
     public final List<String> interiorNames = new ArrayList<>();
+    public final Map<String, CellRef> inboundSpawns = new LinkedHashMap<>();
 
     public static boolean isHiddenMarker(String id) {
         String s = id.toLowerCase(Locale.ROOT);
@@ -60,8 +61,7 @@ public final class EsmFile {
             } else if ("NPC_".equals(rec) || "CREA".equals(rec)) {
                 file.readActor(esm);
             } else if ("CELL".equals(rec)) {
-                String[] stillWanted = hits[0] != null ? new String[0] : wanted;
-                LoadedCell cell = file.readCell(esm, stillWanted);
+                LoadedCell cell = file.readCell(esm, wanted);
                 if (cell != null) {
                     for (int i = 0; i < wanted.length; i++) {
                         if (wanted[i].equalsIgnoreCase(cell.name)) {
@@ -87,7 +87,53 @@ public final class EsmFile {
         }
         found.objects = file.objects;
         found.actorIds = file.actorIds;
+        file.applySpawn(found);
         return found;
+    }
+
+    /**
+     * CELL-only pass: interior size, fog, inbound door spawn. Skips STAT/DOOR object records.
+     * Use from the debug CLI; {@link #loadInterior} is still required to place a cell.
+     */
+    public static List<InteriorSummary> listInteriors(EsmReader esm) {
+        EsmFile file = new EsmFile();
+        List<InteriorSummary> list = new ArrayList<>();
+        while (esm.hasMoreRecs()) {
+            String rec = esm.getRecName();
+            esm.getRecHeader();
+            if (!"CELL".equals(rec)) {
+                esm.skipRecord();
+                continue;
+            }
+            InteriorSummary summary = file.readInteriorSummary(esm);
+            if (summary != null) {
+                list.add(summary);
+            }
+        }
+        for (InteriorSummary summary : list) {
+            file.applySpawn(summary);
+        }
+        return list;
+    }
+
+    private void applySpawn(LoadedCell cell) {
+        CellRef inbound = inboundSpawns.get(cell.name.toLowerCase(Locale.ROOT));
+        if (inbound == null) {
+            return;
+        }
+        System.arraycopy(inbound.destPos, 0, cell.spawnPos, 0, 3);
+        System.arraycopy(inbound.destRot, 0, cell.spawnRot, 0, 3);
+        cell.hasSpawn = true;
+    }
+
+    private void applySpawn(InteriorSummary cell) {
+        CellRef inbound = inboundSpawns.get(cell.name.toLowerCase(Locale.ROOT));
+        if (inbound == null) {
+            return;
+        }
+        System.arraycopy(inbound.destPos, 0, cell.spawnPos, 0, 3);
+        System.arraycopy(inbound.destRot, 0, cell.spawnRot, 0, 3);
+        cell.hasSpawn = true;
     }
 
     private static boolean matchWanted(String[] wanted, String name) {
@@ -161,54 +207,22 @@ public final class EsmFile {
     }
 
     private LoadedCell readCell(EsmReader esm, String[] wanted) {
-        String name = "";
-        int flags = 0;
-        boolean headerDone = false;
-        while (!headerDone && esm.hasMoreSubs()) {
-            if (esm.isNextSub("NAME")) {
-                name = esm.getHString();
-            } else if (esm.isNextSub("DATA")) {
-                esm.getSubHeader();
-                flags = esm.getI32();
-                esm.getI32();
-                esm.getI32();
-            } else if (esm.isNextSub("DELE")) {
-                esm.skipHSub();
-            } else {
-                headerDone = true;
-            }
+        CellHead head = readCellHead(esm);
+        boolean interior = (head.flags & CELL_INTERIOR) != 0;
+        if (interior && !head.name.isEmpty()) {
+            interiorNames.add(head.name);
         }
-        boolean cellHeaderDone = false;
-        int ambiAmbient = 0;
-        int ambiSun = 0;
-        while (!cellHeaderDone && esm.hasMoreSubs()) {
-            if (esm.isNextSub("AMBI")) {
-                esm.getSubHeader();
-                ambiAmbient = esm.getI32();
-                ambiSun = esm.getI32();
-                esm.getI32();
-                esm.getF32();
-                esm.skipRestOfSub();
-            } else if (esm.isNextSub("INTV") || esm.isNextSub("WHGT") || esm.isNextSub("RGNN")
-                || esm.isNextSub("NAM5") || esm.isNextSub("NAM0")) {
-                esm.skipHSub();
-            } else {
-                cellHeaderDone = true;
-            }
-        }
-        boolean interior = (flags & CELL_INTERIOR) != 0;
-        if (interior && !name.isEmpty()) {
-            interiorNames.add(name);
-        }
-        if (!interior || wanted == null || !matchWanted(wanted, name)) {
-            esm.skipRecord();
+        if (!interior || wanted == null || !matchWanted(wanted, head.name)) {
+            harvestRefs(esm);
             return null;
         }
         LoadedCell cell = new LoadedCell();
-        cell.name = name;
+        cell.name = head.name;
         cell.interior = true;
-        colourFromRgb(ambiAmbient, cell.ambient);
-        colourFromRgb(ambiSun, cell.sunlight);
+        colourFromRgb(head.ambiAmbient, cell.ambient);
+        colourFromRgb(head.ambiSun, cell.sunlight);
+        colourFromRgb(head.ambiFog, cell.fogColor);
+        cell.fogDensity = head.fogDensity;
         while (esm.hasMoreSubs()) {
             while (esm.isNextSub("MVRF")) {
                 esm.skipHSub();
@@ -229,8 +243,99 @@ public final class EsmFile {
             }
             CellRef ref = readRef(esm);
             cell.refs.add(ref);
+            noteInbound(ref);
         }
         return cell;
+    }
+
+    private InteriorSummary readInteriorSummary(EsmReader esm) {
+        CellHead head = readCellHead(esm);
+        boolean interior = (head.flags & CELL_INTERIOR) != 0;
+        if (!interior || head.name.isEmpty()) {
+            harvestRefs(esm);
+            return null;
+        }
+        InteriorSummary summary = new InteriorSummary();
+        summary.name = head.name;
+        summary.fogDensity = head.fogDensity;
+        colourFromRgb(head.ambiFog, summary.fogColor);
+        float minX = Float.POSITIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float minZ = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
+        float maxZ = Float.NEGATIVE_INFINITY;
+        while (esm.hasMoreSubs()) {
+            while (esm.isNextSub("MVRF")) {
+                esm.skipHSub();
+                if (esm.isNextSub("CNDT")) {
+                    esm.skipHSub();
+                }
+                if (esm.peekNextSub("FRMR")) {
+                    noteInbound(readRef(esm));
+                }
+            }
+            if (!esm.peekNextSub("FRMR")) {
+                if (esm.hasMoreSubs()) {
+                    esm.getSubName();
+                    esm.skipHSub();
+                    continue;
+                }
+                break;
+            }
+            CellRef ref = readRef(esm);
+            noteInbound(ref);
+            summary.refs++;
+            minX = Math.min(minX, ref.pos[0]);
+            minY = Math.min(minY, ref.pos[1]);
+            minZ = Math.min(minZ, ref.pos[2]);
+            maxX = Math.max(maxX, ref.pos[0]);
+            maxY = Math.max(maxY, ref.pos[1]);
+            maxZ = Math.max(maxZ, ref.pos[2]);
+        }
+        if (summary.refs > 0 && minX <= maxX) {
+            summary.dx = maxX - minX;
+            summary.dy = maxY - minY;
+            summary.dz = maxZ - minZ;
+            summary.span = Math.max(summary.dx, Math.max(summary.dy, summary.dz));
+        }
+        return summary;
+    }
+
+    private CellHead readCellHead(EsmReader esm) {
+        CellHead head = new CellHead();
+        boolean headerDone = false;
+        while (!headerDone && esm.hasMoreSubs()) {
+            if (esm.isNextSub("NAME")) {
+                head.name = esm.getHString();
+            } else if (esm.isNextSub("DATA")) {
+                esm.getSubHeader();
+                head.flags = esm.getI32();
+                esm.getI32();
+                esm.getI32();
+            } else if (esm.isNextSub("DELE")) {
+                esm.skipHSub();
+            } else {
+                headerDone = true;
+            }
+        }
+        boolean cellHeaderDone = false;
+        while (!cellHeaderDone && esm.hasMoreSubs()) {
+            if (esm.isNextSub("AMBI")) {
+                esm.getSubHeader();
+                head.ambiAmbient = esm.getI32();
+                head.ambiSun = esm.getI32();
+                head.ambiFog = esm.getI32();
+                head.fogDensity = esm.getF32();
+                esm.skipRestOfSub();
+            } else if (esm.isNextSub("INTV") || esm.isNextSub("WHGT") || esm.isNextSub("RGNN")
+                || esm.isNextSub("NAM5") || esm.isNextSub("NAM0")) {
+                esm.skipHSub();
+            } else {
+                cellHeaderDone = true;
+            }
+        }
+        return head;
     }
 
     private static CellRef readRef(EsmReader esm) {
@@ -259,12 +364,24 @@ public final class EsmFile {
                     ref.rot[1] = esm.getF32();
                     ref.rot[2] = esm.getF32();
                 }
+                case "DODT" -> {
+                    esm.getSubHeader();
+                    ref.destPos[0] = esm.getF32();
+                    ref.destPos[1] = esm.getF32();
+                    ref.destPos[2] = esm.getF32();
+                    ref.destRot[0] = esm.getF32();
+                    ref.destRot[1] = esm.getF32();
+                    ref.destRot[2] = esm.getF32();
+                    ref.teleport = true;
+                    esm.skipRestOfSub();
+                }
+                case "DNAM" -> ref.destCell = esm.getHString();
                 case "DELE" -> {
                     esm.skipHSub();
                     ref.deleted = true;
                 }
                 case "NAM0" -> esm.skipHSub();
-                case "UNAM", "ANAM", "BNAM", "XSOL", "CNAM", "INDX", "XCHG", "INTV", "NAM9", "DODT", "DNAM", "FLTV",
+                case "UNAM", "ANAM", "BNAM", "XSOL", "CNAM", "INDX", "XCHG", "INTV", "NAM9", "FLTV",
                      "KNAM", "TNAM" -> esm.skipHSub();
                 default -> {
                     esm.cacheSubName();
@@ -275,13 +392,72 @@ public final class EsmFile {
         return ref;
     }
 
+    private void harvestRefs(EsmReader esm) {
+        while (esm.hasMoreSubs()) {
+            while (esm.isNextSub("MVRF")) {
+                esm.skipHSub();
+                if (esm.isNextSub("CNDT")) {
+                    esm.skipHSub();
+                }
+                if (esm.peekNextSub("FRMR")) {
+                    noteInbound(readRef(esm));
+                }
+            }
+            if (!esm.peekNextSub("FRMR")) {
+                if (esm.hasMoreSubs()) {
+                    esm.getSubName();
+                    esm.skipHSub();
+                    continue;
+                }
+                break;
+            }
+            noteInbound(readRef(esm));
+        }
+    }
+
+    private void noteInbound(CellRef ref) {
+        if (!ref.teleport || ref.destCell.isEmpty()) {
+            return;
+        }
+        inboundSpawns.putIfAbsent(ref.destCell.toLowerCase(Locale.ROOT), ref);
+    }
+
     public static final class LoadedCell {
         public String name = "";
         public boolean interior;
+        public boolean hasSpawn;
         public final List<CellRef> refs = new ArrayList<>();
         public Map<String, EsmObject> objects = Map.of();
         public Set<String> actorIds = Set.of();
         public final float[] ambient = {0.35f, 0.35f, 0.35f};
         public final float[] sunlight = {1f, 1f, 1f};
+        public final float[] fogColor = {0.08f, 0.09f, 0.12f};
+        public float fogDensity;
+        public final float[] spawnPos = new float[3];
+        public final float[] spawnRot = new float[3];
+    }
+
+    /** CELL scan row for the debug CLI. Not a placed scene. */
+    public static final class InteriorSummary {
+        public String name = "";
+        public int refs;
+        public float fogDensity;
+        public final float[] fogColor = new float[3];
+        public float dx;
+        public float dy;
+        public float dz;
+        public float span;
+        public boolean hasSpawn;
+        public final float[] spawnPos = new float[3];
+        public final float[] spawnRot = new float[3];
+    }
+
+    private static final class CellHead {
+        String name = "";
+        int flags;
+        int ambiAmbient;
+        int ambiSun;
+        int ambiFog;
+        float fogDensity;
     }
 }

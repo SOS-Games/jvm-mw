@@ -3,3 +3,11 @@ eclipse.project.name = appName + '-core'
 dependencies {
   api "com.badlogicgames.gdx:gdx:$gdxVersion"
 }
+
+tasks.register('debugCli', JavaExec) {
+  group = 'jvm-mw'
+  description = 'Headless ESM/NIF dumps for agents (see :core:debugCli --args="help")'
+  classpath = sourceSets.main.runtimeClasspath
+  mainClass = 'io.github.jvmmw.debug.DebugCli'
+  workingDir = rootProject.projectDir
+}

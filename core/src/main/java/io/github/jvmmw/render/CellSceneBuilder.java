@@ -64,8 +64,10 @@ public final class CellSceneBuilder {
         finished = false;
         pendingLights.clear();
         lighting.lights.clear();
+        lighting.resetTime();
         System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
         System.arraycopy(cell.sunlight, 0, lighting.sunDiffuse, 0, 3);
+        lighting.configureFog(cell.fogColor, cell.fogDensity);
     }
 
     /** Place refs until {@code budgetNanos} elapses. Returns true when the cell is done. */
@@ -86,7 +88,7 @@ public final class CellSceneBuilder {
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
             + " byRec=" + byRec + " empty=" + skippedEmpty + " actor=" + skippedActor
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
-            + " lights=" + lighting.lights.size() + '\n');
+            + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity + '\n');
         finished = true;
         return true;
     }
@@ -191,20 +193,29 @@ public final class CellSceneBuilder {
             light.pos[1] = tmpPos.y;
             light.pos[2] = tmpPos.z;
             float radius = Math.max(pending.obj.lightRadius, 16f);
-            EsmFile.colourFromRgb(pending.obj.lightColor, light.diffuse);
+            EsmFile.colourFromRgb(pending.obj.lightColor, light.baseDiffuse);
             if ((pending.obj.lightFlags & EsmObject.LIGH_NEGATIVE) != 0) {
-                light.diffuse[0] *= -1f;
-                light.diffuse[1] *= -1f;
-                light.diffuse[2] *= -1f;
+                light.baseDiffuse[0] *= -1f;
+                light.baseDiffuse[1] *= -1f;
+                light.baseDiffuse[2] *= -1f;
             }
+            System.arraycopy(light.baseDiffuse, 0, light.diffuse, 0, 3);
             light.radius = radius;
             light.constant = 0f;
             light.linear = 3f / radius;
             light.quadratic = 0f;
+            light.type = CellLight.typeFromFlags(pending.obj.lightFlags);
+            if (light.type != CellLight.TYPE_NORMAL) {
+                light.phase = lighting.rollPhase();
+                light.brightness = 0.675f;
+            }
             lighting.lights.add(light);
             log.append("light ").append(pending.refId).append(" r=").append((int) radius)
-                .append(" rgb=").append(light.diffuse[0]).append(',').append(light.diffuse[1]).append(',')
-                .append(light.diffuse[2]);
+                .append(" rgb=").append(light.baseDiffuse[0]).append(',').append(light.baseDiffuse[1]).append(',')
+                .append(light.baseDiffuse[2]);
+            if (light.type != CellLight.TYPE_NORMAL) {
+                log.append(" type=").append(light.type);
+            }
             if (attach != pending.node) {
                 log.append(" attach=").append(attach.name);
             }

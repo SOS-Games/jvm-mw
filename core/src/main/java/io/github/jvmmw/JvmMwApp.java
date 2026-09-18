@@ -30,7 +30,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
+import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
+import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
@@ -41,10 +43,11 @@ import io.github.jvmmw.render.SceneNode;
 import io.github.jvmmw.resource.TestData;
 
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
-    private static final String[] AUTO = {TestData.CHAIR, CELL_PREFIX + TestData.CENSUS_CELL};
+    private static final String[] AUTO = {TestData.CHAIR, CELL_PREFIX + TestData.ADDAMASARTUS};
 
     private static final float START_YAW = 215f;
     private static final float START_PITCH = -20f;
@@ -101,6 +104,10 @@ public final class JvmMwApp extends ApplicationAdapter {
                     } else {
                         Gdx.input.setCursorCatched(!Gdx.input.isCursorCatched());
                     }
+                    return true;
+                }
+                if (keycode == Input.Keys.F3) {
+                    debugSnapshot();
                     return true;
                 }
                 return false;
@@ -284,8 +291,10 @@ public final class JvmMwApp extends ApplicationAdapter {
         try {
             if (loadedCell == null || !wanted.equalsIgnoreCase(loadedCell.name)) {
                 Gdx.app.log("JVM-MW", "Parsing " + TestData.esmPath());
-                loadedCell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()),
-                    TestData.CENSUS_CELL, TestData.PRISON_SHIP);
+                String[] names = wanted.equalsIgnoreCase(TestData.CENSUS_CELL)
+                    ? new String[] { TestData.CENSUS_CELL, TestData.PRISON_SHIP }
+                    : new String[] { wanted };
+                loadedCell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), names);
             }
             cellBuilder = new CellSceneBuilder();
             cellBuilder.begin(loadedCell);
@@ -303,6 +312,10 @@ public final class JvmMwApp extends ApplicationAdapter {
         if (root != null) {
             root.collectAabb(aabb);
         }
+        if (cellBuilder != null && loadedCell != null) {
+            frameCellCamera();
+            return;
+        }
         if (aabb.isValid()) {
             aabb.getCenter(eye);
             float radius = aabb.getDimensions(new Vector3()).len() * 0.5f;
@@ -316,6 +329,66 @@ public final class JvmMwApp extends ApplicationAdapter {
         pitch = START_PITCH;
         updateLookDir();
         eye.mulAdd(lookDir, -moveScale);
+    }
+
+    private static final float EYE_HEIGHT = 96f;
+
+    private void frameCellCamera() {
+        camera.far = Math.max(8000f, CellLighting.VIEW_DISTANCE + 256f);
+        moveScale = 220f;
+        if (loadedCell.hasSpawn) {
+            placeEye(loadedCell.spawnPos, loadedCell.spawnRot[2]);
+            Gdx.app.log("JVM-MW", "spawn inbound tes=(" + loadedCell.spawnPos[0] + ','
+                + loadedCell.spawnPos[1] + ',' + loadedCell.spawnPos[2] + ')');
+        } else {
+            CellRef door = findTeleportDoor(loadedCell);
+            if (door != null) {
+                float h = door.rot[2];
+                float[] tes = {
+                    door.pos[0] - (float) Math.sin(h) * 160f,
+                    door.pos[1] - (float) Math.cos(h) * 160f,
+                    door.pos[2]
+                };
+                placeEye(tes, h + (float) Math.PI);
+                Gdx.app.log("JVM-MW", "spawn door=" + door.refId);
+            } else if (aabb.isValid()) {
+                aabb.getCenter(eye);
+                eye.y = aabb.min.y + EYE_HEIGHT;
+                yaw = START_YAW;
+                pitch = START_PITCH;
+            } else {
+                eye.setZero();
+                yaw = START_YAW;
+                pitch = START_PITCH;
+            }
+        }
+        updateLookDir();
+    }
+
+    private void placeEye(float[] tes, float heading) {
+        eye.set(tes[0], tes[2] + EYE_HEIGHT, -tes[1]);
+        yaw = (float) Math.toDegrees(Math.atan2(Math.sin(heading), -Math.cos(heading)));
+        pitch = 0f;
+    }
+
+    private static CellRef findTeleportDoor(EsmFile.LoadedCell cell) {
+        CellRef fallback = null;
+        for (CellRef ref : cell.refs) {
+            if (ref.deleted) {
+                continue;
+            }
+            EsmObject obj = cell.objects.get(ref.refId.toLowerCase(java.util.Locale.ROOT));
+            if (obj == null || !"DOOR".equals(obj.rec)) {
+                continue;
+            }
+            if (ref.teleport) {
+                return ref;
+            }
+            if (fallback == null) {
+                fallback = ref;
+            }
+        }
+        return fallback;
     }
 
     private void buildUi() {
@@ -348,12 +421,12 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 5", skin);
+        Window win = new Window("JVM-MW Phase 6", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, scroll dolly.", skin))
+        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, scroll dolly, F3 dump.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
@@ -362,6 +435,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Banner", TestData.BANNER));
         win.add(meshButton("Dwrv", TestData.DWRV)).row();
         win.add(meshButton("Cell", CELL_PREFIX + TestData.CENSUS_CELL));
+        win.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
         TextButton click = new TextButton("Click me", skin);
         click.addListener(new ClickListener() {
             @Override
@@ -369,7 +443,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 hudClicks++;
             }
         });
-        win.add(click).padTop(8).colspan(2).row();
+        win.add(click).padTop(8).row();
         win.pack();
         win.setPosition(12, Gdx.graphics.getHeight() - win.getHeight() - 12);
         stage.addActor(win);
@@ -407,10 +481,15 @@ public final class JvmMwApp extends ApplicationAdapter {
         camera.update();
 
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        Gdx.gl.glClearColor(0.08f, 0.09f, 0.12f, 1f);
+        CellLighting mood = (cellBuilder != null && !isLoading()) ? cellBuilder.lighting : null;
+        if (mood != null) {
+            mood.updateFlicker(Gdx.graphics.getDeltaTime());
+            Gdx.gl.glClearColor(mood.fogColor[0], mood.fogColor[1], mood.fogColor[2], 1f);
+        } else {
+            Gdx.gl.glClearColor(0.08f, 0.09f, 0.12f, 1f);
+        }
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
         if (root != null) {
-            CellLighting mood = (cellBuilder != null && !isLoading()) ? cellBuilder.lighting : null;
             renderer.render(camera, root, mood);
         }
         lastGlError = Gdx.gl.glGetError();
@@ -422,12 +501,13 @@ public final class JvmMwApp extends ApplicationAdapter {
             String extra = "";
             if (cellBuilder != null) {
                 extra = " placed=" + cellBuilder.placed + " lights=" + cellBuilder.lighting.lights.size()
+                    + " fog=" + cellBuilder.lighting.fogDensity
                     + " skip=" + cellBuilder.skippedUnknown
                     + "+" + cellBuilder.skippedEmpty + "+" + cellBuilder.skippedActor
                     + "+" + cellBuilder.skippedNif;
             }
-                status.setText(isLoading() ? loaderCaption.replace('\n', ' ')
-                    : shortName + "  clicks=" + hudClicks + " glError=" + lastGlError + extra + err);
+            status.setText(isLoading() ? loaderCaption.replace('\n', ' ')
+                : shortName + "  clicks=" + hudClicks + " glError=" + lastGlError + extra + err);
         }
         stage.act(Gdx.graphics.getDeltaTime());
         stage.draw();
@@ -455,16 +535,51 @@ public final class JvmMwApp extends ApplicationAdapter {
             stem = stem.substring(0, stem.length() - 4);
         }
         stem = stem.replace(',', ' ').replace("  ", " ").trim();
-        String path = (cellBuilder != null ? "build/phase5-" : "build/phase2-") + stem + ".png";
+        String path = (cellBuilder != null ? "build/phase6-" : "build/phase2-") + stem + ".png";
         int w = Gdx.graphics.getWidth();
         int h = Gdx.graphics.getHeight();
         Pixmap pm = Pixmap.createFromFrameBuffer(0, 0, w, h);
         com.badlogic.gdx.graphics.PixmapIO.writePNG(Gdx.files.local(path), pm);
         pm.dispose();
         Gdx.app.log("JVM-MW", "mesh=" + currentVfs + " glError=" + lastGlError + " meshes=" + countMeshes(root)
-            + (cellBuilder != null ? " lights=" + cellBuilder.lighting.lights.size() : "")
+            + (cellBuilder != null ? " lights=" + cellBuilder.lighting.lights.size()
+                + " fog=" + cellBuilder.lighting.fogDensity : "")
             + " screenshot=" + path
             + (lastError.isEmpty() ? "" : " err=" + lastError));
+    }
+
+    private void debugSnapshot() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("cell=").append(currentVfs).append('\n');
+        sb.append("gl=(").append(eye.x).append(',').append(eye.y).append(',').append(eye.z).append(") yaw=")
+            .append(yaw).append(" pitch=").append(pitch).append('\n');
+        if (cellBuilder != null) {
+            float tesX = eye.x;
+            float tesY = -eye.z;
+            float tesZ = eye.y - EYE_HEIGHT;
+            sb.append("tes=(").append(tesX).append(',').append(tesY).append(',').append(tesZ).append(") eyeHeight=")
+                .append(EYE_HEIGHT).append('\n');
+            CellLighting fog = cellBuilder.lighting;
+            sb.append("fogDensity=").append(fog.fogDensity)
+                .append(" fogStart=").append(fog.fogStart)
+                .append(" fogEnd=").append(fog.fogEnd)
+                .append(" fogEnabled=").append(fog.fogEnabled)
+                .append(" lights=").append(fog.lights.size()).append('\n');
+            if (loadedCell != null && loadedCell.hasSpawn) {
+                sb.append("spawn inbound tes=(").append(loadedCell.spawnPos[0]).append(',')
+                    .append(loadedCell.spawnPos[1]).append(',').append(loadedCell.spawnPos[2]).append(")\n");
+            }
+        }
+        sb.append("glError=").append(lastGlError).append('\n');
+        String text = sb.toString();
+        Gdx.app.log("JVM-MW", "F3\n" + text.trim());
+        try {
+            Path out = Path.of("build/debug-snapshot.txt");
+            Files.createDirectories(out.getParent());
+            Files.writeString(out, text);
+        } catch (Exception e) {
+            Gdx.app.error("JVM-MW", "F3 write failed", e);
+        }
     }
 
     private static int countMeshes(SceneNode node) {

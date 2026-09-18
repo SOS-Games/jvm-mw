@@ -40,3 +40,6 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/sceneutil/lightutil.cpp` | `configureLight` | `CellLight` attenuation | rewrite |
 | `apps/openmw/mwrender/renderingmanager.cpp` | `configureAmbient` | `CellLighting` from cell `AMBI` | rewrite |
 | `files/shaders/lib/light/lighting.glsl` | `lcalcIllumination` | `ForwardRenderer` GLSL | rewrite |
+| `apps/openmw/mwrender/fogmanager.cpp` | `FogManager::configure` | `CellLighting.configureFog` | rewrite |
+| `files/shaders/compatibility/fog.glsl` | `applyFogAtDist` | `ForwardRenderer` GLSL fog | rewrite |
+| `components/sceneutil/lightcontroller.cpp` | `LightController` | `CellLighting.updateFlicker` | rewrite |
