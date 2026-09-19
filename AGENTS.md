@@ -29,6 +29,7 @@ gradlew.bat :core:debugCli --args="cell Addamasartus"
 gradlew.bat :core:debugCli --args="interiors cave"
 gradlew.bat :core:debugCli --args="spawn Addamasartus"
 gradlew.bat :core:debugCli --args="npc sellus gravius"
+gradlew.bat :core:debugCli --args="crea nix-hound"
 gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
 ```
 
@@ -39,6 +40,7 @@ gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
 | `interiors` | Pick a cell large enough to see fog (`fogStart = 7168 * (1 - density)`) |
 | `spawn` | Confirm the exterior-door arrival point |
 | `npc` | Race/head/hair/skeleton/equipped parts for one `NPC_` |
+| `crea` | Model, x-path, flags, scale for one `CREA` |
 | `kf` | Idle groups / bone tracks from a `.kf` |
 
 In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-snapshot.txt`.
@@ -51,7 +53,8 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - `NiSkinData` transforms use packed order (rotation, translation, scale), not `NiAVObject` (translation, rotation, scale). Wrong order flattens skinned parts onto the ground.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
-- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus.
+- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
+- Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 
 Core: `core/src/main/java/io/github/jvmmw/`. NAME_MAP: [docs/NAME_MAP.md](docs/NAME_MAP.md).

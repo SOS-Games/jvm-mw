@@ -7,6 +7,7 @@ package io.github.jvmmw.render;
 
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmBodyPart;
+import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
@@ -120,6 +121,7 @@ public final class NpcMannequin {
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final Map<String, SceneNode> skeletonTemplates = new HashMap<>();
     private final Map<String, PartNif> parts = new HashMap<>();
+    private final Map<String, NifSceneBuilder> nifBuilders = new HashMap<>();
     private final Map<String, KfFile> kfs = new HashMap<>();
     private final List<NpcActor> actors = new ArrayList<>();
     private final Matrix4 id = new Matrix4();
@@ -139,6 +141,7 @@ public final class NpcMannequin {
         }
         builders.clear();
         skeletonTemplates.clear();
+        nifBuilders.clear();
         parts.clear();
         kfs.clear();
         actors.clear();
@@ -230,6 +233,39 @@ public final class NpcMannequin {
         return placed;
     }
 
+    public SceneNode buildCreature(EsmCreature crea, CellRef ref) throws Exception {
+        String mesh = TexturePaths.normalizeMeshPath(crea.model);
+        String animationMesh = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
+        boolean animated = true;
+        if (animationMesh.equals(mesh) && mesh.endsWith(".nif")) {
+            animated = false;
+        }
+        NifSceneBuilder builder = loadNif(animationMesh);
+        SceneNode skeleton = cloneTree(skeleton(animationMesh));
+        SceneNode placed = new SceneNode();
+        placed.name = crea.id;
+        placed.addChild(skeleton);
+        skeleton.updateWorld(id);
+        Map<String, Matrix4> boneWorld = new HashMap<>();
+        Map<String, SceneNode> boneNodes = new HashMap<>();
+        collectBones(skeleton, boneWorld, boneNodes);
+        builder.copyCreatureGeometry(boneWorld, placed, skeleton);
+        NpcActor actor = new NpcActor(placed, skeleton, boneNodes);
+        collectSkins(placed, actor.skins);
+        if (crea.bipedal()) {
+            addAnimSource(actor, XBASE);
+        }
+        if (animated) {
+            addAnimSource(actor, animationMesh);
+        }
+        playIdle(actor);
+        pose(actor);
+        actors.add(actor);
+        float s = ref.scale * crea.scale;
+        EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s, s, s);
+        return placed;
+    }
+
     public void update(float dt) {
         for (NpcActor actor : actors) {
             if (actor.idle == null) {
@@ -299,6 +335,30 @@ public final class NpcMannequin {
             sb.append('\n');
         }
         sb.append("kf=").append(TexturePaths.nifToKf(skeletonPath(npc, cell))).append('\n');
+        return sb.toString();
+    }
+
+    public static String describeCreature(EsmCreature crea) {
+        String mesh = TexturePaths.normalizeMeshPath(crea.model);
+        String corrected = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
+        boolean animated = !(corrected.equals(mesh) && mesh.endsWith(".nif"));
+        StringBuilder sb = new StringBuilder();
+        sb.append("id=").append(crea.id)
+            .append(" name=").append(crea.name)
+            .append(" model=").append(crea.model)
+            .append('\n');
+        sb.append("corrected=").append(corrected)
+            .append(" animated=").append(animated)
+            .append('\n');
+        sb.append("flags=0x").append(Integer.toHexString(crea.flags))
+            .append(" biped=").append(crea.bipedal())
+            .append(" weapon=").append(crea.weapon())
+            .append(" swims=").append(crea.swims())
+            .append(" flies=").append(crea.flies())
+            .append(" walks=").append(crea.walks())
+            .append(" scale=").append(crea.scale)
+            .append('\n');
+        sb.append("kf=").append(TexturePaths.nifToKf(corrected)).append('\n');
         return sb.toString();
     }
 
@@ -594,10 +654,15 @@ public final class NpcMannequin {
     }
 
     private NifSceneBuilder loadNif(String vfs) throws Exception {
+        NifSceneBuilder cached = nifBuilders.get(vfs);
+        if (cached != null) {
+            return cached;
+        }
         Path nifPath = TestData.ensureNif(vfs);
         NifFile nif = NifFile.parse(Files.readAllBytes(nifPath), vfs);
         NifSceneBuilder builder = new NifSceneBuilder(nif, testdata, TestData::vfsExists);
         builders.add(builder);
+        nifBuilders.put(vfs, builder);
         return builder;
     }
 

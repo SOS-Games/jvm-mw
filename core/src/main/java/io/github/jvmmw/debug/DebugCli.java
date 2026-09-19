@@ -1,6 +1,7 @@
 package io.github.jvmmw.debug;
 
 import io.github.jvmmw.esm.CellRef;
+import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
@@ -36,6 +37,7 @@ public final class DebugCli {
             case "interiors" -> interiors(args.length > 1 ? args[1] : "");
             case "spawn" -> spawn(require(args, 1, "spawn <interior name>"));
             case "npc" -> npc(require(args, 1, "npc <id>"));
+            case "crea" -> crea(require(args, 1, "crea <id>"));
             case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
             default -> {
                 System.err.println("Unknown command: " + args[0]);
@@ -55,13 +57,15 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="interiors cave"
             gradlew.bat :core:debugCli --args="spawn Addamasartus"
             gradlew.bat :core:debugCli --args="npc sellus gravius"
+            gradlew.bat :core:debugCli --args="crea nix-hound"
             gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
-            cell       One interior: fog range, inbound spawn, doors, NPCs, ref counts (full ESM parse).
+            cell       One interior: fog range, inbound spawn, doors, NPCs, CREA, ref counts (full ESM parse).
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
+            crea       One CREA: model, corrected x-path, flags, scale.
             kf         Text-key groups and bone tracks from a Morrowind .kf.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
@@ -105,6 +109,7 @@ public final class DebugCli {
         int doors = 0;
         int kit = 0;
         int npcs = 0;
+        int crea = 0;
         for (CellRef ref : cell.refs) {
             if (ref.deleted) {
                 continue;
@@ -120,6 +125,17 @@ public final class DebugCli {
                     + " race=" + npc.race
                     + " head=" + npc.head
                     + " hair=" + npc.hair);
+                continue;
+            }
+            EsmCreature creature = cell.creatures.get(key);
+            if (creature != null) {
+                crea++;
+                System.out.println("crea " + creature.id
+                    + " tes=" + xyz(ref.pos)
+                    + " yaw=" + ref.rot[2]
+                    + " scl=" + (ref.scale * creature.scale)
+                    + " flags=0x" + Integer.toHexString(creature.flags)
+                    + " modl=" + creature.model);
                 continue;
             }
             EsmObject obj = cell.objects.get(key);
@@ -147,7 +163,7 @@ public final class DebugCli {
                 }
             }
         }
-        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs);
+        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs + " crea=" + crea);
     }
 
     private static void npc(String id) throws Exception {
@@ -167,6 +183,25 @@ public final class DebugCli {
             throw new IllegalStateException("No NPC_ matching " + id);
         }
         System.out.print(NpcMannequin.describe(npc, cell));
+    }
+
+    private static void crea(String id) throws Exception {
+        EsmFile.LoadedCell cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), TestData.PUNSABANIT);
+        String key = id.toLowerCase(Locale.ROOT);
+        EsmCreature crea = cell.creatures.get(key);
+        if (crea == null) {
+            for (EsmCreature candidate : cell.creatures.values()) {
+                if (candidate.id.toLowerCase(Locale.ROOT).contains(key)
+                    || candidate.name.toLowerCase(Locale.ROOT).contains(key)) {
+                    crea = candidate;
+                    break;
+                }
+            }
+        }
+        if (crea == null) {
+            throw new IllegalStateException("No CREA matching " + id);
+        }
+        System.out.print(NpcMannequin.describeCreature(crea));
     }
 
     private static void interiors(String filter) throws Exception {

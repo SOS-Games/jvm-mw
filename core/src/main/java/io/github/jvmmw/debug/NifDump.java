@@ -108,6 +108,17 @@ public final class NifDump {
             if (av.skipMeshes) {
                 sb.append(" skipMeshes");
             }
+            if (av.extra >= 0) {
+                sb.append(" extra=").append(av.extra);
+                NifRecord extra = nif.get(av.extra);
+                if (extra != null) {
+                    sb.append('(').append(extra.recordName);
+                    if (extra instanceof io.github.jvmmw.nif.NiStringExtraData str) {
+                        sb.append(" \"").append(str.data).append('"');
+                    }
+                    sb.append(')');
+                }
+            }
             if (av.controller >= 0) {
                 NifRecord ctrl = nif.get(av.controller);
                 sb.append(" ctrl=").append(av.controller);

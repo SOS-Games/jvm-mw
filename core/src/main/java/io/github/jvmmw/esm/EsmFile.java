@@ -19,6 +19,7 @@ public final class EsmFile {
 
     public final Map<String, EsmObject> objects = new LinkedHashMap<>();
     public final Map<String, EsmNpc> npcs = new LinkedHashMap<>();
+    public final Map<String, EsmCreature> creatures = new LinkedHashMap<>();
     public final Map<String, EsmRace> races = new LinkedHashMap<>();
     public final Map<String, EsmBodyPart> bodies = new LinkedHashMap<>();
     public final Set<String> actorIds = new HashSet<>();
@@ -64,7 +65,7 @@ public final class EsmFile {
             } else if ("NPC_".equals(rec)) {
                 file.readNpc(esm);
             } else if ("CREA".equals(rec)) {
-                file.readActor(esm);
+                file.readCreature(esm);
             } else if ("RACE".equals(rec)) {
                 file.readRace(esm);
             } else if ("BODY".equals(rec)) {
@@ -96,6 +97,7 @@ public final class EsmFile {
         }
         found.objects = file.objects;
         found.npcs = file.npcs;
+        found.creatures = file.creatures;
         found.races = file.races;
         found.bodies = file.bodies;
         found.actorIds = file.actorIds;
@@ -234,18 +236,31 @@ public final class EsmFile {
         rgb[2] = ((clr >> 16) & 0xFF) / 255f;
     }
 
-    private void readActor(EsmReader esm) {
-        String id = "";
+    private void readCreature(EsmReader esm) {
+        EsmCreature crea = new EsmCreature();
         while (esm.hasMoreSubs()) {
-            if (esm.isNextSub("NAME")) {
-                id = esm.getHString();
-            } else {
-                esm.getSubName();
-                esm.skipHSub();
+            String sub = esm.getSubName();
+            switch (sub) {
+                case "NAME" -> crea.id = esm.getHString();
+                case "FNAM" -> crea.name = esm.getHString();
+                case "MODL" -> crea.model = esm.getHString();
+                case "FLAG" -> {
+                    esm.getSubHeader();
+                    crea.flags = esm.getI32() & 0xFF;
+                    esm.skipRestOfSub();
+                }
+                case "XSCL" -> {
+                    esm.getSubHeader();
+                    crea.scale = esm.getF32();
+                    esm.skipRestOfSub();
+                }
+                default -> esm.skipHSub();
             }
         }
-        if (!id.isEmpty()) {
-            actorIds.add(id.toLowerCase(Locale.ROOT));
+        if (!crea.id.isEmpty()) {
+            String key = crea.id.toLowerCase(Locale.ROOT);
+            creatures.put(key, crea);
+            actorIds.add(key);
         }
     }
 
@@ -556,6 +571,7 @@ public final class EsmFile {
         public final List<CellRef> refs = new ArrayList<>();
         public Map<String, EsmObject> objects = Map.of();
         public Map<String, EsmNpc> npcs = Map.of();
+        public Map<String, EsmCreature> creatures = Map.of();
         public Map<String, EsmRace> races = Map.of();
         public Map<String, EsmBodyPart> bodies = Map.of();
         public Set<String> actorIds = Set.of();

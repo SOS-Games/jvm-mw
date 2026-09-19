@@ -1,6 +1,7 @@
 package io.github.jvmmw.render;
 
 import io.github.jvmmw.esm.CellRef;
+import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
@@ -29,6 +30,7 @@ public final class CellSceneBuilder {
     public int skippedEmpty;
     public int skippedActor;
     public int placedNpc;
+    public int placedCrea;
     public int skippedDeleted;
     public int skippedNif;
     public int placedStat;
@@ -57,7 +59,8 @@ public final class CellSceneBuilder {
     public void begin(EsmFile.LoadedCell cell) {
         this.cell = cell;
         cellName = cell.name;
-        placed = skippedUnknown = skippedEmpty = skippedActor = skippedDeleted = skippedNif = placedStat = placedNpc = 0;
+        placed = skippedUnknown = skippedEmpty = skippedActor = skippedDeleted = skippedNif = placedStat = placedNpc
+            = placedCrea = 0;
         log.setLength(0);
         byRec = new TreeMap<>();
         buildingRoot = new SceneNode();
@@ -89,7 +92,8 @@ public final class CellSceneBuilder {
         buildingRoot.updateWorld(id);
         finishLights();
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
-            + " npc=" + placedNpc + " byRec=" + byRec + " empty=" + skippedEmpty + " actor=" + skippedActor
+            + " npc=" + placedNpc + " crea=" + placedCrea + " byRec=" + byRec + " empty=" + skippedEmpty
+            + " actor=" + skippedActor
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
             + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity + '\n');
         finished = true;
@@ -133,21 +137,36 @@ public final class CellSceneBuilder {
         }
         if (cell.actorIds.contains(key)) {
             EsmNpc npc = cell.npcs.get(key);
-            if (npc == null) {
+            if (npc != null) {
+                try {
+                    SceneNode inst = mannequin.build(npc, ref, cell);
+                    buildingRoot.addChild(inst);
+                    placed++;
+                    placedNpc++;
+                    byRec.merge("NPC_", 1, Integer::sum);
+                } catch (Exception e) {
+                    skippedNif++;
+                    log.append("npc fail ").append(ref.refId).append(" ").append(e.getMessage()).append('\n');
+                    Gdx.app.error("CellSceneBuilder", "NPC " + ref.refId, e);
+                }
+                return;
+            }
+            EsmCreature crea = cell.creatures.get(key);
+            if (crea == null) {
                 skippedActor++;
                 log.append("skip actor=").append(ref.refId).append('\n');
                 return;
             }
             try {
-                SceneNode inst = mannequin.build(npc, ref, cell);
+                SceneNode inst = mannequin.buildCreature(crea, ref);
                 buildingRoot.addChild(inst);
                 placed++;
-                placedNpc++;
-                byRec.merge("NPC_", 1, Integer::sum);
+                placedCrea++;
+                byRec.merge("CREA", 1, Integer::sum);
             } catch (Exception e) {
                 skippedNif++;
-                log.append("npc fail ").append(ref.refId).append(" ").append(e.getMessage()).append('\n');
-                Gdx.app.error("CellSceneBuilder", "NPC " + ref.refId, e);
+                log.append("crea fail ").append(ref.refId).append(" ").append(e.getMessage()).append('\n');
+                Gdx.app.error("CellSceneBuilder", "CREA " + ref.refId, e);
             }
             return;
         }

@@ -24,6 +24,7 @@ public final class TestData {
     public static final String CENSUS_CELL = "Seyda Neen, Census and Excise Office";
     public static final String PRISON_SHIP = "Imperial Prison Ship";
     public static final String ADDAMASARTUS = "Addamasartus";
+    public static final String PUNSABANIT = "Punsabanit";
 
     private static BsaArchive cachedBsa;
 

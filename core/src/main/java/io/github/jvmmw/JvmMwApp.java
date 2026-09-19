@@ -421,7 +421,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 7", skin);
+        Window win = new Window("JVM-MW Phase 10", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -436,6 +436,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Dwrv", TestData.DWRV)).row();
         win.add(meshButton("Cell", CELL_PREFIX + TestData.CENSUS_CELL));
         win.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
+        win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
         TextButton click = new TextButton("Click me", skin);
         click.addListener(new ClickListener() {
             @Override

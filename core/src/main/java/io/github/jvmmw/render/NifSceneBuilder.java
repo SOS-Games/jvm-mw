@@ -5,6 +5,7 @@ import io.github.jvmmw.nif.NiAvObject;
 import io.github.jvmmw.nif.NiMaterialProperty;
 import io.github.jvmmw.nif.NiNode;
 import io.github.jvmmw.nif.NiSourceTexture;
+import io.github.jvmmw.nif.NiStringExtraData;
 import io.github.jvmmw.nif.Skinning;
 import io.github.jvmmw.nif.NiSpecularProperty;
 import io.github.jvmmw.nif.NiStencilProperty;
@@ -41,6 +42,7 @@ public final class NifSceneBuilder {
     private final List<MeshGpu> gpus = new ArrayList<>();
     private int whiteTex;
     private boolean bonesOnly;
+    private boolean hasMarkers;
 
     public NifSceneBuilder(NifFile nif, Path testdata, Predicate<String> exists) {
         this.nif = nif;
@@ -62,6 +64,7 @@ public final class NifSceneBuilder {
 
     public SceneNode build(boolean convertZUp, boolean bonesOnly) {
         this.bonesOnly = bonesOnly;
+        this.hasMarkers = rootHasMrk();
         ensureWhite();
         flattenLog.setLength(0);
         SceneNode root = new SceneNode();
@@ -93,7 +96,7 @@ public final class NifSceneBuilder {
     public void copyMatchingSkinned(String filter, Map<String, Matrix4> boneWorld, SceneNode dest) {
         ensureWhite();
         for (NifRecord rec : nif.records) {
-            if (!(rec instanceof NiTriBasedGeom geom) || geom.skin < 0 || geom.skipMeshes) {
+            if (!(rec instanceof NiTriBasedGeom geom) || geom.skin < 0 || geom.skipMeshes || skipMwDrawable(geom.name)) {
                 continue;
             }
             if (!filterMatches(geom.name, filter)) {
@@ -112,6 +115,54 @@ public final class NifSceneBuilder {
         }
     }
 
+    /**
+     * Creature NIF drawables onto an already-cloned bone tree. Skips names starting
+     * {@code tri bip} ({@code SceneUtil::RemoveTriBipVisitor}).
+     */
+    public void copyCreatureGeometry(Map<String, Matrix4> boneWorld, SceneNode dest, SceneNode skeleton) {
+        ensureWhite();
+        for (NifRecord rec : nif.records) {
+            if (!(rec instanceof NiTriBasedGeom geom) || geom.skipMeshes || skipMwDrawable(geom.name)) {
+                continue;
+            }
+            if (startsWithIgnoreCase(geom.name, "tri bip")) {
+                continue;
+            }
+            NifRecord dataRec = nif.get(geom.data);
+            if (!(dataRec instanceof NiTriShapeData data) || data.vertices.length == 0 || data.triangles.length < 3) {
+                continue;
+            }
+            List<NiAvObject> path = pathTo(geom);
+            if (geom.skin >= 0) {
+                MeshInstance inst = uploadSkinned(geom, data, path, boneWorld);
+                SceneNode node = new SceneNode();
+                node.name = geom.name;
+                node.meshes.add(inst);
+                dest.addChild(node);
+                continue;
+            }
+            SceneNode host = findNamed(skeleton, geom.name.toLowerCase(java.util.Locale.ROOT));
+            if (host == null) {
+                host = dest;
+            }
+            MeshGpu gpu = upload(data, path);
+            host.meshes.add(new MeshInstance(gpu));
+        }
+    }
+
+    private static SceneNode findNamed(SceneNode node, String key) {
+        if (!node.name.isEmpty() && node.name.toLowerCase(java.util.Locale.ROOT).equals(key)) {
+            return node;
+        }
+        for (SceneNode child : node.children) {
+            SceneNode found = findNamed(child, key);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
     public static boolean filterMatches(String name, String filter) {
         if (startsWithIgnoreCase(name, filter)) {
             return true;
@@ -124,6 +175,29 @@ public final class NifSceneBuilder {
 
     private static boolean startsWithIgnoreCase(String name, String prefix) {
         return name.regionMatches(true, 0, prefix, 0, prefix.length());
+    }
+
+    /** Morrowind: skip CS marker tris when the nif root has extra {@code MRK}, plus baked {@code shadow} blobs. */
+    private boolean skipMwDrawable(String name) {
+        if (startsWithIgnoreCase(name, "shadow") || startsWithIgnoreCase(name, "tri shadow")) {
+            return true;
+        }
+        return hasMarkers && startsWithIgnoreCase(name, "tri editormarker");
+    }
+
+    private boolean rootHasMrk() {
+        for (int idx : nif.roots) {
+            NifRecord rec = nif.get(idx);
+            int extra = rec instanceof NiAvObject av ? av.extra : rec != null ? rec.extra : -1;
+            while (extra >= 0) {
+                NifRecord e = nif.get(extra);
+                if (e instanceof NiStringExtraData str && "MRK".equals(str.data)) {
+                    return true;
+                }
+                extra = e != null ? e.extra : -1;
+            }
+        }
+        return false;
     }
 
     public void dispose() {
@@ -149,7 +223,8 @@ public final class NifSceneBuilder {
         node.skipMeshes = skipHere;
         List<NiAvObject> path = new ArrayList<>(ancestors);
         path.add(av);
-        if (av instanceof NiTriBasedGeom geom && !skipHere && !bonesOnly && geom.skin < 0) {
+        if (av instanceof NiTriBasedGeom geom && !skipHere && !bonesOnly && geom.skin < 0
+            && !skipMwDrawable(geom.name)) {
             NifRecord dataRec = nif.get(geom.data);
             if (dataRec instanceof NiTriShapeData data && data.vertices.length > 0 && data.triangles.length >= 3) {
                 MeshGpu gpu = upload(data, path);

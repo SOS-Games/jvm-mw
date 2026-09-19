@@ -58,6 +58,12 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/nif/data.hpp` | `Nif::NiKeyframeData` | `nif.NiKeyframeData` | same |
 | `components/nifosg/nifloader.cpp` | `NifOsg::Loader::loadKf` | `nif.KfFile` | rewrite |
 | `apps/openmw/mwrender/animation.cpp` | `MWRender::Animation::play` idle | `render.NpcMannequin` idle | rewrite |
+| `components/esm3/loadcrea.hpp` | `ESM::Creature` | `esm.EsmCreature` | same |
+| `apps/openmw/mwclass/creature.cpp` | `Creature::insertObjectRendering` | `CellSceneBuilder` CREA place | rewrite |
+| `apps/openmw/mwrender/objects.cpp` | `Objects::insertCreature` | `NpcMannequin.buildCreature` | rewrite |
+| `apps/openmw/mwrender/creatureanimation.cpp` | `MWRender::CreatureAnimation` | idle on creature nif root | rewrite |
+| `components/sceneutil/visitor.cpp` | `RemoveTriBipVisitor` | skip `"tri bip"` drawables | rewrite |
+| `apps/openmw/mwclass/creature.cpp` | `Creature::adjustScale` | `ref.scale * CREA.XSCL` | rewrite |
 | `components/nifosg/controller.cpp` | `NifOsg::KeyframeController` | `KfFile` sample → bone `SceneNode.local` | rewrite |
 | `components/sceneutil/riggeometry.cpp` | `SceneUtil::RigGeometry` | skinned mesh on `SceneNode` | rewrite |
 | `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` | same |

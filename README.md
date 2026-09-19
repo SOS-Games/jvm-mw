@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 9 (current)
+## Phase 10 (current)
 
-NPC idle from `xbase_anim.kf` — looping group `idle` on Phase 8 mannequins. See [docs/phase9-npc-idle.md](docs/phase9-npc-idle.md). Phase 8: [docs/phase8-npc-mannequins.md](docs/phase8-npc-mannequins.md).
+Creatures from `CREA` — Punsabanit nix-hounds idle on their own nif. See [docs/phase10-creatures.md](docs/phase10-creatures.md). Phase 9: [docs/phase9-npc-idle.md](docs/phase9-npc-idle.md).
 
 ```bat
 gradlew.bat lwjgl3:run
