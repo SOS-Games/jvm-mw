@@ -6,6 +6,7 @@
 package io.github.jvmmw.esm;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,9 +14,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Load placeable NAME+MODL records and one CELL's refs from Morrowind.esm. */
+/** Load placeable NAME+MODL records and CELL refs from Morrowind.esm. */
 public final class EsmFile {
     public static final int CELL_INTERIOR = 0x01;
+    /** TES3 {@code Constants::CellGridRadius}. Active grid side is {@code 2 * r + 1}. */
+    public static final int CELL_GRID_RADIUS = 1;
     public static final String CENSUS_CELL = "Seyda Neen, Census and Excise Office";
     public static final String CENSUS_EXIT = "chargen door exit";
 
@@ -74,7 +77,7 @@ public final class EsmFile {
             } else if ("BODY".equals(rec)) {
                 file.readBody(esm);
             } else if ("CELL".equals(rec)) {
-                LoadedCell cell = file.readCell(esm, wanted, Integer.MIN_VALUE, Integer.MIN_VALUE);
+                LoadedCell cell = file.readCell(esm, wanted, Integer.MIN_VALUE, Integer.MIN_VALUE, 0);
                 if (cell != null) {
                     for (int i = 0; i < wanted.length; i++) {
                         if (wanted[i].equalsIgnoreCase(cell.name)) {
@@ -109,9 +112,13 @@ public final class EsmFile {
     }
 
     public static LoadedCell loadExterior(EsmReader esm, int gridX, int gridY) {
+        return loadExterior(esm, gridX, gridY, CELL_GRID_RADIUS);
+    }
+
+    public static LoadedCell loadExterior(EsmReader esm, int gridX, int gridY, int radius) {
         EsmFile file = new EsmFile();
-        LoadedCell found = null;
-        LandRecord land = null;
+        Map<Long, LoadedCell> cells = new HashMap<>();
+        Map<Long, LandRecord> lands = new HashMap<>();
         while (esm.hasMoreRecs()) {
             String rec = esm.getRecName();
             esm.getRecHeader();
@@ -126,31 +133,62 @@ public final class EsmFile {
             } else if ("BODY".equals(rec)) {
                 file.readBody(esm);
             } else if ("CELL".equals(rec)) {
-                LoadedCell cell = file.readCell(esm, null, gridX, gridY);
+                LoadedCell cell = file.readCell(esm, null, gridX, gridY, radius);
                 if (cell != null) {
-                    found = cell;
+                    cells.put(gridKey(cell.gridX, cell.gridY), cell);
                 }
             } else if ("LAND".equals(rec)) {
-                LandRecord parsed = file.readLand(esm, gridX, gridY);
+                LandRecord parsed = file.readLand(esm, gridX, gridY, radius);
                 if (parsed != null) {
-                    land = parsed;
+                    lands.put(gridKey(parsed.gridX, parsed.gridY), parsed);
                 }
             } else {
                 esm.skipRecord();
             }
         }
-        if (found == null) {
+        LoadedCell center = cells.get(gridKey(gridX, gridY));
+        if (center == null) {
             throw new IllegalStateException("No exterior CELL at (" + gridX + ", " + gridY + ")");
         }
-        found.objects = file.objects;
-        found.npcs = file.npcs;
-        found.creatures = file.creatures;
-        found.races = file.races;
-        found.bodies = file.bodies;
-        found.actorIds = file.actorIds;
-        found.land = land != null ? land : LandRecord.flat(gridX, gridY);
-        file.applyCensusExitSpawn(found);
-        return found;
+        center.objects = file.objects;
+        center.npcs = file.npcs;
+        center.creatures = file.creatures;
+        center.races = file.races;
+        center.bodies = file.bodies;
+        center.actorIds = file.actorIds;
+        for (int x = gridX - radius; x <= gridX + radius; x++) {
+            for (int y = gridY - radius; y <= gridY + radius; y++) {
+                long key = gridKey(x, y);
+                LandRecord land = lands.get(key);
+                if (land == null) {
+                    land = LandRecord.flat(x, y);
+                }
+                LoadedCell part = cells.get(key);
+                GridTile tile = new GridTile();
+                tile.gridX = x;
+                tile.gridY = y;
+                tile.name = part != null ? part.name : "";
+                tile.refs = part != null ? part.refs.size() : 0;
+                tile.land = land;
+                center.tiles.add(tile);
+                center.lands.add(land);
+                if (x == gridX && y == gridY) {
+                    center.land = land;
+                } else if (part != null) {
+                    center.refs.addAll(part.refs);
+                }
+            }
+        }
+        file.applyCensusExitSpawn(center);
+        return center;
+    }
+
+    public static boolean inCellGrid(int x, int y, int cx, int cy, int radius) {
+        return Math.abs(x - cx) <= radius && Math.abs(y - cy) <= radius;
+    }
+
+    private static long gridKey(int x, int y) {
+        return ((long) x << 32) ^ (y & 0xffffffffL);
     }
 
     /**
@@ -396,14 +434,14 @@ public final class EsmFile {
         }
     }
 
-    private LoadedCell readCell(EsmReader esm, String[] wanted, int gridX, int gridY) {
+    private LoadedCell readCell(EsmReader esm, String[] wanted, int gridX, int gridY, int radius) {
         CellHead head = readCellHead(esm);
         boolean interior = (head.flags & CELL_INTERIOR) != 0;
         if (interior && !head.name.isEmpty()) {
             interiorNames.add(head.name);
         }
         boolean takeInterior = interior && wanted != null && matchWanted(wanted, head.name);
-        boolean takeExterior = !interior && wanted == null && head.gridX == gridX && head.gridY == gridY;
+        boolean takeExterior = !interior && wanted == null && inCellGrid(head.gridX, head.gridY, gridX, gridY, radius);
         if (!takeInterior && !takeExterior) {
             harvestRefs(esm, head.name, interior);
             return null;
@@ -640,7 +678,7 @@ public final class EsmFile {
         cell.hasSpawn = true;
     }
 
-    private LandRecord readLand(EsmReader esm, int gridX, int gridY) {
+    private LandRecord readLand(EsmReader esm, int gridX, int gridY, int radius) {
         int x = 0;
         int y = 0;
         boolean hasLocation = false;
@@ -656,7 +694,7 @@ public final class EsmFile {
                 break;
             }
         }
-        if (!hasLocation || x != gridX || y != gridY) {
+        if (!hasLocation || !inCellGrid(x, y, gridX, gridY, radius)) {
             while (esm.hasMoreSubs()) {
                 esm.getSubName();
                 esm.skipHSub();
@@ -705,6 +743,8 @@ public final class EsmFile {
         public int gridY;
         public boolean hasSpawn;
         public LandRecord land;
+        public final List<LandRecord> lands = new ArrayList<>();
+        public final List<GridTile> tiles = new ArrayList<>();
         public final List<CellRef> refs = new ArrayList<>();
         public Map<String, EsmObject> objects = Map.of();
         public Map<String, EsmNpc> npcs = Map.of();
@@ -718,6 +758,14 @@ public final class EsmFile {
         public float fogDensity;
         public final float[] spawnPos = new float[3];
         public final float[] spawnRot = new float[3];
+    }
+
+    public static final class GridTile {
+        public int gridX;
+        public int gridY;
+        public String name = "";
+        public int refs;
+        public LandRecord land;
     }
 
     /** CELL scan row for the debug CLI. Not a placed scene. */

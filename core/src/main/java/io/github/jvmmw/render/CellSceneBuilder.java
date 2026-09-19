@@ -5,6 +5,7 @@ import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
+import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
@@ -91,8 +92,14 @@ public final class CellSceneBuilder {
             lighting.sunDiffuse[1] = 0.98f;
             lighting.sunDiffuse[2] = 0.9f;
         }
-        if (!cell.interior && cell.land != null) {
-            landMesh.attach(buildingRoot, cell.land);
+        if (!cell.interior) {
+            if (!cell.lands.isEmpty()) {
+                for (LandRecord land : cell.lands) {
+                    landMesh.attach(buildingRoot, land);
+                }
+            } else if (cell.land != null) {
+                landMesh.attach(buildingRoot, cell.land);
+            }
         }
     }
 

@@ -10,28 +10,32 @@ import io.github.jvmmw.esm.LandRecord;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Grey 65×65 heightfield. Rewrite of {@code RenderingManager::addCell} terrain
- * without {@code LTEX} blendmaps.
+ * without {@code LTEX} blendmaps. One GPU mesh per grid tile; shared white tex.
  */
 public final class LandMesh {
-    private MeshGpu gpu;
+    private final List<MeshGpu> gpus = new ArrayList<>();
     private int whiteTex;
 
     public SceneNode attach(SceneNode cellRoot, LandRecord land) {
         SceneNode node = new SceneNode();
         node.name = "land:" + land.gridX + "," + land.gridY;
-        gpu = upload(land);
-        node.meshes.add(new MeshInstance(gpu));
+        MeshGpu mesh = upload(land);
+        gpus.add(mesh);
+        node.meshes.add(new MeshInstance(mesh));
         cellRoot.addChild(node);
         return node;
     }
 
     public void dispose() {
-        if (gpu != null) {
+        for (MeshGpu gpu : gpus) {
             gpu.dispose();
-            gpu = null;
         }
+        gpus.clear();
         if (whiteTex != 0) {
             Gdx.gl.glDeleteTexture(whiteTex);
             whiteTex = 0;

@@ -70,11 +70,11 @@ public final class DebugCli {
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
             crea       One CREA: model, corrected x-path, flags, scale.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
-            exterior   One exterior grid cell: name, LAND min/max, spawn, ref counts.
+            exterior   3x3 around a grid: nine grid= lines, then center spawn/doors.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
-            Empty-DNAM dest loads that exterior grid (one cell). HUD Town loads exterior (-2, -9).
+            Empty-DNAM dest loads a 3x3 around that exterior grid. HUD Town loads exterior (-2, -9).
             """;
     }
 
@@ -105,6 +105,12 @@ public final class DebugCli {
         int gx = Integer.parseInt(parts[0]);
         int gy = Integer.parseInt(parts[1]);
         EsmFile.LoadedCell cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+        for (EsmFile.GridTile tile : cell.tiles) {
+            System.out.println("grid= " + tile.gridX + " " + tile.gridY
+                + " name=" + tile.name
+                + " refs=" + tile.refs
+                + " land=" + (int) tile.land.minHeight + ".." + (int) tile.land.maxHeight);
+        }
         System.out.println("cell=" + cell.name
             + " grid=(" + cell.gridX + "," + cell.gridY + ")"
             + " interior=" + cell.interior

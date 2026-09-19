@@ -81,9 +81,12 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/loadcell.hpp` | `ESM::Cell::getGridX/Y` | `LoadedCell.gridX/Y` | same |
 | `components/esm/util.hpp` | `positionToExteriorCellLocation` | `LandRecord.cellGrid` `floor(x/8192)` | same |
 | `components/esm3/loadland.hpp` | `ESM::Land` / `VHGT` | `esm.LandRecord` + `LandMesh` | rewrite |
-| `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | grey `LAND` `MeshInstance` | rewrite |
+| `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | one grey `LAND` mesh per grid | rewrite |
+| `components/misc/constants.hpp` | `CellGridRadius` | `EsmFile.CELL_GRID_RADIUS` (1 → 3×3) | same |
+| `apps/openmw/mwworld/scene.cpp` | `iterateOverCellsAround` | `loadExterior` one pass `|x-cx|<=1` | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `changeCellGrid` | one-shot 3×3, no walk recenter | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
-| `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | one grid cell (not 3×3) | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 3×3 around it | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |
 | `apps/openmw/mwworld/actiontake.cpp` | `ActionTake` | unparent mesh, skip inventory | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `World::deleteObject` | `SceneNode.removeFromParent` | rewrite |

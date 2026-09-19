@@ -430,7 +430,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     private void frameCellCamera() {
         camera.far = loadedCell.interior
             ? Math.max(8000f, CellLighting.VIEW_DISTANCE + 256f)
-            : 20000f;
+            : 40000f;
         moveScale = 220f;
         if (doorArrival) {
             placeEye(doorArrivalPos, doorArrivalYaw);
@@ -525,7 +525,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 17", skin);
+        Window win = new Window("JVM-MW Phase 18", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
