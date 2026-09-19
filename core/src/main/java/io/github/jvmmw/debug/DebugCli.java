@@ -69,7 +69,7 @@ public final class DebugCli {
             kf         Text-key groups and bone tracks from a Morrowind .kf.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
-            E activates a non-teleport door under the camera (192 units).
+            E activates a door under the camera (192 units). Named interior dest loads that cell.
             """;
     }
 

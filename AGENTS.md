@@ -11,6 +11,7 @@ Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca
 - **Do not** commit Bethesda assets (`testdata/`, ESM/BSA).
 - **Do not** commit mid-implementation.
 - Once the user says a phase is **working**, **commit and push that phase before writing the next spec.** Do not start the next spec while the previous working phase is uncommitted. After a working phase, `proceed` means commit first, then spec the next slice.
+- Other-LLM claim prompts live in the phase spec (`docs/phaseN-*.md`). Point at that file; **do not paste the prompts into chat.**
 
 Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`).
 
@@ -54,8 +55,8 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - `NiSkinData` transforms use packed order (rotation, translation, scale), not `NiAVObject` (translation, rotation, scale). Wrong order flattens skinned parts onto the ground.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
-- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit.
-- **E** opens/closes a non-teleport door under the camera (192 units, 90°/s around TES3 Z). Teleport exits stay shut.
+- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall).
+- **E** opens/closes a non-teleport door under the camera (192 units, 90°/s around TES3 Z). Named interior dest loads that cell at the door `DODT`. Empty-`DNAM` exits stay shut.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 

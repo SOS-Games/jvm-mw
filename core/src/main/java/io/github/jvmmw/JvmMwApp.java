@@ -37,6 +37,7 @@ import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
+import io.github.jvmmw.render.DoorSwing;
 import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.NifSceneBuilder;
 import io.github.jvmmw.render.SceneNode;
@@ -86,6 +87,9 @@ public final class JvmMwApp extends ApplicationAdapter {
     private int pendingVisibleFrames;
     private boolean cellStepping;
     private boolean windowFocused;
+    private boolean doorArrival;
+    private final float[] doorArrivalPos = new float[3];
+    private float doorArrivalYaw;
 
     @Override
     public void create() {
@@ -114,6 +118,10 @@ public final class JvmMwApp extends ApplicationAdapter {
                     if (cellBuilder != null && !isLoading()) {
                         String msg = cellBuilder.activateLooking(eye, lookDir);
                         Gdx.app.log("JVM-MW", msg == null ? "door none in range" : msg);
+                        DoorSwing.InteriorTeleport dest = cellBuilder.doors.consumeInteriorTeleport();
+                        if (dest != null) {
+                            startInteriorTeleport(dest);
+                        }
                     }
                     return true;
                 }
@@ -162,6 +170,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void requestLoad(String key, boolean keepAuto) {
+        doorArrival = false;
         pendingKey = key;
         pendingKeepAuto = keepAuto;
         pendingVisibleFrames = 0;
@@ -311,7 +320,22 @@ public final class JvmMwApp extends ApplicationAdapter {
             lastError = e.getMessage() == null ? e.toString() : e.getMessage();
             Gdx.app.error("JVM-MW", "Cell failed: " + wanted, e);
             cellStepping = false;
+            doorArrival = false;
         }
+    }
+
+    private void startInteriorTeleport(DoorSwing.InteriorTeleport dest) {
+        if (loadedCell != null && dest.destCell.equalsIgnoreCase(loadedCell.name)) {
+            placeEye(dest.destPos, dest.destRot[2]);
+            updateLookDir();
+            Gdx.app.log("JVM-MW", "teleport same cell tes=(" + dest.destPos[0] + ','
+                + dest.destPos[1] + ',' + dest.destPos[2] + ')');
+            return;
+        }
+        System.arraycopy(dest.destPos, 0, doorArrivalPos, 0, 3);
+        doorArrivalYaw = dest.destRot[2];
+        requestLoad(CELL_PREFIX + dest.destCell, false);
+        doorArrival = true;
     }
 
     private void frameCamera() {
@@ -343,6 +367,14 @@ public final class JvmMwApp extends ApplicationAdapter {
     private void frameCellCamera() {
         camera.far = Math.max(8000f, CellLighting.VIEW_DISTANCE + 256f);
         moveScale = 220f;
+        if (doorArrival) {
+            placeEye(doorArrivalPos, doorArrivalYaw);
+            doorArrival = false;
+            Gdx.app.log("JVM-MW", "spawn door DODT tes=(" + doorArrivalPos[0] + ','
+                + doorArrivalPos[1] + ',' + doorArrivalPos[2] + ')');
+            updateLookDir();
+            return;
+        }
         if (loadedCell.hasSpawn) {
             placeEye(loadedCell.spawnPos, loadedCell.spawnRot[2]);
             Gdx.app.log("JVM-MW", "spawn inbound tes=(" + loadedCell.spawnPos[0] + ','
@@ -428,7 +460,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 11", skin);
+        Window win = new Window("JVM-MW Phase 12", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -444,6 +476,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Cell", CELL_PREFIX + TestData.CENSUS_CELL));
         win.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
         win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
+        win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD)).row();
         TextButton click = new TextButton("Click me", skin);
         click.addListener(new ClickListener() {
             @Override

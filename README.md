@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 11 (current)
+## Phase 12 (current)
 
-Interior doors swing open on **E** (90° TES3 Z, 90°/s). Teleport exits stay shut. See [docs/phase11-doors.md](docs/phase11-doors.md). Phase 10: [docs/phase10-creatures.md](docs/phase10-creatures.md).
+**E** on a load door with a named interior dest unloads this cell and loads that one (arrive at `DODT`). See [docs/phase12-interior-teleport.md](docs/phase12-interior-teleport.md). Phase 11: [docs/phase11-doors.md](docs/phase11-doors.md).
 
 ```bat
 gradlew.bat lwjgl3:run

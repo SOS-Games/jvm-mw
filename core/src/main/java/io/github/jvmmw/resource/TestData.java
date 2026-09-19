@@ -25,6 +25,7 @@ public final class TestData {
     public static final String PRISON_SHIP = "Imperial Prison Ship";
     public static final String ADDAMASARTUS = "Addamasartus";
     public static final String PUNSABANIT = "Punsabanit";
+    public static final String WOLVERINE_GUILD = "Sadrith Mora, Wolverine Hall: Mage's Guild";
 
     private static BsaArchive cachedBsa;
 

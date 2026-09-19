@@ -70,6 +70,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/doorstate.hpp` | `MWWorld::DoorState` | `DoorSwing.State` | same |
 | `apps/openmw/mwworld/worldimp.cpp` | `getMaxActivationDistance` | `DoorSwing.MAX_ACTIVATE` (192) | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `getFocusObject` | camera ray vs door AABB | rewrite |
+| `apps/openmw/mwworld/actionteleport.cpp` | `ActionTeleport` | `DoorSwing.InteriorTeleport` | rewrite |
+| `apps/openmw/mwworld/cellref.cpp` | `getDestCell` | empty `destCell` → exterior no-op | rewrite |
+| `apps/openmw/mwworld/worldimp.cpp` | `changeToCell` | `loadInterior` + `placeEye` at `DODT` | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `changeToInteriorCell` | dispose + rebuild cell | rewrite |
 | `components/nifosg/controller.cpp` | `NifOsg::KeyframeController` | `KfFile` sample → bone `SceneNode.local` | rewrite |
 | `components/sceneutil/riggeometry.cpp` | `SceneUtil::RigGeometry` | skinned mesh on `SceneNode` | rewrite |
 | `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` | same |

@@ -16,8 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Non-teleport door open/close. Rewrite of {@code World::activateDoor} /
- * {@code rotateDoor} / {@code processDoors}.
+ * Non-teleport door open/close and interior load-door teleport. Rewrite of
+ * {@code World::activateDoor} / {@code rotateDoor} / {@code processDoors} /
+ * {@code ActionTeleport}.
  */
 public final class DoorSwing {
     /** GMST {@code iMaxActivateDist}. */
@@ -34,6 +35,9 @@ public final class DoorSwing {
         public final SceneNode node;
         public final String refId;
         public final boolean teleport;
+        public final String destCell;
+        public final float[] destPos = new float[3];
+        public final float[] destRot = new float[3];
         public final float[] pos = new float[3];
         public final float[] closedRot = new float[3];
         public final float[] liveRot = new float[3];
@@ -44,10 +48,13 @@ public final class DoorSwing {
             this.node = node;
             this.refId = ref.refId;
             this.teleport = ref.teleport;
+            this.destCell = ref.destCell;
             this.scale = ref.scale;
             System.arraycopy(ref.pos, 0, pos, 0, 3);
             System.arraycopy(ref.rot, 0, closedRot, 0, 3);
             System.arraycopy(ref.rot, 0, liveRot, 0, 3);
+            System.arraycopy(ref.destPos, 0, destPos, 0, 3);
+            System.arraycopy(ref.destRot, 0, destRot, 0, 3);
         }
 
         float minRot() {
@@ -59,13 +66,33 @@ public final class DoorSwing {
         }
     }
 
+    public static final class InteriorTeleport {
+        public final String destCell;
+        public final float[] destPos;
+        public final float[] destRot;
+
+        InteriorTeleport(String destCell, float[] destPos, float[] destRot) {
+            this.destCell = destCell;
+            this.destPos = destPos;
+            this.destRot = destRot;
+        }
+    }
+
     public final List<Placed> doors = new ArrayList<>();
+    private InteriorTeleport pendingTeleport;
     private final Ray ray = new Ray();
     private final BoundingBox box = new BoundingBox();
     private final Vector3 hit = new Vector3();
 
     public void clear() {
         doors.clear();
+        pendingTeleport = null;
+    }
+
+    public InteriorTeleport consumeInteriorTeleport() {
+        InteriorTeleport t = pendingTeleport;
+        pendingTeleport = null;
+        return t;
     }
 
     public Placed add(SceneNode node, CellRef ref) {
@@ -99,16 +126,22 @@ public final class DoorSwing {
     }
 
     /**
-     * Camera-center pick. Teleport doors are a no-op. Returns a log line, or
-     * null if nothing was in range.
+     * Camera-center pick. Empty-{@code DNAM} teleport doors are a no-op.
+     * Named dest queues {@link #consumeInteriorTeleport()}. Returns a log line,
+     * or null if nothing was in range.
      */
     public String activate(Vector3 origin, Vector3 direction) {
+        pendingTeleport = null;
         Placed door = pick(origin, direction);
         if (door == null) {
             return null;
         }
         if (door.teleport) {
-            return "door teleport (no swing) " + door.refId;
+            if (door.destCell.isEmpty()) {
+                return "door teleport exterior " + door.refId;
+            }
+            pendingTeleport = new InteriorTeleport(door.destCell, door.destPos, door.destRot);
+            return "door teleport " + door.refId + " -> " + door.destCell;
         }
         activateDoor(door);
         return "door " + door.refId + " " + door.state;
