@@ -95,10 +95,10 @@ public final class CellSceneBuilder {
         if (!cell.interior) {
             if (!cell.lands.isEmpty()) {
                 for (LandRecord land : cell.lands) {
-                    landMesh.attach(buildingRoot, land, cell.landTextures);
+                    landMesh.attach(buildingRoot, land, cell.landTextures, cell.lands);
                 }
             } else if (cell.land != null) {
-                landMesh.attach(buildingRoot, cell.land, cell.landTextures);
+                landMesh.attach(buildingRoot, cell.land, cell.landTextures, List.of(cell.land));
             }
         }
     }

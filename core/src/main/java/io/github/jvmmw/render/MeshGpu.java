@@ -49,6 +49,12 @@ public final class MeshGpu {
 
     public boolean alphaBlend;
     public boolean alphaTest;
+    public boolean terrainPass;
+    public boolean useBlendMap;
+    public int blendMapTex;
+    public int blendMapWrapS = GL20.GL_CLAMP_TO_EDGE;
+    public int blendMapWrapT = GL20.GL_CLAMP_TO_EDGE;
+    public float uvScale = 1f;
     public boolean noSorter;
     public int blendSrc = GL20.GL_SRC_ALPHA;
     public int blendDst = GL20.GL_ONE_MINUS_SRC_ALPHA;
@@ -56,6 +62,7 @@ public final class MeshGpu {
     public float alphaRef = 0.5f;
     public boolean depthTest = true;
     public boolean depthWrite = true;
+    public int depthFunc = GL20.GL_LEQUAL;
     public boolean cull = true;
 
     public int textureId;

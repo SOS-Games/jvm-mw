@@ -14,6 +14,7 @@ public final class Lwjgl3Launcher {
         config.setTitle("JVM-MW — Phase 1 NIF");
         config.useVsync(true);
         config.setWindowedMode(1280, 720);
+        config.setBackBufferConfig(8, 8, 8, 8, 24, 0, 0);
         config.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.GL30, 3, 3);
         JvmMwApp app = new JvmMwApp();
         config.setWindowListener(new Lwjgl3WindowAdapter() {

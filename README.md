@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 19 (current)
+## Phase 20 (current)
 
-Exterior land uses `VTEX`/`LTEX` dirt textures on the Phase 18 3×3. See [docs/phase19-land-textures.md](docs/phase19-land-textures.md). Phase 18 grid: [docs/phase18-cell-grid.md](docs/phase18-cell-grid.md).
+Exterior land mixes `VTEX` layers with TES3 blendmaps. See [docs/phase20-land-blendmaps.md](docs/phase20-land-blendmaps.md). Phase 19 textures: [docs/phase19-land-textures.md](docs/phase19-land-textures.md).
 
 ```bat
 gradlew.bat lwjgl3:run

@@ -45,6 +45,12 @@ public final class ForwardRenderer {
     private final int uAlphaTest;
     private final int uAlphaFunc;
     private final int uAlphaRef;
+    private final int uBlendMap;
+    private final int uUseBlendMap;
+    private final int uUvScale;
+    private final int uAdjustCoverage;
+    private final int uCameraFar;
+    private final int uDepthBias;
     private final FloatBuffer matBuf = BufferUtils.newFloatBuffer(16);
     private final FloatBuffer pointPosBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 3);
     private final FloatBuffer pointDiffBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 3);
@@ -85,6 +91,12 @@ public final class ForwardRenderer {
         uAlphaTest = Gdx.gl.glGetUniformLocation(program, "u_alphaTest");
         uAlphaFunc = Gdx.gl.glGetUniformLocation(program, "u_alphaFunc");
         uAlphaRef = Gdx.gl.glGetUniformLocation(program, "u_alphaRef");
+        uBlendMap = Gdx.gl.glGetUniformLocation(program, "u_blendMap");
+        uUseBlendMap = Gdx.gl.glGetUniformLocation(program, "u_useBlendMap");
+        uUvScale = Gdx.gl.glGetUniformLocation(program, "u_uvScale");
+        uAdjustCoverage = Gdx.gl.glGetUniformLocation(program, "u_adjustCoverage");
+        uCameraFar = Gdx.gl.glGetUniformLocation(program, "u_cameraFar");
+        uDepthBias = Gdx.gl.glGetUniformLocation(program, "u_depthBias");
     }
 
     public void render(PerspectiveCamera cam, SceneNode root) {
@@ -117,18 +129,23 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform1i(uDark, 1);
         Gdx.gl.glUniform1i(uDetail, 2);
         Gdx.gl.glUniform1i(uGlow, 3);
-        drawNode(cam, root, false, lighting);
-        drawNode(cam, root, true, lighting);
+        Gdx.gl.glUniform1i(uBlendMap, 4);
+        Gdx.gl.glUniform1f(uCameraFar, cam.far);
+        drawNode(cam, root, 1, lighting);
+        drawNode(cam, root, 0, lighting);
+        drawNode(cam, root, 2, lighting);
+        Gdx.gl.glDisable(GL20.GL_POLYGON_OFFSET_FILL);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
         Gdx.gl.glUseProgram(0);
         Gdx.gl30.glBindVertexArray(0);
     }
 
-    private void drawNode(PerspectiveCamera cam, SceneNode node, boolean blendPass, CellLighting lighting) {
+    private void drawNode(PerspectiveCamera cam, SceneNode node, int pass, CellLighting lighting) {
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 MeshGpu mesh = inst.mesh;
-                if (mesh.alphaBlend != blendPass) {
+                int meshPass = mesh.terrainPass ? 1 : mesh.alphaBlend ? 2 : 0;
+                if (meshPass != pass) {
                     continue;
                 }
                 if (lighting != null) {
@@ -141,9 +158,14 @@ public final class ForwardRenderer {
                 bindUnit(GL20.GL_TEXTURE1, mesh.darkTex, mesh.darkWrapS, mesh.darkWrapT);
                 bindUnit(GL20.GL_TEXTURE2, mesh.detailTex, mesh.detailWrapS, mesh.detailWrapT);
                 bindUnit(GL20.GL_TEXTURE3, mesh.glowTex, mesh.glowWrapS, mesh.glowWrapT);
+                if (mesh.useBlendMap) {
+                    bindUnit(GL20.GL_TEXTURE4, mesh.blendMapTex, mesh.blendMapWrapS, mesh.blendMapWrapT);
+                }
                 Gdx.gl.glUniform1i(uUseDark, mesh.useDark ? 1 : 0);
                 Gdx.gl.glUniform1i(uUseDetail, mesh.useDetail ? 1 : 0);
                 Gdx.gl.glUniform1i(uUseGlow, mesh.useGlow ? 1 : 0);
+                Gdx.gl.glUniform1i(uUseBlendMap, mesh.useBlendMap ? 1 : 0);
+                Gdx.gl.glUniform1f(uUvScale, mesh.uvScale);
                 Gdx.gl.glUniform3f(uAmbient, mesh.ambient[0], mesh.ambient[1], mesh.ambient[2]);
                 Gdx.gl.glUniform3f(uDiffuse, mesh.diffuse[0], mesh.diffuse[1], mesh.diffuse[2]);
                 Gdx.gl.glUniform3f(uEmissive, mesh.emissive[0], mesh.emissive[1], mesh.emissive[2]);
@@ -152,6 +174,8 @@ public final class ForwardRenderer {
                 Gdx.gl.glUniform1i(uAlphaTest, mesh.alphaTest ? 1 : 0);
                 Gdx.gl.glUniform1i(uAlphaFunc, mesh.alphaFunc);
                 Gdx.gl.glUniform1f(uAlphaRef, mesh.alphaRef);
+                Gdx.gl.glUniform1i(uAdjustCoverage, mesh.alphaTest && !mesh.alphaBlend ? 1 : 0);
+                Gdx.gl.glUniform1f(uDepthBias, mesh.terrainPass ? 4e-5f : 0f);
                 if (mesh.cull) {
                     Gdx.gl.glEnable(GL20.GL_CULL_FACE);
                 } else {
@@ -160,24 +184,30 @@ public final class ForwardRenderer {
                 Gdx.gl.glFrontFace(inst.frontClockwise ? GL20.GL_CW : GL20.GL_CCW);
                 if (mesh.depthTest || mesh.depthWrite) {
                     Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
-                    Gdx.gl.glDepthFunc(mesh.depthTest ? GL20.GL_LEQUAL : GL20.GL_ALWAYS);
+                    Gdx.gl.glDepthFunc(mesh.depthTest ? mesh.depthFunc : GL20.GL_ALWAYS);
                 } else {
                     Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
                 }
                 if (mesh.alphaBlend) {
                     Gdx.gl.glEnable(GL20.GL_BLEND);
                     Gdx.gl.glBlendFunc(mesh.blendSrc, mesh.blendDst);
-                    Gdx.gl.glDepthMask(mesh.noSorter && mesh.depthWrite);
+                    Gdx.gl.glDepthMask(mesh.terrainPass ? mesh.depthWrite : mesh.noSorter && mesh.depthWrite);
                 } else {
                     Gdx.gl.glDisable(GL20.GL_BLEND);
                     Gdx.gl.glDepthMask(mesh.depthWrite);
+                }
+                if (mesh.terrainPass) {
+                    Gdx.gl.glEnable(GL20.GL_POLYGON_OFFSET_FILL);
+                    Gdx.gl.glPolygonOffset(1f, 1f);
+                } else {
+                    Gdx.gl.glDisable(GL20.GL_POLYGON_OFFSET_FILL);
                 }
                 Gdx.gl30.glBindVertexArray(mesh.vao);
                 Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
             }
         }
         for (SceneNode child : node.children) {
-            drawNode(cam, child, blendPass, lighting);
+            drawNode(cam, child, pass, lighting);
         }
     }
 
@@ -360,6 +390,12 @@ public final class ForwardRenderer {
         uniform int u_alphaTest;
         uniform int u_alphaFunc;
         uniform float u_alphaRef;
+        uniform sampler2D u_blendMap;
+        uniform int u_useBlendMap;
+        uniform float u_uvScale;
+        uniform int u_adjustCoverage;
+        uniform float u_cameraFar;
+        uniform float u_depthBias;
         out vec4 frag;
         float quickstep(float x) {
             x = clamp(x, 0.0, 1.0);
@@ -378,8 +414,15 @@ public final class ForwardRenderer {
             if (f == 7) return false;
             return a <= r;
         }
+        float mipmapLevel(vec2 scaleduv) {
+            vec2 dUVdx = dFdx(scaleduv);
+            vec2 dUVdy = dFdy(scaleduv);
+            float maxDUVSquared = max(dot(dUVdx, dUVdx), dot(dUVdy, dUVdy));
+            return max(0.0, 0.5 * log2(maxDUVSquared));
+        }
         void main() {
-            vec4 tex = texture(u_base, v_uv);
+            vec2 baseUV = v_uv * u_uvScale;
+            vec4 tex = texture(u_base, baseUV);
             vec3 amb = u_ambient;
             vec3 diff = u_diffuse;
             vec3 emi = u_emissive;
@@ -392,12 +435,24 @@ public final class ForwardRenderer {
                 matA = v_color.a;
             }
             tex.a *= matA;
+            if (u_useBlendMap != 0) {
+                vec2 buv = (v_uv - vec2(0.5)) * (16.0 / 17.0) + vec2(0.5);
+                buv += vec2(1.0 / 16.0 / 4.0, -1.0 / 16.0 / 4.0);
+                tex.a *= texture(u_blendMap, buv).r;
+            }
             if (u_useDark != 0) {
-                tex *= texture(u_dark, v_uv);
+                tex *= texture(u_dark, baseUV);
+            }
+            if (u_adjustCoverage != 0) {
+                vec2 ts = vec2(textureSize(u_base, 0));
+                tex.a *= 1.0 + mipmapLevel(baseUV * ts) * 0.25;
             }
             if (u_alphaTest != 0 && !alphaPass(tex.a, u_alphaRef, u_alphaFunc)) discard;
+            gl_FragDepth = clamp(
+                log2(max(1e-6, 1.0 + abs(v_viewZ))) / log2(max(u_cameraFar, 1.0) + 1.0) + u_depthBias,
+                0.0, 1.0);
             if (u_useDetail != 0) {
-                tex.rgb *= texture(u_detail, v_uv).rgb * 2.0;
+                tex.rgb *= texture(u_detail, baseUV).rgb * 2.0;
             }
             vec3 n = normalize(v_normal);
             vec3 sunDir = normalize(u_lightDir);
@@ -419,7 +474,7 @@ public final class ForwardRenderer {
             lighting = max(lighting, vec3(0.0));
             tex.rgb *= lighting;
             if (u_useGlow != 0) {
-                tex.rgb += texture(u_glow, v_uv).rgb;
+                tex.rgb += texture(u_glow, baseUV).rgb;
             }
             if (u_fogEnabled != 0) {
                 float fogValue = clamp((abs(v_viewZ) - u_fogStart) * u_fogScale, 0.0, 1.0);

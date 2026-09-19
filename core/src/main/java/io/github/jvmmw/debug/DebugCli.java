@@ -8,6 +8,7 @@ import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
+import io.github.jvmmw.render.LandMesh;
 import io.github.jvmmw.render.NpcMannequin;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
@@ -110,7 +111,8 @@ public final class DebugCli {
                 + " name=" + tile.name
                 + " refs=" + tile.refs
                 + " land=" + (int) tile.land.minHeight + ".." + (int) tile.land.maxHeight
-                + " vtex=" + tile.land.uniqueVtex());
+                + " vtex=" + tile.land.uniqueVtex()
+                + " layers=" + LandMesh.layerCount(tile.land, cell.lands, cell.landTextures));
         }
         System.out.println("cell=" + cell.name
             + " grid=(" + cell.gridX + "," + cell.gridY + ")"

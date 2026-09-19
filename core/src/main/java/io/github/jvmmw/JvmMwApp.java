@@ -428,6 +428,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     private static final float EYE_HEIGHT = 96f;
 
     private void frameCellCamera() {
+        camera.near = 1f;
         camera.far = loadedCell.interior
             ? Math.max(8000f, CellLighting.VIEW_DISTANCE + 256f)
             : 40000f;
@@ -525,7 +526,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 19", skin);
+        Window win = new Window("JVM-MW Phase 20", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

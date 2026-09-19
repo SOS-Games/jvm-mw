@@ -81,7 +81,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/loadcell.hpp` | `ESM::Cell::getGridX/Y` | `LoadedCell.gridX/Y` | same |
 | `components/esm/util.hpp` | `positionToExteriorCellLocation` | `LandRecord.cellGrid` `floor(x/8192)` | same |
 | `components/esm3/loadland.hpp` | `ESM::Land` / `VHGT` | `esm.LandRecord` + `LandMesh` | rewrite |
-| `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | one `LAND` mesh per grid, `VTEX` textures | rewrite |
+| `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | `LAND` layers + TES3 blendmaps | rewrite |
+| `components/esmterrain/storage.cpp` | `getBlendmaps` TES3 | `LandMesh` 17→34 alpha | rewrite |
+| `components/terrain/material.cpp` | `createPasses` | land layer blend + depth | rewrite |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |
