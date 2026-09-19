@@ -6,7 +6,7 @@ Instructions for AI coding agents working in **jvm-mw**.
 
 Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`). Path B: libGDX window/input/Scene2D only — never `ModelBatch`. Package `io.github.jvmmw`.
 
-- **Do not** touch `D:\morrowind_mods`.
+- You **may read** `D:\morrowind_mods` (modlist, meshes, `.kf`). **Do not** edit, move, or write anything there.
 - **Do not** port OpenMW tools.
 - **Do not** commit Bethesda assets (`testdata/`, ESM/BSA).
 - **Do not** commit mid-implementation.
@@ -56,7 +56,7 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall).
-- **E** opens/closes a non-teleport door under the camera (192 units, 90°/s around TES3 Z). Named interior dest loads that cell at the door `DODT`. Empty-`DNAM` exits stay shut.
+- **E** opens/closes a non-teleport door, loads a named interior dest, or plays a chest `containeropen` if that kf group exists. Empty-`DNAM` exits stay shut. Vanilla `Morrowind.bsa` chests have no that group (OpenMW would open loot; this port skips the GUI).
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 

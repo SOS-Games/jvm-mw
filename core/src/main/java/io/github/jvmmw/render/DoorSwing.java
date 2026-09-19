@@ -78,6 +78,16 @@ public final class DoorSwing {
         }
     }
 
+    public static final class Hit {
+        public final Placed door;
+        public final float dist;
+
+        Hit(Placed door, float dist) {
+            this.door = door;
+            this.dist = dist;
+        }
+    }
+
     public final List<Placed> doors = new ArrayList<>();
     private InteriorTeleport pendingTeleport;
     private final Ray ray = new Ray();
@@ -125,17 +135,26 @@ public final class DoorSwing {
         }
     }
 
-    /**
-     * Camera-center pick. Empty-{@code DNAM} teleport doors are a no-op.
-     * Named dest queues {@link #consumeInteriorTeleport()}. Returns a log line,
-     * or null if nothing was in range.
-     */
-    public String activate(Vector3 origin, Vector3 direction) {
-        pendingTeleport = null;
-        Placed door = pick(origin, direction);
-        if (door == null) {
-            return null;
+    public Hit nearest(Vector3 origin, Vector3 direction) {
+        ray.set(origin, direction);
+        Hit best = null;
+        for (Placed door : doors) {
+            box.inf();
+            door.node.collectAabb(box);
+            if (!box.isValid() || !Intersector.intersectRayBounds(ray, box, hit)) {
+                continue;
+            }
+            float dist = origin.dst(hit);
+            if (dist <= MAX_ACTIVATE && (best == null || dist < best.dist)) {
+                best = new Hit(door, dist);
+            }
         }
+        return best;
+    }
+
+    public String activate(Hit picked) {
+        pendingTeleport = null;
+        Placed door = picked.door;
         if (door.teleport) {
             if (door.destCell.isEmpty()) {
                 return "door teleport exterior " + door.refId;
@@ -145,6 +164,19 @@ public final class DoorSwing {
         }
         activateDoor(door);
         return "door " + door.refId + " " + door.state;
+    }
+
+    /**
+     * Camera-center pick. Empty-{@code DNAM} teleport doors are a no-op.
+     * Named dest queues {@link #consumeInteriorTeleport()}. Returns a log line,
+     * or null if nothing was in range.
+     */
+    public String activate(Vector3 origin, Vector3 direction) {
+        Hit picked = nearest(origin, direction);
+        if (picked == null) {
+            return null;
+        }
+        return activate(picked);
     }
 
     void activateDoor(Placed door) {
@@ -166,25 +198,8 @@ public final class DoorSwing {
     }
 
     Placed pick(Vector3 origin, Vector3 direction) {
-        ray.set(origin, direction);
-        Placed best = null;
-        float bestDist = MAX_ACTIVATE;
-        for (Placed door : doors) {
-            box.inf();
-            door.node.collectAabb(box);
-            if (!box.isValid()) {
-                continue;
-            }
-            if (!Intersector.intersectRayBounds(ray, box, hit)) {
-                continue;
-            }
-            float dist = origin.dst(hit);
-            if (dist <= bestDist) {
-                bestDist = dist;
-                best = door;
-            }
-        }
-        return best;
+        Hit h = nearest(origin, direction);
+        return h == null ? null : h.door;
     }
 
     private static float clamp(float v, float lo, float hi) {

@@ -74,6 +74,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/cellref.cpp` | `getDestCell` | empty `destCell` → exterior no-op | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `changeToCell` | `loadInterior` + `placeEye` at `DODT` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToInteriorCell` | dispose + rebuild cell | rewrite |
+| `apps/openmw/mwclass/container.cpp` | `Container::useAnim` | object kf on chest nif | rewrite |
+| `apps/openmw/mwclass/container.cpp` | `Container::activate` | **E** + CONT pick | rewrite |
+| `apps/openmw/mwworld/actionopen.cpp` | `ActionOpen` | play lid, skip GUI | rewrite |
+| `apps/openmw/mwmechanics/character.cpp` | `CharacterController::onOpen` | `containeropen` once | rewrite |
 | `components/nifosg/controller.cpp` | `NifOsg::KeyframeController` | `KfFile` sample → bone `SceneNode.local` | rewrite |
 | `components/sceneutil/riggeometry.cpp` | `SceneUtil::RigGeometry` | skinned mesh on `SceneNode` | rewrite |
 | `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` | same |

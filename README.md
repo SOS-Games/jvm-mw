@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 12 (current)
+## Phase 13 (current)
 
-**E** on a load door with a named interior dest unloads this cell and loads that one (arrive at `DODT`). See [docs/phase12-interior-teleport.md](docs/phase12-interior-teleport.md). Phase 11: [docs/phase11-doors.md](docs/phase11-doors.md).
+**E** on a container plays `containeropen` when that kf group exists (no loot window). Vanilla Census chests have none. See [docs/phase13-containers.md](docs/phase13-containers.md). Phase 12: [docs/phase12-interior-teleport.md](docs/phase12-interior-teleport.md).
 
 ```bat
 gradlew.bat lwjgl3:run

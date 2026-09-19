@@ -117,7 +117,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 if (keycode == Input.Keys.E) {
                     if (cellBuilder != null && !isLoading()) {
                         String msg = cellBuilder.activateLooking(eye, lookDir);
-                        Gdx.app.log("JVM-MW", msg == null ? "door none in range" : msg);
+                        Gdx.app.log("JVM-MW", msg == null ? "activate none in range" : msg);
                         DoorSwing.InteriorTeleport dest = cellBuilder.doors.consumeInteriorTeleport();
                         if (dest != null) {
                             startInteriorTeleport(dest);
@@ -460,7 +460,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 12", skin);
+        Window win = new Window("JVM-MW Phase 13", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

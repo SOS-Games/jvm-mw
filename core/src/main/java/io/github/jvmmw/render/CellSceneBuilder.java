@@ -37,6 +37,7 @@ public final class CellSceneBuilder {
     public String cellName = "";
     public final CellLighting lighting = new CellLighting();
     public final DoorSwing doors = new DoorSwing();
+    public final ContainerOpen containers = new ContainerOpen();
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
@@ -71,6 +72,7 @@ public final class CellSceneBuilder {
         finished = false;
         pendingLights.clear();
         doors.clear();
+        containers.clear();
         lighting.lights.clear();
         lighting.resetTime();
         System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
@@ -98,7 +100,8 @@ public final class CellSceneBuilder {
             + " actor=" + skippedActor
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
             + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
-            + " doors=" + doors.swingCount() + "+" + doors.teleportCount() + '\n');
+            + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
+            + " cont=" + containers.withOpen() + "/" + containers.containers.size() + '\n');
         finished = true;
         return true;
     }
@@ -110,6 +113,7 @@ public final class CellSceneBuilder {
     public void update(float dt) {
         mannequin.update(dt);
         doors.process(dt);
+        containers.process(dt);
         if (buildingRoot != null) {
             Matrix4 id = new Matrix4();
             buildingRoot.updateWorld(id);
@@ -117,7 +121,15 @@ public final class CellSceneBuilder {
     }
 
     public String activateLooking(Vector3 origin, Vector3 direction) {
-        return doors.activate(origin, direction);
+        DoorSwing.Hit door = doors.nearest(origin, direction);
+        ContainerOpen.Hit cont = containers.nearest(origin, direction);
+        if (door == null && cont == null) {
+            return null;
+        }
+        if (cont == null || (door != null && door.dist <= cont.dist)) {
+            return doors.activate(door);
+        }
+        return containers.activate(cont);
     }
 
     public int refCount() {
@@ -197,7 +209,7 @@ public final class CellSceneBuilder {
             return;
         }
         try {
-            SceneNode inst = instance(obj.model);
+            SceneNode inst = instance(placeMesh(obj));
             EsmTransforms.setLocal(inst.local, ref.pos, ref.rot, ref.scale);
             inst.name = ref.refId;
             buildingRoot.addChild(inst);
@@ -207,6 +219,9 @@ public final class CellSceneBuilder {
             }
             if ("DOOR".equals(obj.rec)) {
                 doors.add(inst, ref);
+            }
+            if ("CONT".equals(obj.rec)) {
+                containers.add(inst, ref.refId, obj.model);
             }
             byRec.merge(obj.rec, 1, Integer::sum);
             if (isEmittingLight(obj)) {
@@ -306,6 +321,18 @@ public final class CellSceneBuilder {
         }
         builders.clear();
         templates.clear();
+    }
+
+    private String placeMesh(EsmObject obj) {
+        String mesh = TexturePaths.normalizeMeshPath(obj.model);
+        if (!"CONT".equals(obj.rec) && !"DOOR".equals(obj.rec)) {
+            return mesh;
+        }
+        String anim = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
+        if (anim.equals(mesh) || TestData.vfsExists(anim)) {
+            return anim;
+        }
+        return mesh;
     }
 
     private SceneNode instance(String model) throws Exception {

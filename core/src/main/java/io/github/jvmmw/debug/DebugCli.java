@@ -10,6 +10,7 @@ import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.NpcMannequin;
 import io.github.jvmmw.resource.TestData;
+import io.github.jvmmw.resource.TexturePaths;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -69,7 +70,7 @@ public final class DebugCli {
             kf         Text-key groups and bone tracks from a Morrowind .kf.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
-            E activates a door under the camera (192 units). Named interior dest loads that cell.
+            E activates the closest door or container (192 units). Named interior dest loads that cell.
             """;
     }
 
@@ -111,6 +112,7 @@ public final class DebugCli {
         int kit = 0;
         int npcs = 0;
         int crea = 0;
+        int cont = 0;
         for (CellRef ref : cell.refs) {
             if (ref.deleted) {
                 continue;
@@ -143,6 +145,13 @@ public final class DebugCli {
             if (obj == null) {
                 continue;
             }
+            if ("CONT".equals(obj.rec)) {
+                cont++;
+                System.out.println("cont " + ref.refId
+                    + " tes=" + xyz(ref.pos)
+                    + " modl=" + obj.model
+                    + " kf=" + containerKf(obj.model));
+            }
             if ("DOOR".equals(obj.rec)) {
                 doors++;
                 System.out.println("door " + ref.refId
@@ -164,7 +173,7 @@ public final class DebugCli {
                 }
             }
         }
-        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs + " crea=" + crea);
+        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs + " crea=" + crea + " cont=" + cont);
     }
 
     private static void npc(String id) throws Exception {
@@ -250,6 +259,13 @@ public final class DebugCli {
         System.out.println("cell=" + hit.name
             + " spawn inbound tes=" + xyz(hit.spawnPos)
             + " rot=" + xyz(hit.spawnRot));
+    }
+
+    private static String containerKf(String model) {
+        String mesh = TexturePaths.normalizeMeshPath(model);
+        String anim = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
+        String kf = TexturePaths.nifToKf(anim);
+        return TestData.vfsExists(kf) ? kf : "none";
     }
 
     private static float fogStart(float density) {
