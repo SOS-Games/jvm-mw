@@ -9,7 +9,8 @@ Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca
 - **Do not** touch `D:\morrowind_mods`.
 - **Do not** port OpenMW tools.
 - **Do not** commit Bethesda assets (`testdata/`, ESM/BSA).
-- **Do not** commit unless the user asks.
+- **Do not** commit mid-implementation.
+- Once the user says a phase is **working**, **commit and push that phase before writing the next spec.** Do not start the next spec while the previous working phase is uncommitted. After a working phase, `proceed` means commit first, then spec the next slice.
 
 Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`).
 
@@ -54,6 +55,7 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit.
+- **E** opens/closes a non-teleport door under the camera (192 units, 90°/s around TES3 Z). Teleport exits stay shut.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 

@@ -36,6 +36,7 @@ public final class CellSceneBuilder {
     public int placedStat;
     public String cellName = "";
     public final CellLighting lighting = new CellLighting();
+    public final DoorSwing doors = new DoorSwing();
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
@@ -69,6 +70,7 @@ public final class CellSceneBuilder {
         refIndex = 0;
         finished = false;
         pendingLights.clear();
+        doors.clear();
         lighting.lights.clear();
         lighting.resetTime();
         System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
@@ -95,7 +97,8 @@ public final class CellSceneBuilder {
             + " npc=" + placedNpc + " crea=" + placedCrea + " byRec=" + byRec + " empty=" + skippedEmpty
             + " actor=" + skippedActor
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
-            + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity + '\n');
+            + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
+            + " doors=" + doors.swingCount() + "+" + doors.teleportCount() + '\n');
         finished = true;
         return true;
     }
@@ -106,10 +109,15 @@ public final class CellSceneBuilder {
 
     public void update(float dt) {
         mannequin.update(dt);
+        doors.process(dt);
         if (buildingRoot != null) {
             Matrix4 id = new Matrix4();
             buildingRoot.updateWorld(id);
         }
+    }
+
+    public String activateLooking(Vector3 origin, Vector3 direction) {
+        return doors.activate(origin, direction);
     }
 
     public int refCount() {
@@ -196,6 +204,9 @@ public final class CellSceneBuilder {
             placed++;
             if ("STAT".equals(obj.rec)) {
                 placedStat++;
+            }
+            if ("DOOR".equals(obj.rec)) {
+                doors.add(inst, ref);
             }
             byRec.merge(obj.rec, 1, Integer::sum);
             if (isEmittingLight(obj)) {

@@ -110,6 +110,13 @@ public final class JvmMwApp extends ApplicationAdapter {
                     debugSnapshot();
                     return true;
                 }
+                if (keycode == Input.Keys.E) {
+                    if (cellBuilder != null && !isLoading()) {
+                        String msg = cellBuilder.activateLooking(eye, lookDir);
+                        Gdx.app.log("JVM-MW", msg == null ? "door none in range" : msg);
+                    }
+                    return true;
+                }
                 return false;
             }
 
@@ -421,12 +428,12 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 10", skin);
+        Window win = new Window("JVM-MW Phase 11", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, scroll dolly, F3 dump.", skin))
+        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, E door, scroll dolly, F3 dump.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));

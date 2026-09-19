@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 10 (current)
+## Phase 11 (current)
 
-Creatures from `CREA` — Punsabanit nix-hounds idle on their own nif. See [docs/phase10-creatures.md](docs/phase10-creatures.md). Phase 9: [docs/phase9-npc-idle.md](docs/phase9-npc-idle.md).
+Interior doors swing open on **E** (90° TES3 Z, 90°/s). Teleport exits stay shut. See [docs/phase11-doors.md](docs/phase11-doors.md). Phase 10: [docs/phase10-creatures.md](docs/phase10-creatures.md).
 
 ```bat
 gradlew.bat lwjgl3:run

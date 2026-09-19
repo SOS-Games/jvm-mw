@@ -69,6 +69,7 @@ public final class DebugCli {
             kf         Text-key groups and bone tracks from a Morrowind .kf.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
+            E activates a non-teleport door under the camera (192 units).
             """;
     }
 
@@ -149,7 +150,7 @@ public final class DebugCli {
                     + " rot=" + xyz(ref.rot)
                     + " scl=" + ref.scale
                     + " modl=" + obj.model
-                    + (ref.teleport ? " dest=" + ref.destCell + " dodt=" + xyz(ref.destPos) : ""));
+                    + (ref.teleport ? " dest=" + ref.destCell + " dodt=" + xyz(ref.destPos) : " swing"));
             }
             String model = obj.model.toLowerCase(Locale.ROOT);
             if (model.contains("moldcave") || model.contains("cavern_door")) {
