@@ -77,6 +77,11 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/cellref.cpp` | `getDestCell` | empty `destCell` → exterior no-op | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `changeToCell` | `loadInterior` + `placeEye` at `DODT` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToInteriorCell` | dispose + rebuild cell | rewrite |
+| `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |
+| `apps/openmw/mwworld/actiontake.cpp` | `ActionTake` | unparent mesh, skip inventory | rewrite |
+| `apps/openmw/mwworld/worldimp.cpp` | `World::deleteObject` | `SceneNode.removeFromParent` | rewrite |
+| `apps/openmw/mwrender/objects.cpp` | `Objects::removeObject` | drop instance node | rewrite |
+| `components/esm3/loadligh.hpp` | `ESM::Light::Carry` | `EsmObject.LIGH_CARRY` `0x002` | same |
 | `apps/openmw/mwclass/container.cpp` | `Container::useAnim` | object kf on chest nif | rewrite |
 | `apps/openmw/mwclass/container.cpp` | `Container::activate` | **E** + CONT pick | rewrite |
 | `apps/openmw/mwworld/actionopen.cpp` | `ActionOpen` | play lid, skip GUI | rewrite |

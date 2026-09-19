@@ -21,6 +21,13 @@ public final class SceneNode {
         children.add(child);
     }
 
+    public void removeFromParent() {
+        if (parent != null) {
+            parent.children.remove(this);
+            parent = null;
+        }
+    }
+
     public void updateWorld(Matrix4 parentWorld) {
         world.set(parentWorld).mul(local);
         for (SceneNode child : children) {

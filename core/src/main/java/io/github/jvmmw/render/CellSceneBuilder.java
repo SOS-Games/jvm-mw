@@ -38,6 +38,7 @@ public final class CellSceneBuilder {
     public final CellLighting lighting = new CellLighting();
     public final DoorSwing doors = new DoorSwing();
     public final ContainerOpen containers = new ContainerOpen();
+    public final ItemTake items = new ItemTake();
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
@@ -73,6 +74,7 @@ public final class CellSceneBuilder {
         pendingLights.clear();
         doors.clear();
         containers.clear();
+        items.clear();
         lighting.lights.clear();
         lighting.resetTime();
         System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
@@ -101,7 +103,8 @@ public final class CellSceneBuilder {
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
             + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
             + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
-            + " cont=" + containers.withOpen() + "/" + containers.containers.size() + '\n');
+            + " cont=" + containers.withOpen() + "/" + containers.containers.size()
+            + " take=" + items.takeCount() + '\n');
         finished = true;
         return true;
     }
@@ -123,13 +126,20 @@ public final class CellSceneBuilder {
     public String activateLooking(Vector3 origin, Vector3 direction) {
         DoorSwing.Hit door = doors.nearest(origin, direction);
         ContainerOpen.Hit cont = containers.nearest(origin, direction);
-        if (door == null && cont == null) {
+        ItemTake.Hit item = items.nearest(origin, direction);
+        float doorDist = door == null ? Float.POSITIVE_INFINITY : door.dist;
+        float contDist = cont == null ? Float.POSITIVE_INFINITY : cont.dist;
+        float itemDist = item == null ? Float.POSITIVE_INFINITY : item.dist;
+        if (door == null && cont == null && item == null) {
             return null;
         }
-        if (cont == null || (door != null && door.dist <= cont.dist)) {
+        if (doorDist <= contDist && doorDist <= itemDist) {
             return doors.activate(door);
         }
-        return containers.activate(cont);
+        if (contDist <= itemDist) {
+            return containers.activate(cont);
+        }
+        return items.activate(item, lighting);
     }
 
     public int refCount() {
@@ -223,6 +233,9 @@ public final class CellSceneBuilder {
             if ("CONT".equals(obj.rec)) {
                 containers.add(inst, ref.refId, obj.model);
             }
+            if (EsmObject.isTakeable(obj) || EsmObject.isBook(obj)) {
+                items.add(inst, ref.refId, obj);
+            }
             byRec.merge(obj.rec, 1, Integer::sum);
             if (isEmittingLight(obj)) {
                 pendingLights.add(new PendingLight(inst, obj, ref.refId));
@@ -281,6 +294,7 @@ public final class CellSceneBuilder {
                 light.brightness = 0.675f;
             }
             lighting.lights.add(light);
+            items.bindLight(pending.node, light);
             log.append("light ").append(pending.refId).append(" r=").append((int) radius)
                 .append(" rgb=").append(light.baseDiffuse[0]).append(',').append(light.baseDiffuse[1]).append(',')
                 .append(light.baseDiffuse[2]);

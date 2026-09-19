@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 14 (current)
+## Phase 15 (current)
 
-**E** on a Census chest lifts the lid when extra data folders supply `containeropen` (OpenMW Containers Animated). See [docs/phase14-vfs.md](docs/phase14-vfs.md). Phase 13: [docs/phase13-containers.md](docs/phase13-containers.md).
+**E** on desk clutter removes that mesh (no inventory). See [docs/phase15-take.md](docs/phase15-take.md). Phase 14: [docs/phase14-vfs.md](docs/phase14-vfs.md).
 
 ```bat
 gradlew.bat lwjgl3:run

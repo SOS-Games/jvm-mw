@@ -70,7 +70,7 @@ public final class DebugCli {
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
-            E activates the closest door or container (192 units). Named interior dest loads that cell.
+            E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
             """;
     }
 
@@ -113,6 +113,8 @@ public final class DebugCli {
         int npcs = 0;
         int crea = 0;
         int cont = 0;
+        int take = 0;
+        int books = 0;
         for (CellRef ref : cell.refs) {
             if (ref.deleted) {
                 continue;
@@ -152,6 +154,19 @@ public final class DebugCli {
                     + " modl=" + obj.model
                     + " kf=" + containerKf(obj.model));
             }
+            if (EsmObject.isTakeable(obj)) {
+                take++;
+                System.out.println("take " + ref.refId
+                    + " tes=" + xyz(ref.pos)
+                    + " modl=" + obj.model
+                    + " rec=" + obj.rec);
+            }
+            if (EsmObject.isBook(obj)) {
+                books++;
+                System.out.println("book " + ref.refId
+                    + " tes=" + xyz(ref.pos)
+                    + " modl=" + obj.model);
+            }
             if ("DOOR".equals(obj.rec)) {
                 doors++;
                 System.out.println("door " + ref.refId
@@ -173,7 +188,8 @@ public final class DebugCli {
                 }
             }
         }
-        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs + " crea=" + crea + " cont=" + cont);
+        System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs + " crea=" + crea
+            + " cont=" + cont + " take=" + take + " book=" + books);
     }
 
     private static void npc(String id) throws Exception {

@@ -45,6 +45,19 @@ public final class EsmObject {
     public int value;
     public final List<EsmPartRef> parts = new ArrayList<>();
 
+    public static boolean isTakeable(EsmObject obj) {
+        return switch (obj.rec) {
+            case "WEAP", "ARMO", "CLOT", "MISC", "INGR", "ALCH", "APPA", "LOCK", "PROB", "REPA" -> true;
+            case "LIGH" -> (obj.lightFlags & LIGH_CARRY) != 0;
+            default -> false;
+        };
+    }
+
+    public static boolean isBook(EsmObject obj) {
+        return "BOOK".equals(obj.rec);
+    }
+
+    public static final int LIGH_CARRY = 0x002;
     public static final int LIGH_NEGATIVE = 0x004;
     public static final int LIGH_FLICKER = 0x008;
     public static final int LIGH_OFF_DEFAULT = 0x020;
