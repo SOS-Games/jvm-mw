@@ -6,6 +6,7 @@ Instructions for AI coding agents working in **jvm-mw**.
 
 Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`). Path B: libGDX window/input/Scene2D only — never `ModelBatch`. Package `io.github.jvmmw`.
 
+- OpenMW source is local: `D:\coding\morrowind\openmw` at pin `f4bec41444214a7903bebd178389ca22ca13f646`. **Read that tree.** Do not fetch OpenMW from GitHub.
 - You **may read** `D:\morrowind_mods` (modlist, meshes, `.kf`). **Do not** edit, move, or write anything there.
 - **Do not** port OpenMW tools.
 - **Do not** commit Bethesda assets (`testdata/`, ESM/BSA).
@@ -13,7 +14,7 @@ Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca
 - Once the user says a phase is **working**, **commit and push that phase before writing the next spec.** Do not start the next spec while the previous working phase is uncommitted. After a working phase, `proceed` means commit first, then spec the next slice.
 - Other-LLM claim prompts live in the phase spec (`docs/phaseN-*.md`). Point at that file; **do not paste the prompts into chat.**
 
-Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`).
+Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`). Extra data folders: `jvmmw.data.extra=...` (`;` separated; or `JVMMW_DATA_EXTRA` / `-Djvmmw.data.extra`).
 
 ```bat
 gradlew.bat compileJava
@@ -56,7 +57,7 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall).
-- **E** opens/closes a non-teleport door, loads a named interior dest, or plays a chest `containeropen` if that kf group exists. Empty-`DNAM` exits stay shut. Vanilla `Morrowind.bsa` chests have no that group (OpenMW would open loot; this port skips the GUI).
+- **E** opens/closes a non-teleport door, loads a named interior dest, or plays a chest `containeropen` / `containerclose` if those kf groups exist. Empty-`DNAM` exits stay shut. Vanilla `Morrowind.bsa` chests have no those groups; extra data folders (OpenMW Containers Animated) supply them. This port skips the loot GUI.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 

@@ -279,8 +279,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             var nifPath = TestData.ensureNif(vfsPath);
             byte[] bytes = Files.readAllBytes(nifPath);
             NifFile nif = NifFile.parse(bytes, nifPath.toString());
-            builder = new NifSceneBuilder(nif, TestData.testdataRoot(), p ->
-                Files.isRegularFile(TestData.testdataRoot().resolve(p.replace('/', java.io.File.separatorChar))));
+            builder = new NifSceneBuilder(nif, TestData.testdataRoot(), TestData::vfsExists);
             root = builder.build();
             frameCamera();
             if (nif.records.size() < 80) {
@@ -460,7 +459,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 13", skin);
+        Window win = new Window("JVM-MW Phase 14", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

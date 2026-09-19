@@ -20,6 +20,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/nifosg/nifloader.cpp` | `NifOsg::Loader` | `io.github.jvmmw.render.NifSceneBuilder` | rewrite |
 | `components/sceneutil/` | `osg::Node` / `SceneUtil::*` | `io.github.jvmmw.render.SceneNode` | rewrite |
 | `components/bsa/bsafile.hpp` | `Bsa::BSAFile` | `io.github.jvmmw.bsa.BsaArchive` | same |
+| `components/vfs/registerarchives.cpp` | `VFS::registerArchives` | extra dirs after `Morrowind.bsa` | rewrite |
+| `components/vfs/manager.cpp` | `VFS::Manager::buildIndex` | `vfs.VfsManager` last archive wins | rewrite |
+| `components/vfs/filesystemarchive.cpp` | `VFS::FileSystemArchive` | `vfs.FileSystemArchive` | rewrite |
 | `components/misc/resourcehelpers.cpp` | `correctTexturePath` | `io.github.jvmmw.resource.TexturePaths` | same |
 | `apps/openmw/mwrender/*` | OSG draw | `io.github.jvmmw.render.ForwardRenderer` | rewrite |
 | `apps/openmw/mwgui/*` | MyGUI | Scene2D HUD (Phase 1 debug only) | rewrite |
@@ -80,7 +83,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwmechanics/character.cpp` | `CharacterController::onOpen` | `containeropen` once | rewrite |
 | `components/nifosg/controller.cpp` | `NifOsg::KeyframeController` | `KfFile` sample → bone `SceneNode.local` | rewrite |
 | `components/sceneutil/riggeometry.cpp` | `SceneUtil::RigGeometry` | skinned mesh on `SceneNode` | rewrite |
-| `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` | same |
+| `components/misc/resourcehelpers.cpp` | `correctActorModelPath` | `TexturePaths.correctActorModelPath` (VFS sees extra dirs) | same |
 | `components/esm3/loadnpc.hpp` | `ESM::NPC` | `esm.EsmNpc` | same |
 | `components/esm3/loadrace.hpp` | `ESM::Race` | `esm.EsmRace` | same |
 | `components/esm3/loadbody.hpp` | `ESM::BodyPart` | `esm.EsmBodyPart` | same |

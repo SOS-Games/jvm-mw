@@ -17,6 +17,7 @@ import io.github.jvmmw.nif.NiZBufferProperty;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.nif.NifRecord;
 import io.github.jvmmw.resource.DdsTexture;
+import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
 
 import com.badlogic.gdx.Gdx;
@@ -480,8 +481,10 @@ public final class NifSceneBuilder {
         NifRecord src = nif.get(slot.source);
         if (src instanceof NiSourceTexture st && !st.file.isEmpty()) {
             String vfs = TexturePaths.correctTexturePath(st.file, exists);
-            Path resolved = testdata.resolve(vfs.replace('/', testdata.getFileSystem().getSeparator().charAt(0)));
-            if (!Files.isRegularFile(resolved)) {
+            Path resolved;
+            try {
+                resolved = TestData.openPath(vfs);
+            } catch (Exception e) {
                 resolved = testdata.resolve(vfs.replace('/', java.io.File.separatorChar));
             }
             final Path file = resolved;

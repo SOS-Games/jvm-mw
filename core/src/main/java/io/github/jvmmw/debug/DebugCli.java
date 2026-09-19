@@ -67,7 +67,7 @@ public final class DebugCli {
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
             crea       One CREA: model, corrected x-path, flags, scale.
-            kf         Text-key groups and bone tracks from a Morrowind .kf.
+            kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             E activates the closest door or container (192 units). Named interior dest loads that cell.

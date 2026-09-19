@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 13 (current)
+## Phase 14 (current)
 
-**E** on a container plays `containeropen` when that kf group exists (no loot window). Vanilla Census chests have none. See [docs/phase13-containers.md](docs/phase13-containers.md). Phase 12: [docs/phase12-interior-teleport.md](docs/phase12-interior-teleport.md).
+**E** on a Census chest lifts the lid when extra data folders supply `containeropen` (OpenMW Containers Animated). See [docs/phase14-vfs.md](docs/phase14-vfs.md). Phase 13: [docs/phase13-containers.md](docs/phase13-containers.md).
 
 ```bat
 gradlew.bat lwjgl3:run
@@ -23,6 +23,7 @@ Point at your Morrowind `Data Files` folder (not committed) with one of:
 - environment `JVMMW_DATA`
 - `-Djvmmw.data=...`
 - gitignored `local.properties` with `jvmmw.data=...`
+- optional extra folders: `jvmmw.data.extra=...` (`;` separated)
 
 Vanilla meshes are extracted from `Morrowind.bsa` into gitignored `testdata/` on first run. Do not commit `testdata/`, `build/`, or `.gradle/`.
 

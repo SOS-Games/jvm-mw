@@ -4,14 +4,17 @@ import io.github.jvmmw.bsa.BsaArchive;
 import io.github.jvmmw.nif.NiSourceTexture;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.nif.NifRecord;
+import io.github.jvmmw.vfs.VfsManager;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 public final class TestData {
     public static final String CHAIR = "meshes/f/furn_de_chair_01.nif";
@@ -28,41 +31,18 @@ public final class TestData {
     public static final String WOLVERINE_GUILD = "Sadrith Mora, Wolverine Hall: Mage's Guild";
 
     private static BsaArchive cachedBsa;
+    private static VfsManager cachedVfs;
+    private static Properties localProps;
 
     private TestData() {
     }
 
     public static Path dataRoot() {
-        String configured = configuredDataPath();
+        String configured = configured("JVMMW_DATA", "jvmmw.data");
         if (configured != null) {
             return Path.of(configured);
         }
         return Path.of(".");
-    }
-
-    private static String configuredDataPath() {
-        String env = System.getenv("JVMMW_DATA");
-        if (env != null && !env.isBlank()) {
-            return env;
-        }
-        String prop = System.getProperty("jvmmw.data");
-        if (prop != null && !prop.isBlank()) {
-            return prop;
-        }
-        Path local = Path.of("local.properties");
-        if (Files.isRegularFile(local)) {
-            Properties p = new Properties();
-            try (InputStream in = Files.newInputStream(local)) {
-                p.load(in);
-            } catch (IOException e) {
-                throw new IllegalStateException("Could not read " + local, e);
-            }
-            String v = p.getProperty("jvmmw.data");
-            if (v != null && !v.isBlank()) {
-                return v.trim();
-            }
-        }
-        return null;
     }
 
     public static Path esmPath() {
@@ -74,16 +54,19 @@ public final class TestData {
     }
 
     public static boolean vfsExists(String vfsPath) {
-        String n = vfsPath.replace('\\', '/').toLowerCase();
-        if (Files.isRegularFile(localNif(n))) {
-            return true;
-        }
         try {
-            BsaArchive archive = bsa(dataRoot());
-            return archive != null && archive.contains(n);
+            return vfs().exists(vfsPath);
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public static Path openPath(String vfsPath) throws IOException {
+        VfsManager.Source src = vfs().get(vfsPath);
+        if (src == null) {
+            throw new IOException("Not in VFS: " + vfsPath);
+        }
+        return src.open(testdataRoot());
     }
 
     public static Path localNif(String vfsPath) {
@@ -95,18 +78,7 @@ public final class TestData {
     }
 
     public static Path ensureNif(String vfsPath) throws Exception {
-        Path testdata = testdataRoot();
-        Path nifOut = localNif(vfsPath);
-        Path data = dataRoot();
-        BsaArchive bsa = bsa(data);
-        if (!Files.isRegularFile(nifOut)) {
-            if (bsa == null) {
-                throw new IllegalStateException("Missing Morrowind.bsa and " + nifOut
-                    + ". Set JVMMW_DATA, -Djvmmw.data, or jvmmw.data in gitignored local.properties "
-                    + "to your Morrowind Data Files folder.");
-            }
-            bsa.extract(vfsPath, nifOut);
-        }
+        Path nifOut = openPath(vfsPath);
         byte[] nifBytes = Files.readAllBytes(nifOut);
         NifFile nif = NifFile.parse(nifBytes, vfsPath);
         List<String> textures = new ArrayList<>();
@@ -116,24 +88,105 @@ public final class TestData {
             }
         }
         for (String tex : textures) {
-            String vfs = TexturePaths.correctTexturePath(tex, p -> {
-                if (Files.isRegularFile(testdata.resolve(p.replace('/', java.io.File.separatorChar)))) {
-                    return true;
-                }
-                return bsa != null && bsa.contains(p);
-            });
-            Path dest = testdata.resolve(vfs.replace('/', java.io.File.separatorChar));
-            if (Files.isRegularFile(dest)) {
+            String vfs = TexturePaths.correctTexturePath(tex, TestData::vfsExists);
+            if (!vfsExists(vfs)) {
                 continue;
             }
-            if (bsa != null && bsa.contains(vfs)) {
-                bsa.extract(vfs, dest);
-            }
+            openPath(vfs);
         }
         return nifOut;
     }
 
-    private static BsaArchive bsa(Path data) throws Exception {
+    private static VfsManager vfs() throws IOException {
+        if (cachedVfs != null) {
+            return cachedVfs;
+        }
+        VfsManager vfs = new VfsManager();
+        Path data = dataRoot();
+        BsaArchive archive = bsa(data);
+        if (archive != null) {
+            vfs.addBsa(archive);
+        }
+        if (Files.isDirectory(data)) {
+            vfs.addDir(data);
+        }
+        Set<Path> seen = new LinkedHashSet<>();
+        if (Files.isDirectory(data)) {
+            seen.add(data.toAbsolutePath().normalize());
+        }
+        for (Path extra : extraDirs()) {
+            Path abs = extra.toAbsolutePath().normalize();
+            if (!seen.add(abs)) {
+                continue;
+            }
+            if (!Files.isDirectory(abs)) {
+                System.err.println("vfs extra missing " + abs);
+                continue;
+            }
+            System.out.println("vfs extra=" + abs);
+            vfs.addDir(abs);
+        }
+        vfs.buildIndex();
+        cachedVfs = vfs;
+        return cachedVfs;
+    }
+
+    private static List<Path> extraDirs() {
+        List<Path> dirs = new ArrayList<>();
+        String raw = configured("JVMMW_DATA_EXTRA", "jvmmw.data.extra");
+        if (raw == null || raw.isBlank()) {
+            return dirs;
+        }
+        for (String part : raw.split(";")) {
+            String trimmed = part.trim();
+            if (trimmed.length() >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+                trimmed = trimmed.substring(1, trimmed.length() - 1);
+            }
+            if (!trimmed.isBlank()) {
+                dirs.add(Path.of(trimmed));
+            }
+        }
+        return dirs;
+    }
+
+    private static String configured(String envName, String propName) {
+        String env = System.getenv(envName);
+        if (env != null && !env.isBlank()) {
+            return env;
+        }
+        String prop = System.getProperty(propName);
+        if (prop != null && !prop.isBlank()) {
+            return prop;
+        }
+        Properties p = localProperties();
+        if (p != null) {
+            String v = p.getProperty(propName);
+            if (v != null && !v.isBlank()) {
+                return v.trim();
+            }
+        }
+        return null;
+    }
+
+    private static Properties localProperties() {
+        if (localProps != null) {
+            return localProps;
+        }
+        Path local = Path.of("local.properties");
+        if (!Files.isRegularFile(local)) {
+            return null;
+        }
+        Properties p = new Properties();
+        try (InputStream in = Files.newInputStream(local)) {
+            p.load(in);
+        } catch (IOException e) {
+            throw new IllegalStateException("Could not read " + local, e);
+        }
+        localProps = p;
+        return p;
+    }
+
+    private static BsaArchive bsa(Path data) throws IOException {
         if (cachedBsa != null) {
             return cachedBsa;
         }

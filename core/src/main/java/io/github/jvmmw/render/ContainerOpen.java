@@ -29,8 +29,10 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Chest lid {@code containeropen}. Rewrite of {@code ActionOpen} /
- * {@code CharacterController::onOpen} without {@code GM_Container}.
+ * Chest lid {@code containeropen} / {@code containerclose}. Rewrite of
+ * {@code ActionOpen} / {@code CharacterController::onOpen} /
+ * {@code onClose} without {@code GM_Container}. Second {@code E} is the
+ * loot-window dismiss.
  */
 public final class ContainerOpen {
     public static final class Hit {
@@ -52,6 +54,7 @@ public final class ContainerOpen {
         KfFile.IdleLoop playing;
         boolean moving;
         boolean opened;
+        boolean closing;
 
         Placed(SceneNode node, String refId, KfFile kf) {
             this.node = node;
@@ -61,7 +64,15 @@ public final class ContainerOpen {
         }
 
         boolean hasOpen() {
-            return kf != null && kf.play("containeropen", "start", "stop", false) != null;
+            return hasGroup("containeropen");
+        }
+
+        boolean hasClose() {
+            return hasGroup("containerclose");
+        }
+
+        boolean hasGroup(String group) {
+            return kf != null && kf.play(group, "start", "stop", false) != null;
         }
 
         private void index(SceneNode n) {
@@ -141,14 +152,57 @@ public final class ContainerOpen {
         if (!c.hasOpen()) {
             return "cont " + c.refId + " no containeropen";
         }
-        if (c.moving) {
+        if (c.moving && c.closing) {
             return "cont " + c.refId + " busy";
         }
-        if (c.opened) {
-            return "cont " + c.refId + " open";
+        if (c.opened || c.moving) {
+            return close(c);
         }
+        return open(c);
+    }
+
+    private String open(Placed c) {
         KfFile.IdleLoop loop = c.kf.play("containeropen", "start", "stop", false);
-        c.bindings.clear();
+        if (loop == null) {
+            return "cont " + c.refId + " no containeropen";
+        }
+        bind(c);
+        c.playing = loop;
+        c.moving = true;
+        c.closing = false;
+        c.opened = true;
+        pose(c);
+        return "cont " + c.refId + " containeropen";
+    }
+
+    private String close(Placed c) {
+        if (!c.hasClose()) {
+            return "cont " + c.refId + " no containerclose";
+        }
+        KfFile.IdleLoop loop = c.kf.play("containerclose", "start", "stop", false);
+        if (loop == null) {
+            return "cont " + c.refId + " no containerclose";
+        }
+        float startPoint = 0f;
+        if (c.moving && c.playing != null && !c.closing) {
+            float span = c.playing.stopTime - c.playing.startTime;
+            float complete = span <= 0f ? 1f : (c.playing.time - c.playing.startTime) / span;
+            startPoint = 1f - Math.max(0f, Math.min(1f, complete));
+        }
+        bind(c);
+        loop.time = loop.startTime + startPoint * (loop.stopTime - loop.startTime);
+        c.playing = loop;
+        c.moving = true;
+        c.closing = true;
+        c.opened = false;
+        pose(c);
+        return "cont " + c.refId + " containerclose";
+    }
+
+    private void bind(Placed c) {
+        if (!c.bindings.isEmpty()) {
+            return;
+        }
         for (KfFile.BoneTrack track : c.kf.tracks.values()) {
             SceneNode node = c.bones.get(track.bone.toLowerCase(Locale.ROOT));
             if (node == null) {
@@ -159,11 +213,6 @@ public final class ContainerOpen {
             bind.rest.set(node.local);
             c.bindings.add(bind);
         }
-        c.playing = loop;
-        c.moving = true;
-        c.opened = true;
-        pose(c);
-        return "cont " + c.refId + " containeropen";
     }
 
     public void process(float dt) {
@@ -176,6 +225,12 @@ public final class ContainerOpen {
                 c.playing.time = c.playing.stopTime;
                 pose(c);
                 c.moving = false;
+                if (c.closing) {
+                    c.opened = false;
+                    c.closing = false;
+                } else {
+                    c.opened = true;
+                }
             } else {
                 pose(c);
             }

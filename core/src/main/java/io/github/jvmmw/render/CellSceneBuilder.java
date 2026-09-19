@@ -342,8 +342,7 @@ public final class CellSceneBuilder {
             Path nifPath = TestData.ensureNif(vfs);
             byte[] bytes = Files.readAllBytes(nifPath);
             NifFile nif = NifFile.parse(bytes, vfs);
-            NifSceneBuilder builder = new NifSceneBuilder(nif, TestData.testdataRoot(), p ->
-                Files.isRegularFile(TestData.testdataRoot().resolve(p.replace('/', java.io.File.separatorChar))));
+            NifSceneBuilder builder = new NifSceneBuilder(nif, TestData.testdataRoot(), TestData::vfsExists);
             builders.add(builder);
             template = builder.build(false);
             templates.put(vfs, template);
