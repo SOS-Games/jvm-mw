@@ -34,6 +34,7 @@ import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmReader;
+import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
@@ -121,7 +122,11 @@ public final class JvmMwApp extends ApplicationAdapter {
                         Gdx.app.log("JVM-MW", msg == null ? "activate none in range" : msg);
                         DoorSwing.InteriorTeleport dest = cellBuilder.doors.consumeInteriorTeleport();
                         if (dest != null) {
-                            startInteriorTeleport(dest);
+                            if (dest.destCell.isEmpty()) {
+                                startExteriorTeleport(dest);
+                            } else {
+                                startInteriorTeleport(dest);
+                            }
                         }
                     }
                     return true;
@@ -335,14 +340,16 @@ public final class JvmMwApp extends ApplicationAdapter {
         dumpedFrame = false;
         framesOnMesh = 0;
         currentVfs = grid;
-        disposeScene();
         try {
             int[] xy = parseGrid(grid);
+            EsmFile.LoadedCell next = loadedCell;
             if (loadedCell == null || loadedCell.interior
                 || loadedCell.gridX != xy[0] || loadedCell.gridY != xy[1]) {
                 Gdx.app.log("JVM-MW", "Parsing exterior " + TestData.esmPath());
-                loadedCell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), xy[0], xy[1]);
+                next = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), xy[0], xy[1]);
             }
+            disposeScene();
+            loadedCell = next;
             cellBuilder = new CellSceneBuilder();
             cellBuilder.begin(loadedCell);
             currentVfs = loadedCell.name + " (" + loadedCell.gridX + "," + loadedCell.gridY + ")";
@@ -374,6 +381,23 @@ public final class JvmMwApp extends ApplicationAdapter {
         System.arraycopy(dest.destPos, 0, doorArrivalPos, 0, 3);
         doorArrivalYaw = dest.destRot[2];
         requestLoad(CELL_PREFIX + dest.destCell, false);
+        doorArrival = true;
+    }
+
+    private void startExteriorTeleport(DoorSwing.InteriorTeleport dest) {
+        int gx = LandRecord.cellGrid(dest.destPos[0]);
+        int gy = LandRecord.cellGrid(dest.destPos[1]);
+        if (loadedCell != null && !loadedCell.interior
+            && loadedCell.gridX == gx && loadedCell.gridY == gy) {
+            placeEye(dest.destPos, dest.destRot[2]);
+            updateLookDir();
+            Gdx.app.log("JVM-MW", "teleport same exterior tes=(" + dest.destPos[0] + ','
+                + dest.destPos[1] + ',' + dest.destPos[2] + ')');
+            return;
+        }
+        System.arraycopy(dest.destPos, 0, doorArrivalPos, 0, 3);
+        doorArrivalYaw = dest.destRot[2];
+        requestLoad(EXT_PREFIX + gx + "," + gy, false);
         doorArrival = true;
     }
 
@@ -501,7 +525,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 16", skin);
+        Window win = new Window("JVM-MW Phase 17", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

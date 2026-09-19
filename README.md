@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 16 (current)
+## Phase 17 (current)
 
-HUD **Town** loads one Seyda Neen exterior cell (grey land). See [docs/phase16-exterior.md](docs/phase16-exterior.md). Phase 15: [docs/phase15-take.md](docs/phase15-take.md).
+**E** on a Census exit loads that exterior cell at the door `DODT`. See [docs/phase17-exterior-teleport.md](docs/phase17-exterior-teleport.md). Phase 16: [docs/phase16-exterior.md](docs/phase16-exterior.md).
 
 ```bat
 gradlew.bat lwjgl3:run

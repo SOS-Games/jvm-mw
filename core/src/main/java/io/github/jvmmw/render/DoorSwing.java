@@ -11,6 +11,7 @@ import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.collision.Ray;
 
 import io.github.jvmmw.esm.CellRef;
+import io.github.jvmmw.esm.LandRecord;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +19,7 @@ import java.util.List;
 /**
  * Non-teleport door open/close and interior load-door teleport. Rewrite of
  * {@code World::activateDoor} / {@code rotateDoor} / {@code processDoors} /
- * {@code ActionTeleport}.
+ * {@code ActionTeleport}. Empty {@code DNAM} is an exterior grid from {@code DODT}.
  */
 public final class DoorSwing {
     /** GMST {@code iMaxActivateDist}. */
@@ -157,7 +158,10 @@ public final class DoorSwing {
         Placed door = picked.door;
         if (door.teleport) {
             if (door.destCell.isEmpty()) {
-                return "door teleport exterior " + door.refId;
+                pendingTeleport = new InteriorTeleport("", door.destPos, door.destRot);
+                int gx = LandRecord.cellGrid(door.destPos[0]);
+                int gy = LandRecord.cellGrid(door.destPos[1]);
+                return "door teleport exterior " + door.refId + " -> (" + gx + "," + gy + ")";
             }
             pendingTeleport = new InteriorTeleport(door.destCell, door.destPos, door.destRot);
             return "door teleport " + door.refId + " -> " + door.destCell;
@@ -167,9 +171,9 @@ public final class DoorSwing {
     }
 
     /**
-     * Camera-center pick. Empty-{@code DNAM} teleport doors are a no-op.
-     * Named dest queues {@link #consumeInteriorTeleport()}. Returns a log line,
-     * or null if nothing was in range.
+     * Camera-center pick. Empty-{@code DNAM} teleport doors queue an exterior
+     * load ({@link #consumeInteriorTeleport()} with empty dest name). Named dest
+     * queues an interior load. Returns a log line, or null if nothing was in range.
      */
     public String activate(Vector3 origin, Vector3 direction) {
         Hit picked = nearest(origin, direction);

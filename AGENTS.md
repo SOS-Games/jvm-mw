@@ -59,7 +59,7 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (grey land; Census door `DODT`). Walking off the south edge of that one cell is expected.
-- **E** opens/closes a non-teleport door, loads a named interior dest, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Empty-`DNAM` exits stay shut. Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
+- **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as that exterior grid (one cell), plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 

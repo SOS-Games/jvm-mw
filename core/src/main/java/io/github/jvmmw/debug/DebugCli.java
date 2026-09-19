@@ -74,7 +74,7 @@ public final class DebugCli {
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
-            HUD Town loads exterior (-2, -9). Empty-DNAM exits stay shut.
+            Empty-DNAM dest loads that exterior grid (one cell). HUD Town loads exterior (-2, -9).
             """;
     }
 
