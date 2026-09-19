@@ -525,7 +525,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 18", skin);
+        Window win = new Window("JVM-MW Phase 19", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -720,6 +720,9 @@ public final class JvmMwApp extends ApplicationAdapter {
         boolean shift = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
             || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT);
         float speed = Math.max(60f, moveScale) * 0.4f * Gdx.graphics.getDeltaTime() * (shift ? 10f : 1f);
+        if (loadedCell != null && !loadedCell.interior) {
+            speed *= 3f;
+        }
         float radYaw = (float) Math.toRadians(yaw);
         float sin = (float) Math.sin(radYaw);
         float cos = (float) Math.cos(radYaw);

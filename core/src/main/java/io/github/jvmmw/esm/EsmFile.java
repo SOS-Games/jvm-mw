@@ -30,6 +30,8 @@ public final class EsmFile {
     public final Set<String> actorIds = new HashSet<>();
     public final List<String> interiorNames = new ArrayList<>();
     public final Map<String, CellRef> inboundSpawns = new LinkedHashMap<>();
+    /** {@code LTEX} INTV index → DATA path. First index wins (OpenMW {@code emplace}). */
+    public final Map<Integer, String> landTextures = new HashMap<>();
     private CellRef censusExit;
 
     public static boolean isHiddenMarker(String id) {
@@ -132,6 +134,8 @@ public final class EsmFile {
                 file.readRace(esm);
             } else if ("BODY".equals(rec)) {
                 file.readBody(esm);
+            } else if ("LTEX".equals(rec)) {
+                file.readLandTexture(esm);
             } else if ("CELL".equals(rec)) {
                 LoadedCell cell = file.readCell(esm, null, gridX, gridY, radius);
                 if (cell != null) {
@@ -156,6 +160,7 @@ public final class EsmFile {
         center.races = file.races;
         center.bodies = file.bodies;
         center.actorIds = file.actorIds;
+        center.landTextures = file.landTextures;
         for (int x = gridX - radius; x <= gridX + radius; x++) {
             for (int y = gridY - radius; y <= gridY + radius; y++) {
                 long key = gridKey(x, y);
@@ -705,6 +710,8 @@ public final class EsmFile {
         while (esm.hasMoreSubs()) {
             if (esm.isNextSub("VHGT")) {
                 decodeVhgt(esm, land);
+            } else if (esm.isNextSub("VTEX")) {
+                decodeVtex(esm, land);
             } else {
                 esm.getSubName();
                 esm.skipHSub();
@@ -736,6 +743,44 @@ public final class EsmFile {
         esm.skipRestOfSub();
     }
 
+    private static void decodeVtex(EsmReader esm, LandRecord land) {
+        esm.getSubHeader();
+        int[] raw = new int[LandRecord.NUM_TEXTURES];
+        for (int i = 0; i < raw.length; i++) {
+            raw[i] = esm.getU16();
+        }
+        esm.skipRestOfSub();
+        int readPos = 0;
+        for (int y1 = 0; y1 < 4; y1++) {
+            for (int x1 = 0; x1 < 4; x1++) {
+                for (int y2 = 0; y2 < 4; y2++) {
+                    for (int x2 = 0; x2 < 4; x2++) {
+                        land.textures[(y1 * 4 + y2) * 16 + (x1 * 4 + x2)] = raw[readPos++];
+                    }
+                }
+            }
+        }
+    }
+
+    private void readLandTexture(EsmReader esm) {
+        LandTexture lt = new LandTexture();
+        while (esm.hasMoreSubs()) {
+            if (esm.isNextSub("NAME")) {
+                lt.id = esm.getHString();
+            } else if (esm.isNextSub("INTV")) {
+                esm.getSubHeader();
+                lt.index = esm.getI32();
+                esm.skipRestOfSub();
+            } else if (esm.isNextSub("DATA")) {
+                lt.texture = esm.getHString();
+            } else {
+                esm.getSubName();
+                esm.skipHSub();
+            }
+        }
+        landTextures.putIfAbsent(lt.index, lt.texture);
+    }
+
     public static final class LoadedCell {
         public String name = "";
         public boolean interior;
@@ -752,6 +797,7 @@ public final class EsmFile {
         public Map<String, EsmRace> races = Map.of();
         public Map<String, EsmBodyPart> bodies = Map.of();
         public Set<String> actorIds = Set.of();
+        public Map<Integer, String> landTextures = Map.of();
         public final float[] ambient = {0.35f, 0.35f, 0.35f};
         public final float[] sunlight = {1f, 1f, 1f};
         public final float[] fogColor = {0.08f, 0.09f, 0.12f};

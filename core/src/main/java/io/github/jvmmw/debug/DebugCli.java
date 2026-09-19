@@ -109,13 +109,15 @@ public final class DebugCli {
             System.out.println("grid= " + tile.gridX + " " + tile.gridY
                 + " name=" + tile.name
                 + " refs=" + tile.refs
-                + " land=" + (int) tile.land.minHeight + ".." + (int) tile.land.maxHeight);
+                + " land=" + (int) tile.land.minHeight + ".." + (int) tile.land.maxHeight
+                + " vtex=" + tile.land.uniqueVtex());
         }
         System.out.println("cell=" + cell.name
             + " grid=(" + cell.gridX + "," + cell.gridY + ")"
             + " interior=" + cell.interior
             + " refs=" + cell.refs.size()
-            + " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight);
+            + " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight
+            + " ltex=" + cell.landTextures.size());
         if (cell.hasSpawn) {
             System.out.println("spawn census-exit tes=" + xyz(cell.spawnPos)
                 + " heading=" + cell.spawnRot[2]);

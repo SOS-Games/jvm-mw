@@ -95,10 +95,10 @@ public final class CellSceneBuilder {
         if (!cell.interior) {
             if (!cell.lands.isEmpty()) {
                 for (LandRecord land : cell.lands) {
-                    landMesh.attach(buildingRoot, land);
+                    landMesh.attach(buildingRoot, land, cell.landTextures);
                 }
             } else if (cell.land != null) {
-                landMesh.attach(buildingRoot, cell.land);
+                landMesh.attach(buildingRoot, cell.land, cell.landTextures);
             }
         }
     }
@@ -126,7 +126,8 @@ public final class CellSceneBuilder {
             + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
             + " cont=" + containers.withOpen() + "/" + containers.containers.size()
             + " take=" + items.takeCount()
-            + (cell.interior ? "" : " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight)
+            + (cell.interior ? "" : " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight
+                + " vtex=" + cell.land.uniqueVtex() + " ltex=" + cell.landTextures.size())
             + '\n');
         finished = true;
         return true;

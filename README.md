@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 18 (current)
+## Phase 19 (current)
 
-An exterior load places a 3×3 of grey land and refs around the dest grid. See [docs/phase18-cell-grid.md](docs/phase18-cell-grid.md). Phase 17 walk-out: [docs/phase17-exterior-teleport.md](docs/phase17-exterior-teleport.md). Phase 16: [docs/phase16-exterior.md](docs/phase16-exterior.md).
+Exterior land uses `VTEX`/`LTEX` dirt textures on the Phase 18 3×3. See [docs/phase19-land-textures.md](docs/phase19-land-textures.md). Phase 18 grid: [docs/phase18-cell-grid.md](docs/phase18-cell-grid.md).
 
 ```bat
 gradlew.bat lwjgl3:run
