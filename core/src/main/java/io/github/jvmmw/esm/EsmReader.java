@@ -138,6 +138,12 @@ public final class EsmReader {
         return v;
     }
 
+    public byte getI8() {
+        byte v = buf.get();
+        leftSub -= 1;
+        return v;
+    }
+
     public int getU16() {
         int v = buf.getShort() & 0xFFFF;
         leftSub -= 2;

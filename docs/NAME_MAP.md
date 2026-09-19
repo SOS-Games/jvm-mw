@@ -77,6 +77,11 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/cellref.cpp` | `getDestCell` | empty `destCell` → exterior no-op | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `changeToCell` | `loadInterior` + `placeEye` at `DODT` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToInteriorCell` | dispose + rebuild cell | rewrite |
+| `components/esm3/loadcell.hpp` | `ESM::Cell::isExterior` | `LoadedCell.interior` from `DATA` flags | same |
+| `components/esm3/loadcell.hpp` | `ESM::Cell::getGridX/Y` | `LoadedCell.gridX/Y` | same |
+| `components/esm/util.hpp` | `positionToExteriorCellLocation` | `LandRecord.cellGrid` `floor(x/8192)` | same |
+| `components/esm3/loadland.hpp` | `ESM::Land` / `VHGT` | `esm.LandRecord` + `LandMesh` | rewrite |
+| `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | grey `LAND` `MeshInstance` | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |
 | `apps/openmw/mwworld/actiontake.cpp` | `ActionTake` | unparent mesh, skip inventory | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `World::deleteObject` | `SceneNode.removeFromParent` | rewrite |

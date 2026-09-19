@@ -39,6 +39,7 @@ public final class CellSceneBuilder {
     public final DoorSwing doors = new DoorSwing();
     public final ContainerOpen containers = new ContainerOpen();
     public final ItemTake items = new ItemTake();
+    private final LandMesh landMesh = new LandMesh();
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
@@ -79,7 +80,20 @@ public final class CellSceneBuilder {
         lighting.resetTime();
         System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
         System.arraycopy(cell.sunlight, 0, lighting.sunDiffuse, 0, 3);
-        lighting.configureFog(cell.fogColor, cell.fogDensity);
+        if (cell.interior) {
+            lighting.configureFog(cell.fogColor, cell.fogDensity);
+        } else {
+            lighting.configureFog(cell.fogColor, 0f);
+            lighting.ambient[0] = 0.55f;
+            lighting.ambient[1] = 0.58f;
+            lighting.ambient[2] = 0.62f;
+            lighting.sunDiffuse[0] = 1f;
+            lighting.sunDiffuse[1] = 0.98f;
+            lighting.sunDiffuse[2] = 0.9f;
+        }
+        if (!cell.interior && cell.land != null) {
+            landMesh.attach(buildingRoot, cell.land);
+        }
     }
 
     /** Place refs until {@code budgetNanos} elapses. Returns true when the cell is done. */
@@ -104,7 +118,9 @@ public final class CellSceneBuilder {
             + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
             + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
             + " cont=" + containers.withOpen() + "/" + containers.containers.size()
-            + " take=" + items.takeCount() + '\n');
+            + " take=" + items.takeCount()
+            + (cell.interior ? "" : " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight)
+            + '\n');
         finished = true;
         return true;
     }
@@ -329,6 +345,7 @@ public final class CellSceneBuilder {
     }
 
     public void dispose() {
+        landMesh.dispose();
         mannequin.dispose();
         for (NifSceneBuilder b : builders) {
             b.dispose();

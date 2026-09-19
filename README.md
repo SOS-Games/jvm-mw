@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 15 (current)
+## Phase 16 (current)
 
-**E** on desk clutter removes that mesh (no inventory). See [docs/phase15-take.md](docs/phase15-take.md). Phase 14: [docs/phase14-vfs.md](docs/phase14-vfs.md).
+HUD **Town** loads one Seyda Neen exterior cell (grey land). See [docs/phase16-exterior.md](docs/phase16-exterior.md). Phase 15: [docs/phase15-take.md](docs/phase15-take.md).
 
 ```bat
 gradlew.bat lwjgl3:run

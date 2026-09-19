@@ -13,9 +13,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Load placeable NAME+MODL records and one interior CELL's refs from Morrowind.esm. */
+/** Load placeable NAME+MODL records and one CELL's refs from Morrowind.esm. */
 public final class EsmFile {
     public static final int CELL_INTERIOR = 0x01;
+    public static final String CENSUS_CELL = "Seyda Neen, Census and Excise Office";
+    public static final String CENSUS_EXIT = "chargen door exit";
 
     public final Map<String, EsmObject> objects = new LinkedHashMap<>();
     public final Map<String, EsmNpc> npcs = new LinkedHashMap<>();
@@ -25,6 +27,7 @@ public final class EsmFile {
     public final Set<String> actorIds = new HashSet<>();
     public final List<String> interiorNames = new ArrayList<>();
     public final Map<String, CellRef> inboundSpawns = new LinkedHashMap<>();
+    private CellRef censusExit;
 
     public static boolean isHiddenMarker(String id) {
         String s = id.toLowerCase(Locale.ROOT);
@@ -71,7 +74,7 @@ public final class EsmFile {
             } else if ("BODY".equals(rec)) {
                 file.readBody(esm);
             } else if ("CELL".equals(rec)) {
-                LoadedCell cell = file.readCell(esm, wanted);
+                LoadedCell cell = file.readCell(esm, wanted, Integer.MIN_VALUE, Integer.MIN_VALUE);
                 if (cell != null) {
                     for (int i = 0; i < wanted.length; i++) {
                         if (wanted[i].equalsIgnoreCase(cell.name)) {
@@ -102,6 +105,51 @@ public final class EsmFile {
         found.bodies = file.bodies;
         found.actorIds = file.actorIds;
         file.applySpawn(found);
+        return found;
+    }
+
+    public static LoadedCell loadExterior(EsmReader esm, int gridX, int gridY) {
+        EsmFile file = new EsmFile();
+        LoadedCell found = null;
+        LandRecord land = null;
+        while (esm.hasMoreRecs()) {
+            String rec = esm.getRecName();
+            esm.getRecHeader();
+            if (isPlaceable(rec)) {
+                file.readObject(esm, rec);
+            } else if ("NPC_".equals(rec)) {
+                file.readNpc(esm);
+            } else if ("CREA".equals(rec)) {
+                file.readCreature(esm);
+            } else if ("RACE".equals(rec)) {
+                file.readRace(esm);
+            } else if ("BODY".equals(rec)) {
+                file.readBody(esm);
+            } else if ("CELL".equals(rec)) {
+                LoadedCell cell = file.readCell(esm, null, gridX, gridY);
+                if (cell != null) {
+                    found = cell;
+                }
+            } else if ("LAND".equals(rec)) {
+                LandRecord parsed = file.readLand(esm, gridX, gridY);
+                if (parsed != null) {
+                    land = parsed;
+                }
+            } else {
+                esm.skipRecord();
+            }
+        }
+        if (found == null) {
+            throw new IllegalStateException("No exterior CELL at (" + gridX + ", " + gridY + ")");
+        }
+        found.objects = file.objects;
+        found.npcs = file.npcs;
+        found.creatures = file.creatures;
+        found.races = file.races;
+        found.bodies = file.bodies;
+        found.actorIds = file.actorIds;
+        found.land = land != null ? land : LandRecord.flat(gridX, gridY);
+        file.applyCensusExitSpawn(found);
         return found;
     }
 
@@ -348,23 +396,29 @@ public final class EsmFile {
         }
     }
 
-    private LoadedCell readCell(EsmReader esm, String[] wanted) {
+    private LoadedCell readCell(EsmReader esm, String[] wanted, int gridX, int gridY) {
         CellHead head = readCellHead(esm);
         boolean interior = (head.flags & CELL_INTERIOR) != 0;
         if (interior && !head.name.isEmpty()) {
             interiorNames.add(head.name);
         }
-        if (!interior || wanted == null || !matchWanted(wanted, head.name)) {
-            harvestRefs(esm);
+        boolean takeInterior = interior && wanted != null && matchWanted(wanted, head.name);
+        boolean takeExterior = !interior && wanted == null && head.gridX == gridX && head.gridY == gridY;
+        if (!takeInterior && !takeExterior) {
+            harvestRefs(esm, head.name, interior);
             return null;
         }
         LoadedCell cell = new LoadedCell();
         cell.name = head.name;
-        cell.interior = true;
-        colourFromRgb(head.ambiAmbient, cell.ambient);
-        colourFromRgb(head.ambiSun, cell.sunlight);
-        colourFromRgb(head.ambiFog, cell.fogColor);
-        cell.fogDensity = head.fogDensity;
+        cell.interior = interior;
+        cell.gridX = head.gridX;
+        cell.gridY = head.gridY;
+        if (interior) {
+            colourFromRgb(head.ambiAmbient, cell.ambient);
+            colourFromRgb(head.ambiSun, cell.sunlight);
+            colourFromRgb(head.ambiFog, cell.fogColor);
+            cell.fogDensity = head.fogDensity;
+        }
         while (esm.hasMoreSubs()) {
             while (esm.isNextSub("MVRF")) {
                 esm.skipHSub();
@@ -372,7 +426,7 @@ public final class EsmFile {
                     esm.skipHSub();
                 }
                 if (esm.peekNextSub("FRMR")) {
-                    readRef(esm);
+                    noteRef(head.name, interior, readRef(esm));
                 }
             }
             if (!esm.peekNextSub("FRMR")) {
@@ -385,7 +439,7 @@ public final class EsmFile {
             }
             CellRef ref = readRef(esm);
             cell.refs.add(ref);
-            noteInbound(ref);
+            noteRef(head.name, interior, ref);
         }
         return cell;
     }
@@ -394,7 +448,7 @@ public final class EsmFile {
         CellHead head = readCellHead(esm);
         boolean interior = (head.flags & CELL_INTERIOR) != 0;
         if (!interior || head.name.isEmpty()) {
-            harvestRefs(esm);
+            harvestRefs(esm, head.name, interior);
             return null;
         }
         InteriorSummary summary = new InteriorSummary();
@@ -414,7 +468,7 @@ public final class EsmFile {
                     esm.skipHSub();
                 }
                 if (esm.peekNextSub("FRMR")) {
-                    noteInbound(readRef(esm));
+                    noteRef(head.name, true, readRef(esm));
                 }
             }
             if (!esm.peekNextSub("FRMR")) {
@@ -426,7 +480,7 @@ public final class EsmFile {
                 break;
             }
             CellRef ref = readRef(esm);
-            noteInbound(ref);
+            noteRef(head.name, true, ref);
             summary.refs++;
             minX = Math.min(minX, ref.pos[0]);
             minY = Math.min(minY, ref.pos[1]);
@@ -453,8 +507,8 @@ public final class EsmFile {
             } else if (esm.isNextSub("DATA")) {
                 esm.getSubHeader();
                 head.flags = esm.getI32();
-                esm.getI32();
-                esm.getI32();
+                head.gridX = esm.getI32();
+                head.gridY = esm.getI32();
             } else if (esm.isNextSub("DELE")) {
                 esm.skipHSub();
             } else {
@@ -534,7 +588,7 @@ public final class EsmFile {
         return ref;
     }
 
-    private void harvestRefs(EsmReader esm) {
+    private void harvestRefs(EsmReader esm, String cellName, boolean interior) {
         while (esm.hasMoreSubs()) {
             while (esm.isNextSub("MVRF")) {
                 esm.skipHSub();
@@ -542,7 +596,7 @@ public final class EsmFile {
                     esm.skipHSub();
                 }
                 if (esm.peekNextSub("FRMR")) {
-                    noteInbound(readRef(esm));
+                    noteRef(cellName, interior, readRef(esm));
                 }
             }
             if (!esm.peekNextSub("FRMR")) {
@@ -553,7 +607,16 @@ public final class EsmFile {
                 }
                 break;
             }
-            noteInbound(readRef(esm));
+            noteRef(cellName, interior, readRef(esm));
+        }
+    }
+
+    private void noteRef(String cellName, boolean interior, CellRef ref) {
+        noteInbound(ref);
+        if (interior && CENSUS_CELL.equalsIgnoreCase(cellName) && ref.teleport && ref.destCell.isEmpty()) {
+            if (censusExit == null || CENSUS_EXIT.equalsIgnoreCase(ref.refId)) {
+                censusExit = ref;
+            }
         }
     }
 
@@ -564,10 +627,84 @@ public final class EsmFile {
         inboundSpawns.putIfAbsent(ref.destCell.toLowerCase(Locale.ROOT), ref);
     }
 
+    private void applyCensusExitSpawn(LoadedCell cell) {
+        if (censusExit == null) {
+            return;
+        }
+        if (LandRecord.cellGrid(censusExit.destPos[0]) != cell.gridX
+            || LandRecord.cellGrid(censusExit.destPos[1]) != cell.gridY) {
+            return;
+        }
+        System.arraycopy(censusExit.destPos, 0, cell.spawnPos, 0, 3);
+        System.arraycopy(censusExit.destRot, 0, cell.spawnRot, 0, 3);
+        cell.hasSpawn = true;
+    }
+
+    private LandRecord readLand(EsmReader esm, int gridX, int gridY) {
+        int x = 0;
+        int y = 0;
+        boolean hasLocation = false;
+        while (esm.hasMoreSubs()) {
+            if (esm.isNextSub("INTV")) {
+                esm.getSubHeader();
+                x = esm.getI32();
+                y = esm.getI32();
+                hasLocation = true;
+            } else if (esm.isNextSub("DATA") || esm.isNextSub("DELE")) {
+                esm.skipHSub();
+            } else {
+                break;
+            }
+        }
+        if (!hasLocation || x != gridX || y != gridY) {
+            while (esm.hasMoreSubs()) {
+                esm.getSubName();
+                esm.skipHSub();
+            }
+            return null;
+        }
+        LandRecord land = LandRecord.flat(x, y);
+        while (esm.hasMoreSubs()) {
+            if (esm.isNextSub("VHGT")) {
+                decodeVhgt(esm, land);
+            } else {
+                esm.getSubName();
+                esm.skipHSub();
+            }
+        }
+        return land;
+    }
+
+    private static void decodeVhgt(EsmReader esm, LandRecord land) {
+        esm.getSubHeader();
+        float rowOffset = esm.getF32();
+        land.minHeight = Float.POSITIVE_INFINITY;
+        land.maxHeight = Float.NEGATIVE_INFINITY;
+        for (int row = 0; row < LandRecord.SIZE; row++) {
+            rowOffset += esm.getI8();
+            float h = rowOffset * LandRecord.HEIGHT_SCALE;
+            land.heights[row * LandRecord.SIZE] = h;
+            land.minHeight = Math.min(land.minHeight, h);
+            land.maxHeight = Math.max(land.maxHeight, h);
+            float colOffset = rowOffset;
+            for (int col = 1; col < LandRecord.SIZE; col++) {
+                colOffset += esm.getI8();
+                h = colOffset * LandRecord.HEIGHT_SCALE;
+                land.heights[col + row * LandRecord.SIZE] = h;
+                land.minHeight = Math.min(land.minHeight, h);
+                land.maxHeight = Math.max(land.maxHeight, h);
+            }
+        }
+        esm.skipRestOfSub();
+    }
+
     public static final class LoadedCell {
         public String name = "";
         public boolean interior;
+        public int gridX;
+        public int gridY;
         public boolean hasSpawn;
+        public LandRecord land;
         public final List<CellRef> refs = new ArrayList<>();
         public Map<String, EsmObject> objects = Map.of();
         public Map<String, EsmNpc> npcs = Map.of();
@@ -601,6 +738,8 @@ public final class EsmFile {
     private static final class CellHead {
         String name = "";
         int flags;
+        int gridX;
+        int gridY;
         int ambiAmbient;
         int ambiSun;
         int ambiFog;

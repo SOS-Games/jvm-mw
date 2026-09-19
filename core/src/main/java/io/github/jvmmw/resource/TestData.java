@@ -29,6 +29,8 @@ public final class TestData {
     public static final String ADDAMASARTUS = "Addamasartus";
     public static final String PUNSABANIT = "Punsabanit";
     public static final String WOLVERINE_GUILD = "Sadrith Mora, Wolverine Hall: Mage's Guild";
+    public static final int TOWN_GRID_X = -2;
+    public static final int TOWN_GRID_Y = -9;
 
     private static BsaArchive cachedBsa;
     private static VfsManager cachedVfs;

@@ -40,6 +40,7 @@ public final class DebugCli {
             case "npc" -> npc(require(args, 1, "npc <id>"));
             case "crea" -> crea(require(args, 1, "crea <id>"));
             case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
+            case "exterior" -> exterior(require(args, 1, "exterior <gridX> <gridY>"));
             default -> {
                 System.err.println("Unknown command: " + args[0]);
                 System.out.print(help());
@@ -60,6 +61,7 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="npc sellus gravius"
             gradlew.bat :core:debugCli --args="crea nix-hound"
             gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
+            gradlew.bat :core:debugCli --args="exterior -2 -9"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
             cell       One interior: fog range, inbound spawn, doors, NPCs, CREA, ref counts (full ESM parse).
@@ -68,9 +70,11 @@ public final class DebugCli {
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
             crea       One CREA: model, corrected x-path, flags, scale.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
+            exterior   One exterior grid cell: name, LAND min/max, spawn, ref counts.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
+            HUD Town loads exterior (-2, -9). Empty-DNAM exits stay shut.
             """;
     }
 
@@ -91,6 +95,59 @@ public final class DebugCli {
         }
         NifFile nif = NifFile.parse(Files.readAllBytes(file), file.toString());
         System.out.print(io.github.jvmmw.nif.KfFile.load(nif, file.toString()).describe());
+    }
+
+    private static void exterior(String grid) throws Exception {
+        String[] parts = grid.trim().split("[,\\s]+");
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("Usage: exterior <gridX> <gridY>");
+        }
+        int gx = Integer.parseInt(parts[0]);
+        int gy = Integer.parseInt(parts[1]);
+        EsmFile.LoadedCell cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+        System.out.println("cell=" + cell.name
+            + " grid=(" + cell.gridX + "," + cell.gridY + ")"
+            + " interior=" + cell.interior
+            + " refs=" + cell.refs.size()
+            + " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight);
+        if (cell.hasSpawn) {
+            System.out.println("spawn census-exit tes=" + xyz(cell.spawnPos)
+                + " heading=" + cell.spawnRot[2]);
+        } else {
+            System.out.println("spawn census-exit=<none>");
+        }
+        int doors = 0;
+        int stat = 0;
+        int npcs = 0;
+        int crea = 0;
+        for (CellRef ref : cell.refs) {
+            if (ref.deleted) {
+                continue;
+            }
+            String key = ref.refId.toLowerCase(Locale.ROOT);
+            if (cell.npcs.containsKey(key)) {
+                npcs++;
+                continue;
+            }
+            if (cell.creatures.containsKey(key)) {
+                crea++;
+                continue;
+            }
+            EsmObject obj = cell.objects.get(key);
+            if (obj == null) {
+                continue;
+            }
+            if ("DOOR".equals(obj.rec)) {
+                doors++;
+                System.out.println("door " + ref.refId
+                    + " tes=" + xyz(ref.pos)
+                    + (ref.teleport ? " dest=" + ref.destCell + " dodt=" + xyz(ref.destPos) : " swing"));
+            }
+            if ("STAT".equals(obj.rec)) {
+                stat++;
+            }
+        }
+        System.out.println("doors=" + doors + " stat=" + stat + " npcs=" + npcs + " crea=" + crea);
     }
 
     private static void cell(String name) throws Exception {

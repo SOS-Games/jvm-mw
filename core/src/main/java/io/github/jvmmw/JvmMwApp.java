@@ -48,6 +48,7 @@ import java.nio.file.Path;
 
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
+    private static final String EXT_PREFIX = "ext:";
     private static final String[] AUTO = {TestData.CHAIR, CELL_PREFIX + TestData.ADDAMASARTUS};
 
     private static final float START_YAW = 215f;
@@ -162,7 +163,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private boolean isCellKey(String key) {
-        return key != null && key.startsWith(CELL_PREFIX);
+        return key != null && (key.startsWith(CELL_PREFIX) || key.startsWith(EXT_PREFIX));
     }
 
     private boolean isLoading() {
@@ -176,7 +177,8 @@ public final class JvmMwApp extends ApplicationAdapter {
         pendingVisibleFrames = 0;
         cellStepping = false;
         lastError = "";
-        currentVfs = key.startsWith(CELL_PREFIX) ? key.substring(CELL_PREFIX.length()) : key;
+        currentVfs = key.startsWith(CELL_PREFIX) ? key.substring(CELL_PREFIX.length())
+            : key.startsWith(EXT_PREFIX) ? key.substring(EXT_PREFIX.length()) : key;
         if (!keepAuto) {
             autoCycling = false;
         }
@@ -249,6 +251,8 @@ public final class JvmMwApp extends ApplicationAdapter {
     private void load(String key, boolean keepAuto) {
         if (key.startsWith(CELL_PREFIX)) {
             loadCell(key.substring(CELL_PREFIX.length()), keepAuto);
+        } else if (key.startsWith(EXT_PREFIX)) {
+            loadExterior(key.substring(EXT_PREFIX.length()), keepAuto);
         } else {
             loadMesh(key, keepAuto);
         }
@@ -304,7 +308,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         currentVfs = wanted;
         disposeScene();
         try {
-            if (loadedCell == null || !wanted.equalsIgnoreCase(loadedCell.name)) {
+            if (loadedCell == null || !loadedCell.interior || !wanted.equalsIgnoreCase(loadedCell.name)) {
                 Gdx.app.log("JVM-MW", "Parsing " + TestData.esmPath());
                 String[] names = wanted.equalsIgnoreCase(TestData.CENSUS_CELL)
                     ? new String[] { TestData.CENSUS_CELL, TestData.PRISON_SHIP }
@@ -321,6 +325,42 @@ public final class JvmMwApp extends ApplicationAdapter {
             cellStepping = false;
             doorArrival = false;
         }
+    }
+
+    private void loadExterior(String grid, boolean keepAuto) {
+        if (!keepAuto) {
+            autoCycling = false;
+        }
+        lastError = "";
+        dumpedFrame = false;
+        framesOnMesh = 0;
+        currentVfs = grid;
+        disposeScene();
+        try {
+            int[] xy = parseGrid(grid);
+            if (loadedCell == null || loadedCell.interior
+                || loadedCell.gridX != xy[0] || loadedCell.gridY != xy[1]) {
+                Gdx.app.log("JVM-MW", "Parsing exterior " + TestData.esmPath());
+                loadedCell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), xy[0], xy[1]);
+            }
+            cellBuilder = new CellSceneBuilder();
+            cellBuilder.begin(loadedCell);
+            currentVfs = loadedCell.name + " (" + loadedCell.gridX + "," + loadedCell.gridY + ")";
+            cellStepping = true;
+        } catch (Exception e) {
+            lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+            Gdx.app.error("JVM-MW", "Exterior failed: " + grid, e);
+            cellStepping = false;
+            doorArrival = false;
+        }
+    }
+
+    private static int[] parseGrid(String grid) {
+        String[] parts = grid.trim().split("[,\\s]+");
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("exterior grid needs x y, got " + grid);
+        }
+        return new int[] { Integer.parseInt(parts[0]), Integer.parseInt(parts[1]) };
     }
 
     private void startInteriorTeleport(DoorSwing.InteriorTeleport dest) {
@@ -364,7 +404,9 @@ public final class JvmMwApp extends ApplicationAdapter {
     private static final float EYE_HEIGHT = 96f;
 
     private void frameCellCamera() {
-        camera.far = Math.max(8000f, CellLighting.VIEW_DISTANCE + 256f);
+        camera.far = loadedCell.interior
+            ? Math.max(8000f, CellLighting.VIEW_DISTANCE + 256f)
+            : 20000f;
         moveScale = 220f;
         if (doorArrival) {
             placeEye(doorArrivalPos, doorArrivalYaw);
@@ -459,7 +501,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 15", skin);
+        Window win = new Window("JVM-MW Phase 16", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -475,7 +517,8 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Cell", CELL_PREFIX + TestData.CENSUS_CELL));
         win.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
         win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
-        win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD)).row();
+        win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
+        win.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y)).row();
         TextButton click = new TextButton("Click me", skin);
         click.addListener(new ClickListener() {
             @Override
