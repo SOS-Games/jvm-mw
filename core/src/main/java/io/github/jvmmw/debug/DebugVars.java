@@ -29,10 +29,10 @@ public final class DebugVars {
     public static final float wanderTurn = f("wanderTurn", 270f);
 
     /** TES-unit cap from spawn for random (no-grid) dests. 0 uses ESM AI_W. */
-    public static final float wanderRadius = f("wanderRadius", 600f);
+    public static final float wanderRadius = f("wanderRadius", 900f);
 
-    /** TES-unit cap from spawn for pathgrid nodes. 0 uses ESM AI_W. */
-    public static final float nodeWanderRadius = f("nodeWanderRadius", 600f);
+    /** TES-unit hop cap from where they stand now, for pathgrid dests. 0 uses ESM AI_W. */
+    public static final float nodeWanderRadius = f("nodeWanderRadius", 900f);
 
     /** How often they pick a new point. 1 is a 2–5 s pause; 2 is twice as often. */
     public static final float wanderFrequency = f("wanderFrequency", 5f);
