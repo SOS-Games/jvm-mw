@@ -14,7 +14,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Stream;
 
-/** Loose files under a data folder. Maps to {@code VFS::FileSystemArchive}. */
+/**
+ * Loose files under a data folder (the game dir or extra folders). Last
+ * source still wins in the VFS.
+ */
 public final class FileSystemArchive {
     private final Map<String, Path> files = new HashMap<>();
 

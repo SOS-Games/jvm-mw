@@ -17,7 +17,11 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
-/** TES3 BSA. Maps to {@code Bsa::BSAFile}. */
+/**
+ * A Morrowind .bsa: compressed files keyed by lowercase path. The VFS
+ * registers this; TestData extracts bytes the GPU loaders need as loose
+ * files.
+ */
 public final class BsaArchive {
     private final Path file;
     private final Map<String, Entry> entries = new HashMap<>();

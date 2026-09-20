@@ -29,7 +29,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-/** Rewrite of {@code NifOsg::Loader} onto {@link SceneNode}. */
+/**
+ * Turns a parsed .nif into a scene: one GPU mesh per triangle shape,
+ * textures from the cache.
+ *
+ * Meshes placed in a cell skip their own Z-up→Y-up rotate — the cell root
+ * already did that once. Do not transpose the NIF rotation a second time
+ * (kit pieces like cave doorways would open wall seams). Skin bind-pose
+ * data is rotation, then translation, then scale — the other order flattens
+ * people onto the ground.
+ */
 public final class NifSceneBuilder {
     public final StringBuilder flattenLog = new StringBuilder();
 

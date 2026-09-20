@@ -10,7 +10,10 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.function.Predicate;
 
-/** Maps to {@code Misc::ResourceHelpers::correctTexturePath}. */
+/**
+ * Fixes mesh and texture paths from the ESM or .nif: slashes, textures/
+ * prefix, missing extension.
+ */
 public final class TexturePaths {
     private TexturePaths() {
     }

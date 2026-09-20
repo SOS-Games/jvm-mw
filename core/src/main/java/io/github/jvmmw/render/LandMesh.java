@@ -23,14 +23,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Heightfield with {@code VTEX}/{@code LTEX} and TES3 blendmaps. Rewrite of
- * {@code Storage::getBlendmaps} + {@code Terrain::createPasses}.
+ * One outdoor cell’s ground: a 65×65 heightfield, then one mesh per land
+ * texture. Each layer uses a 17×17 blend map as its alpha so dirt fades
+ * into grass instead of showing hard squares.
+ *
+ * Morrowind stores 17 blend samples. Doubling that to 34 and sampling
+ * nearest made the GPU’s linear filter still look blocky, so we keep 17
+ * and sample from the center of each texel.
  */
 public final class LandMesh {
     public static final String DEFAULT_TEXTURE = "_land_default.dds";
     public static final int CHUNK_SIZE = 1;
     public static final int BLENDMAP_SIZE = LandRecord.TEXTURE_SIZE * CHUNK_SIZE + 1;
-    public static final int IMAGE_SCALE = 2;
+    public static final int IMAGE_SCALE = 1;
     public static final int BLENDMAP_IMAGE_SIZE = BLENDMAP_SIZE * IMAGE_SCALE;
     public static final int TILE_COUNT = LandRecord.TEXTURE_SIZE * CHUNK_SIZE;
 
@@ -57,13 +62,7 @@ public final class LandMesh {
             for (int y = 0; y < BLENDMAP_SIZE; y++) {
                 for (int x = 0; x < BLENDMAP_SIZE; x++) {
                     byte[] data = images.get(samples.get(y * BLENDMAP_SIZE + x));
-                    int realX = x * IMAGE_SCALE;
-                    int realY = y * IMAGE_SCALE;
-                    int w = BLENDMAP_IMAGE_SIZE;
-                    data[(realY + 0) * w + realX + 0] = (byte) 255;
-                    data[(realY + 1) * w + realX + 0] = (byte) 255;
-                    data[(realY + 0) * w + realX + 1] = (byte) 255;
-                    data[(realY + 1) * w + realX + 1] = (byte) 255;
+                    data[y * BLENDMAP_IMAGE_SIZE + x] = (byte) 255;
                 }
             }
         }

@@ -9,7 +9,10 @@ import java.nio.ByteOrder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Minimal DDS (DXT1/3/5 and uncompressed) upload for Morrowind textures. */
+/**
+ * Uploads one Morrowind .dds to the GPU. The cache keeps one copy per
+ * path so swapping cells reuses the same texture.
+ */
 public final class DdsTexture {
     public final int textureId;
     public final int width;

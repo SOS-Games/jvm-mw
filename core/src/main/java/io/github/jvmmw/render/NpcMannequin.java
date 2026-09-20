@@ -34,7 +34,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * NPC with idle {@code .kf}. Rewrite of {@code MWRender::NpcAnimation} bind-pose plus idle.
+ * An NPC as a dressed skeleton (head, hair, clothes on base_anim), not the
+ * mesh listed on the NPC record. Faces the yaw of the placement, scaled by
+ * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
+ *
+ * Creatures are not this — they use their own mesh file.
  */
 public final class NpcMannequin {
     public static final int PRT_COUNT = 27;

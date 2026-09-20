@@ -16,6 +16,11 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
+/**
+ * Finds the Morrowind data folder, mounts BSA plus extra dirs, and names
+ * the HUD cells (Census, Cave, Town). Mesh and texture lookups go through
+ * the VFS; files the GPU needs are extracted to loose paths first.
+ */
 public final class TestData {
     public static final String CHAIR = "meshes/f/furn_de_chair_01.nif";
     public static final String SHACK = "meshes/x/ex_de_shack_01.nif";

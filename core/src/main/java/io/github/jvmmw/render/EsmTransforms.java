@@ -8,7 +8,10 @@ package io.github.jvmmw.render;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Quaternion;
 
-/** Maps to {@code Misc::Convert::makeOsgQuat} for static placement. */
+/**
+ * Turns a cell-ref’s ZYX euler rotation into a matrix for placing a static
+ * mesh in the scene.
+ */
 public final class EsmTransforms {
     private static final Quaternion QX = new Quaternion();
     private static final Quaternion QY = new Quaternion();

@@ -5,7 +5,10 @@
  */
 package io.github.jvmmw.esm;
 
-/** TES3 {@code BODY}. Maps to {@code ESM::BodyPart}. */
+/**
+ * A body-part mesh (head, hair, chest, …). NPCs pick these by race and
+ * sex; clothes and armor replace slots.
+ */
 public final class EsmBodyPart {
     public static final int MP_HEAD = 0;
     public static final int MP_HAIR = 1;

@@ -18,9 +18,23 @@ import java.nio.IntBuffer;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Draws one frame of the cell. Morrowind files are Z-up; the cell root
+ * rotates −90° so the GPU sees Y-up. Water at −1 and clip planes live in
+ * that Y-up world.
+ *
+ * If the cell has water, each frame first draws a 512 map of what’s under
+ * the surface, then a 512 map of what’s mirrored (no people). Then sky,
+ * land, solid meshes, the water plane (sampling those two maps), then
+ * leaves and glass. Interiors skip the water cameras and usually skip sky.
+ *
+ * Meshes off-camera, smaller than 2 pixels, or small and farther than 7168
+ * are skipped. Sky and the water plane always draw. Never ModelBatch.
+ */
 public final class ForwardRenderer {
+    /** Morrowind/OpenMW cap: eight dynamic lights per drawable. */
     public static final int MAX_LIGHTS = 8;
-    /** OpenMW {@code [Camera] small feature culling pixel size}. */
+    /** OpenMW {@code [Camera] small feature culling pixel size} on the main view. */
     private static final float CAMERA_FEATURE_PIXELS = 2f;
     private static final float VIEW_DISTANCE_SQ
         = CellLighting.VIEW_DISTANCE * CellLighting.VIEW_DISTANCE;
@@ -29,6 +43,7 @@ public final class ForwardRenderer {
     private static final int GL_CLIP_DISTANCE0 = 0x3000;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
+    /** World-mesh program: land, statics, NPCs. */
     private final int program;
     private final int uMvp;
     private final int uModel;
@@ -66,6 +81,7 @@ public final class ForwardRenderer {
     private final int uCameraFar;
     private final int uDepthBias;
     private final int uClipPlane;
+    /** Harbor shader: waves plus the two 512 maps. */
     private final int waterProgram;
     private final int uWaterMvp;
     private final int uWaterModel;
@@ -86,6 +102,7 @@ public final class ForwardRenderer {
     private final int uWaterFogStart;
     private final int uWaterFogScale;
     private final int uWaterFogColor;
+    /** Atmosphere, clouds, sun disc, stars. Follows the camera, never the cell origin. */
     private final int skyProgram;
     private final int uSkyMvp;
     private final int uSkyModel;
@@ -101,17 +118,20 @@ public final class ForwardRenderer {
     private SkySun sun;
     private SkyClouds clouds;
     private SkyStars stars;
+    /** Clear-day hour: sky color, sun position, land lighting. HUD slider drives this. */
     public final ClearCycle cycle = new ClearCycle();
     public FrameProfiler profiler;
     private final Matrix4 skyView = new Matrix4();
     private final Matrix4 skyCombined = new Matrix4();
     private final Matrix4 origCombined = new Matrix4();
     private final Matrix4 origView = new Matrix4();
+    /** Flip Y through the water: y' = 2h − y. Multiplied onto view; the camera itself does not move. */
     private final Matrix4 reflectMat = new Matrix4();
     private final Matrix4 frustumInv = new Matrix4();
     private final BoundingBox cullBox = new BoundingBox();
     private final Vector3 aabbMin = new Vector3();
     private final Vector3 aabbMax = new Vector3();
+    /** True while filling a water map so tiny-mesh cull uses 20 px on 512, not 2 px on the window. */
     private boolean waterRtt;
     private final int reflectFbo;
     private final int reflectColor;
@@ -194,12 +214,15 @@ public final class ForwardRenderer {
         nmPix.dispose();
         waterNm.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
         waterNm.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
+        // Two 512 off-screen cameras. Refraction stores depth as a texture so the
+        // water shader can measure how deep the seafloor is under each pixel.
         reflectColor = allocColor(WaterMesh.RTT_SIZE);
         reflectDepth = allocDepth(WaterMesh.RTT_SIZE);
         reflectFbo = allocFbo(reflectColor, reflectDepth, false);
         refractColor = allocColor(WaterMesh.RTT_SIZE);
         refractDepth = allocDepthTex(WaterMesh.RTT_SIZE);
         refractFbo = allocFbo(refractColor, refractDepth, true);
+        // Column-major: scale Y by −1, translate Y by 2 * waterHeight.
         reflectMat.idt();
         reflectMat.val[5] = -1f;
         reflectMat.val[13] = 2f * WaterMesh.HEIGHT;
@@ -260,6 +283,7 @@ public final class ForwardRenderer {
         render(cam, root, null);
     }
 
+    /** One frame: optional water maps, then sky / land / opaque / water / alpha. */
     public void render(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         waterTime += Gdx.graphics.getDeltaTime();
         cycle.evaluate();
@@ -273,6 +297,7 @@ public final class ForwardRenderer {
             clouds.setFromHour(cycle.hour);
         }
         boolean water = hasWater(root);
+        // GL Y is up; water plane sits at y = −1.
         boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
         if (water) {
             waterRtt = true;
@@ -292,6 +317,7 @@ public final class ForwardRenderer {
             }
             waterRtt = false;
         }
+        // Main view. Clip plane off; water cameras used it to hide the other side of the surface.
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
@@ -317,6 +343,7 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform1i(uGlow, 3);
         Gdx.gl.glUniform1i(uBlendMap, 4);
         Gdx.gl.glUniform1f(uCameraFar, cam.far);
+        // Pass 1 = land layers (polygon offset so they lose to statics on the same plane).
         if (profiler != null) {
             profiler.begin(FrameProfiler.TERRAIN);
         }
@@ -329,6 +356,7 @@ public final class ForwardRenderer {
         if (profiler != null) {
             profiler.end(FrameProfiler.OPAQUE);
         }
+        // Water after opaque so the depth buffer already holds docks and the seafloor.
         if (water) {
             if (profiler != null) {
                 profiler.begin(FrameProfiler.WATER);
@@ -342,6 +370,7 @@ public final class ForwardRenderer {
         upload(uView, cam.view);
         Gdx.gl.glUniform4f(uClipPlane, 0f, 0f, 0f, 1f);
         bindLighting(lighting, false, underwater);
+        // Pass 2 last: alpha blend (leaves, glass). Depth is already filled.
         if (profiler != null) {
             profiler.begin(FrameProfiler.ALPHA);
         }
@@ -355,6 +384,7 @@ public final class ForwardRenderer {
         Gdx.gl30.glBindVertexArray(0);
     }
 
+    /** Sun + ambient on the world program. Point lights are bound per mesh. */
     private void bindLighting(CellLighting lighting, boolean fogOff, boolean underwater) {
         if (lighting == null) {
             Gdx.gl.glUniform3f(uLightDir, 0.35f, 0.8f, 0.45f);
@@ -369,6 +399,10 @@ public final class ForwardRenderer {
         bindFog(uFogEnabled, uFogStart, uFogScale, uFogColor, lighting, fogOff, underwater);
     }
 
+    /**
+     * Fog on interiors (and underwater). Exterior Clear weather often has density 0,
+     * so {@code fogEnabled} stays false even in Town.
+     */
     private void bindFog(int enabledLoc, int startLoc, int scaleLoc, int colorLoc, CellLighting lighting,
         boolean fogOff, boolean underwater) {
         if (fogOff) {
@@ -402,6 +436,12 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform3f(colorLoc, lighting.fogColor[0], lighting.fogColor[1], lighting.fogColor[2]);
     }
 
+    /**
+     * Draw the world as seen from under the water, looking up. Vertices are multiplied
+     * by {@link #reflectMat} so docks appear inverted. Clip discards anything below
+     * the plane (the seafloor would otherwise show in the mirror). People are skipped
+     * (OpenMW reflection detail 2).
+     */
     private void renderReflection(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, reflectFbo);
         Gdx.gl.glViewport(0, 0, WaterMesh.RTT_SIZE, WaterMesh.RTT_SIZE);
@@ -426,6 +466,7 @@ public final class ForwardRenderer {
         Gdx.gl.glEnable(GL_CLIP_DISTANCE0);
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
+        // Keep fragments with world.y >= water height (the side that should appear in the mirror).
         Gdx.gl.glUniform4f(uClipPlane, 0f, 1f, 0f, -WaterMesh.HEIGHT);
         bindLighting(lighting, false, false);
         Gdx.gl.glUniform1i(uBase, 0);
@@ -444,6 +485,11 @@ public final class ForwardRenderer {
         Gdx.gl.glFrontFace(GL20.GL_CCW);
     }
 
+    /**
+     * Draw what is under the water from the player camera. Clip keeps geometry below
+     * the plane. Fog is off so the seafloor stays readable; the water shader tints it.
+     * Actors still draw here (you can see someone swimming).
+     */
     private void renderRefraction(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, refractFbo);
         Gdx.gl.glViewport(0, 0, WaterMesh.RTT_SIZE, WaterMesh.RTT_SIZE);
@@ -456,6 +502,7 @@ public final class ForwardRenderer {
         Gdx.gl.glCullFace(GL20.GL_BACK);
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
+        // Keep fragments with world.y <= water height (the seafloor).
         Gdx.gl.glUniform4f(uClipPlane, 0f, -1f, 0f, WaterMesh.HEIGHT);
         bindLighting(lighting, true, false);
         Gdx.gl.glUniform1i(uBase, 0);
@@ -471,8 +518,13 @@ public final class ForwardRenderer {
         Gdx.gl.glFrontFace(GL20.GL_CCW);
     }
 
+    /**
+     * One tree walk for one bucket: 1 = land, 0 = solid objects, 2 = alpha blend.
+     * Sky and water meshes are skipped; they have their own draws.
+     */
     private void drawNode(PerspectiveCamera cam, SceneNode node, int pass, CellLighting lighting, boolean reflection) {
         if (reflection && node.actor) {
+            // OpenMW reflection detail 2: sky + land + statics, not NPCs or creatures.
             return;
         }
         if (!node.skipMeshes) {
@@ -526,6 +578,7 @@ public final class ForwardRenderer {
                 }
                 boolean cw = inst.frontClockwise;
                 if (reflection) {
+                    // Mirror flips winding; without this, back-faces become front.
                     cw = !cw;
                 }
                 Gdx.gl.glFrontFace(cw ? GL20.GL_CW : GL20.GL_CCW);
@@ -538,12 +591,14 @@ public final class ForwardRenderer {
                 if (mesh.alphaBlend) {
                     Gdx.gl.glEnable(GL20.GL_BLEND);
                     Gdx.gl.glBlendFunc(mesh.blendSrc, mesh.blendDst);
+                    // Land: first layer SRC_ALPHA,ZERO then later SRC_ALPHA,ONE. Leaves: typical alpha.
                     Gdx.gl.glDepthMask(mesh.terrainPass ? mesh.depthWrite : mesh.noSorter && mesh.depthWrite);
                 } else {
                     Gdx.gl.glDisable(GL20.GL_BLEND);
                     Gdx.gl.glDepthMask(mesh.depthWrite);
                 }
                 if (mesh.terrainPass) {
+                    // Land layers share one heightfield. Offset so later blend layers do not z-fight.
                     Gdx.gl.glEnable(GL20.GL_POLYGON_OFFSET_FILL);
                     Gdx.gl.glPolygonOffset(1f, 1f);
                 } else {
@@ -566,6 +621,10 @@ public final class ForwardRenderer {
         cam.frustum.update(frustumInv);
     }
 
+    /**
+     * True means skip this draw. Invalid AABB always draws. Order: tiny-on-screen,
+     * then far clutter, then frustum (with the box mirrored for the reflection pass).
+     */
     private boolean frustumCulled(PerspectiveCamera cam, SceneNode node, MeshGpu mesh, boolean reflection) {
         if (mesh.localMin[0] > mesh.localMax[0]) {
             return false;
@@ -599,7 +658,10 @@ public final class ForwardRenderer {
         cullBox.set(aabbMin, aabbMax);
     }
 
-    /** OpenMW {@code small feature culling}: AABB sphere vs viewport height in pixels. */
+    /**
+     * How many pixels the mesh's bounding sphere covers. OpenMW uses viewport height.
+     * Water maps pass 512 and 20 px; the main view passes window height and 2 px.
+     */
     private boolean featureCulled(PerspectiveCamera cam, float viewportPx, float pixelSize) {
         if (viewportPx < 1f) {
             return false;
@@ -619,6 +681,7 @@ public final class ForwardRenderer {
         return pixels < pixelSize;
     }
 
+    /** Trees/shacks: longest world-axis ≥ 128, so distant hills are not empty. */
     private boolean landmarkMesh() {
         float dx = cullBox.max.x - cullBox.min.x;
         float dy = cullBox.max.y - cullBox.min.y;
@@ -653,6 +716,10 @@ public final class ForwardRenderer {
         return d2 > VIEW_DISTANCE_SQ;
     }
 
+    /**
+     * Draw the water plane using the two maps filled earlier. Screen UVs sample those
+     * maps; the normal map wobbles the UVs so the reflection looks wavy.
+     */
     private void drawWater(PerspectiveCamera cam, SceneNode root, CellLighting lighting, boolean underwater) {
         Gdx.gl.glUseProgram(waterProgram);
         upload(uWaterView, cam.view);
@@ -661,6 +728,7 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform1i(uWaterRefraction, 2);
         Gdx.gl.glUniform1i(uWaterRefractionDepth, 3);
         Gdx.gl.glUniform1f(uWaterTime, waterTime);
+        // Water shader is TES3 Z-up: GL (x,y,z) → TES (x, −z, y).
         Gdx.gl.glUniform3f(uWaterCamTes, cam.position.x, -cam.position.z, cam.position.y);
         if (lighting == null) {
             Gdx.gl.glUniform3f(uWaterSunDir, 0.35f, -0.45f, 0.8f);
@@ -741,6 +809,11 @@ public final class ForwardRenderer {
         return false;
     }
 
+    /**
+     * Sky NIFs sit at the origin. Zeroing the view translation makes them follow the
+     * camera so they never look like a painted lid over Seyda Neen. Depth writes off
+     * so world meshes always win. Sun is skipped in the reflection map.
+     */
     private void drawSky(PerspectiveCamera cam, boolean reflection) {
         boolean haveSky = sky != null && sky.root != null;
         boolean haveClouds = clouds != null && clouds.root != null;
@@ -821,6 +894,7 @@ public final class ForwardRenderer {
         }
     }
 
+    /** Eight nearest cell lights to this mesh. Morrowind does the same per-object cap. */
     private void bindClosestLights(SceneNode node, MeshGpu mesh, List<CellLight> lights) {
         if (mesh.localMin[0] > mesh.localMax[0]) {
             node.world.getTranslation(meshCenter);
@@ -922,9 +996,11 @@ public final class ForwardRenderer {
         Gdx.gl30.glDeleteFramebuffers(1, ids);
         ids.put(0, refractFbo);
         Gdx.gl30.glDeleteFramebuffers(1, ids);
+        // Interned DDS / static NIF templates live until the renderer dies.
         GpuCache.dispose();
     }
 
+    /** Clear GL state so Scene2D HUD can draw after the 3D pass. */
     public static void resetForScene2d() {
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glDisable(GL20.GL_DEPTH_TEST);
@@ -940,6 +1016,7 @@ public final class ForwardRenderer {
         }
     }
 
+    /** Color target for a water camera. */
     private static int allocColor(int size) {
         int tex = Gdx.gl.glGenTexture();
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, tex);
@@ -953,6 +1030,7 @@ public final class ForwardRenderer {
         return tex;
     }
 
+    /** Depth renderbuffer for the reflection map (not sampled later). */
     private static int allocDepth(int size) {
         IntBuffer ids = BufferUtils.newIntBuffer(1);
         Gdx.gl30.glGenRenderbuffers(1, ids);
@@ -963,6 +1041,7 @@ public final class ForwardRenderer {
         return rb;
     }
 
+    /** Depth texture for refraction so the water shader can read seafloor distance. */
     private static int allocDepthTex(int size) {
         int tex = Gdx.gl.glGenTexture();
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, tex);
@@ -1034,6 +1113,7 @@ public final class ForwardRenderer {
 
     private static final String VERT = """
         #version 330
+        // World-mesh vertex. Clip plane is in world space (water cameras only).
         layout(location = 0) in vec3 a_pos;
         layout(location = 1) in vec3 a_normal;
         layout(location = 2) in vec2 a_uv;
@@ -1055,12 +1135,14 @@ public final class ForwardRenderer {
             v_viewZ = (u_view * world).z;
             v_normal = mat3(u_model) * a_normal;
             gl_Position = u_mvp * vec4(a_pos, 1.0);
+            // Zero clip plane (main view) always passes. Water cameras pass ax+by+cz+d.
             gl_ClipDistance[0] = length(u_clipPlane.xyz) < 1e-6 ? 1.0 : dot(vec4(world.xyz, 1.0), u_clipPlane);
         }
         """;
 
     private static final String FRAG = """
         #version 330
+        // Land, statics, actors. NiTexture slots: base, dark, detail, glow.
         in vec3 v_normal;
         in vec3 v_worldPos;
         in float v_viewZ;
@@ -1137,9 +1219,9 @@ public final class ForwardRenderer {
                 matA = v_color.a;
             }
             tex.a *= matA;
+            // 17 VTEX samples across the cell. Half-texel so linear mix sits on square edges.
             if (u_useBlendMap != 0) {
-                vec2 buv = (v_uv - vec2(0.5)) * (16.0 / 17.0) + vec2(0.5);
-                buv += vec2(1.0 / 16.0 / 4.0, -1.0 / 16.0 / 4.0);
+                vec2 buv = v_uv * (16.0 / 17.0) + vec2(0.5 / 17.0);
                 tex.a *= texture(u_blendMap, buv).r;
             }
             if (u_useDark != 0) {
@@ -1150,6 +1232,7 @@ public final class ForwardRenderer {
                 tex.a *= 1.0 + mipmapLevel(baseUV * ts) * 0.25;
             }
             if (u_alphaTest != 0 && !alphaPass(tex.a, u_alphaRef, u_alphaFunc)) discard;
+            // Log depth: better precision at Morrowind distances than a linear 1/z buffer.
             gl_FragDepth = clamp(
                 log2(max(1e-6, 1.0 + abs(v_viewZ))) / log2(max(u_cameraFar, 1.0) + 1.0) + u_depthBias,
                 0.0, 1.0);
@@ -1199,6 +1282,7 @@ public final class ForwardRenderer {
         out float v_viewZ;
         void main() {
             vec4 world = u_model * vec4(a_pos, 1.0);
+            // OpenMW water.frag is TES3 Z-up. GL Y-up world → (x, −z, y).
             v_tesPos = vec3(world.x, -world.z, world.y);
             v_viewZ = (u_view * world).z;
             gl_Position = u_mvp * vec4(a_pos, 1.0);
@@ -1207,6 +1291,7 @@ public final class ForwardRenderer {
 
     private static final String WATER_FRAG = """
         #version 330
+        // OpenMW compatibility/water.frag (refraction on). Mix seafloor vs mirror by fresnel.
         in vec3 v_tesPos;
         in float v_viewZ;
         uniform sampler2D u_normalMap;
@@ -1287,6 +1372,7 @@ public final class ForwardRenderer {
             vec3 viewDir = normalize(v_tesPos - cameraPos);
             float sunFade = length(u_ambientLight);
             float ior = (cameraPos.z > 0.0) ? (1.333 / 1.0) : (1.0 / 1.333);
+            // Looking down → fresnel ~0 (see the bottom). Grazing → ~1 (see the sky/docks).
             float fresnel = clamp(fresnel_dielectric(viewDir, normal, ior), 0.0, 1.0);
             vec2 reflOffset = normal.xy * REFL_BUMP;
             vec2 refrOffset = normal.xy * REFR_BUMP;
@@ -1296,6 +1382,7 @@ public final class ForwardRenderer {
             float depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - refrOffset).x);
             float waterDepthDistorted = max(depthSampleDistorted - surfaceDepth, 0.0);
             refrOffset *= clamp(realWaterDepth / BUMP_SUPPRESS_DEPTH, 0.0, 1.0);
+            // Reflection bump stays on; only refraction is calmed in shallow water (shores).
             vec3 reflection = texture(u_reflectionMap, screenCoords + reflOffset).rgb;
             vec3 waterColor = WATER_COLOR * sunFade;
             const float SPEC_MAGIC = 1.55;
@@ -1349,6 +1436,7 @@ public final class ForwardRenderer {
             v_alpha = a_color.a;
             v_uv = a_uv;
             if (u_pass == 2) {
+                // Clouds: OpenMW scrolls V so they drift.
                 v_uv.y += u_scroll;
             }
             vec4 world = u_model * vec4(a_pos, 1.0);
@@ -1371,6 +1459,7 @@ public final class ForwardRenderer {
         out vec4 frag;
         void main() {
             vec4 color;
+            // 0 atmosphere, 1 stars, 2 clouds, 4 sun disc.
             if (u_pass == 0) {
                 color = vec4(u_emission, v_alpha);
             } else if (u_pass == 1) {

@@ -9,7 +9,11 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-/** TES3 {@code ESM::Land} heightfield. Rewrite of {@code LandRecordData} VHGT / VTEX. */
+/**
+ * One outdoor cell’s heightfield from the ESM: 65×65 heights and a 16×16
+ * grid of texture ids. A cell is 8192 units on a side. LandMesh turns this
+ * into GPU layers.
+ */
 public final class LandRecord {
     public static final int SIZE = 65;
     public static final int NUM_VERTS = SIZE * SIZE;

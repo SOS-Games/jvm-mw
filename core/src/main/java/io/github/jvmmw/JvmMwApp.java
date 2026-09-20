@@ -61,6 +61,13 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * The walk-in viewer window: load a cell, fly around, HUD buttons, E to
+ * activate. Scene2D is only the overlay — the 3D pass is ForwardRenderer.
+ *
+ * Town is Seyda Neen. Walking recenters nearby cells in the background.
+ * F3 dumps a snapshot; F4 toggles the fps overlay.
+ */
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
     private static final String EXT_PREFIX = "ext:";
@@ -881,7 +888,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 34", skin);
+        Window win = new Window("JVM-MW Phase 35", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

@@ -9,7 +9,8 @@ import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 
 /**
- * Maps to {@code Nif::KeyMapT}. Quaternion keys store NIF WXYZ in four floats.
+ * Timed keys on an animation track (move, rotate, scale). Most Morrowind
+ * idle clips are linear. Quaternion keys store WXYZ in four floats.
  */
 public final class NifKeyMap {
     public static final int LINEAR = 1;

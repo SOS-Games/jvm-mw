@@ -15,7 +15,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
-/** Binary reader for Morrowind NIF 4.0.0.2. Maps to {@code Nif::NIFStream}. */
+/**
+ * Little-endian binary reader for Morrowind .nif files. NifFile is the
+ * only caller.
+ */
 public final class NifStream {
     public static final int VER_MW = 0x04000002;
     public static final int VER_4_0_0_0 = 0x04000000;

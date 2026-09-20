@@ -13,8 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Day cloud dome ({@code meshes/sky_clouds_01.nif}). Camera-relative; Clear
- * {@code Tx_Sky_Clear.dds}. Rewrite of OpenMW {@code CloudUpdater} / cloud mesh.
+ * Day cloud dome. Moves with the camera. Clear weather uses Tx_Sky_Clear.
  */
 public final class SkyClouds {
     public static final String MODEL = "meshes/sky_clouds_01.nif";

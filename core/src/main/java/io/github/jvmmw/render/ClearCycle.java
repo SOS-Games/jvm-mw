@@ -1,8 +1,9 @@
 package io.github.jvmmw.render;
 
 /**
- * Clear-weather hour. Rewrite of OpenMW {@code TimeOfDayInterpolator} plus
- * sun orbit / {@code getSunPercentage} / night flag. Frozen to Clear.
+ * Clear-weather hour: sky, fog, sun color, sun in the sky, night flag.
+ * No other weathers yet. The HUD slider, [ ], and Play scrub the hour
+ * (stars after sunset).
  */
 public final class ClearCycle {
     public static final float SUNRISE = 6f;

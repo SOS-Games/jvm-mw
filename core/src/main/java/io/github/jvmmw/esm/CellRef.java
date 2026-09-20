@@ -5,7 +5,10 @@
  */
 package io.github.jvmmw.esm;
 
-/** Maps to {@code ESM::CellRef}. */
+/**
+ * One thing placed in a cell: which object, where, scale, and (for doors)
+ * where it teleports.
+ */
 public final class CellRef {
     public int frmr;
     public String refId = "";

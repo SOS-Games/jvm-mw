@@ -82,7 +82,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm/util.hpp` | `positionToExteriorCellLocation` | `LandRecord.cellGrid` `floor(x/8192)` | same |
 | `components/esm3/loadland.hpp` | `ESM::Land` / `VHGT` | `esm.LandRecord` + `LandMesh` | rewrite |
 | `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | `LAND` layers + TES3 blendmaps | rewrite |
-| `components/esmterrain/storage.cpp` | `getBlendmaps` TES3 | `LandMesh` 17→34 alpha | rewrite |
+| `components/esmterrain/storage.cpp` | `getBlendmaps` TES3 | `LandMesh` 17×17 `GL_LINEAR` | rewrite |
+| `BlendmapTexMat` 2× nudge | half-texel `16/17 + 0.5/17` | rewrite |
 | `components/terrain/material.cpp` | `createPasses` | land layer blend + depth | rewrite |
 | `apps/openmw/mwworld/cell.cpp` | TES3 exterior water | always on, height −1 | same |
 | `components/sceneutil/waterutil.cpp` | `createWaterGeometry` | `render.WaterMesh` on cell root | rewrite |

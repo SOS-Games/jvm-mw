@@ -18,8 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Process-lifetime intern of DDS and static NIF GPU templates by VFS path.
- * Rewrite of {@code Resource::ImageManager} / {@code SceneManager::getTemplate}.
+ * Shared GPU copies of textures and static meshes, keyed by file path.
+ * They live for the whole process — swapping cells must not delete them.
+ * Skinned copies and land blend maps are per-cell and do go away.
  */
 public final class GpuCache {
     private GpuCache() {

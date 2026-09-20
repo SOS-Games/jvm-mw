@@ -29,10 +29,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Chest lid {@code containeropen} / {@code containerclose}. Rewrite of
- * {@code ActionOpen} / {@code CharacterController::onOpen} /
- * {@code onClose} without {@code GM_Container}. Second {@code E} is the
- * loot-window dismiss.
+ * E on a chest: play the lid open/close animation if the file has those
+ * clips. No loot window; a second E is the dismiss.
  */
 public final class ContainerOpen {
     public static final class Hit {

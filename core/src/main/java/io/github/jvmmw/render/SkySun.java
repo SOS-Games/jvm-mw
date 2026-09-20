@@ -11,8 +11,7 @@ import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 
 /**
- * Day sun disc. Camera-relative textured quad. Rewrite of OpenMW
- * {@code CelestialBody} / {@code Sun} (no glare/flash).
+ * Sun disc in the sky. Moves with the camera. No sunglare flash yet.
  */
 public final class SkySun {
     public static final String TEXTURE = "textures/tx_sun_05.dds";

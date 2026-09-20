@@ -5,6 +5,10 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3WindowAdapter;
 import io.github.jvmmw.JvmMwApp;
 
+/**
+ * Desktop entry: open a GL 3.3 window, then the viewer.
+ * gradlew.bat lwjgl3:run
+ */
 public final class Lwjgl3Launcher {
     public static void main(String[] args) {
         if (StartupHelper.startNewJvmIfRequired()) {

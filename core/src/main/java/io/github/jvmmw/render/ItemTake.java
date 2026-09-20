@@ -18,8 +18,8 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * World-item {@code ActionTake} without inventory. Unparents the instance
- * like {@code Objects::removeObject}.
+ * E on a world item: the mesh leaves the scene (no inventory). Books only
+ * log a line. Fixture lights that you cannot carry stay put.
  */
 public final class ItemTake {
     public static final class Hit {

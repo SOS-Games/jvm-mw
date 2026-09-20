@@ -1,8 +1,8 @@
 # Next topics
 
-Pick one, then say **proceed** to spec that slice. This is the queue.
+Pick one, then say **proceed** to spec that slice. This is the **small** queue.
 
-Do **not** spec combat, dialogue, AI packages, navmesh, plugins, Lua, saves, or a full GUI as a small phase.
+Big holes (occlusion, combat, shadows, full UI, …) live in [big-topics.md](big-topics.md). Do not spec those here.
 
 ## Strong next slices
 
@@ -12,7 +12,6 @@ These match what the viewer already is (walk Town, look, Dump) and were explicit
 | --- | --- |
 | **Keep overlapping tiles** | Walk still rebuilds land and the scene graph for cells you already have. Textures/static NIFs intern; live tiles do not. Biggest remaining swap hitch. |
 | **Moons** | Night is stars only. Masser and Secunda. |
-| **Softer ground blends** | Land mix is still blocky 2× nearest. Noticeable on Town dirt/grass. |
 | **Collision / stay on land** | Fly-cam only. Heightfield + simple object bounds so walking the harbor does not clip through docks. Not full physics. |
 | **NPC / creature walk cycles** | Mannequins idle in place. Walk/idle groups on the same skeletons when you move or when they have a wander. |
 | **Sunglare** | Midday sun disc is there; OpenMW glare/flash is not. |
@@ -32,11 +31,6 @@ These match what the viewer already is (walk Town, look, Dump) and were explicit
 | Topic | Why |
 | --- | --- |
 | **Merge land draws** | Many blend layers per tile. Fewer terrain submits. |
-| **Occlusion** | Frustum + small-feature only. Docks behind a hill still draw. |
 | **Skinned bound updates** | NPC AABB is rest-pose. Idle motion can pop in/out of cull. |
-
-## Later / not a small phase
-
-Weather *types* as a set, loot GUI, shadows, distant land, grass, map, sound/music, GPU skinning, full Morrowind UI.
 
 When a topic ships, delete its row here.

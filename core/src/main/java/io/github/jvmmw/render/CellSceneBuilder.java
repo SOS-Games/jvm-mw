@@ -21,7 +21,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-/** Place cell refs that have a MODL. Rewrite of {@code MWWorld::Scene} insert for non-actors. */
+/**
+ * Puts one cell on screen: land, water, furniture, doors, chests, pickups,
+ * NPCs, and creatures. Walking outdoors builds the next grid in the
+ * background, then swaps it in.
+ *
+ * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
+ * north) stay out.
+ */
 public final class CellSceneBuilder {
     public final StringBuilder log = new StringBuilder();
     public int placed;

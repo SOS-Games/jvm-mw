@@ -17,9 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Non-teleport door open/close and interior load-door teleport. Rewrite of
- * {@code World::activateDoor} / {@code rotateDoor} / {@code processDoors} /
- * {@code ActionTeleport}. Empty {@code DNAM} is an exterior grid from {@code DODT}.
+ * E on a door. Plain doors swing open and shut. A named destination loads
+ * that interior. An empty destination loads the outdoor grid around that
+ * door’s arrival point.
  */
 public final class DoorSwing {
     /** GMST {@code iMaxActivateDist}. */

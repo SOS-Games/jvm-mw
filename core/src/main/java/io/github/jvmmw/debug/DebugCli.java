@@ -21,8 +21,12 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Headless ESM/NIF dumps. Run from repo root:
- * {@code gradlew.bat :core:debugCli --args="help"}
+ * Text dumps of the same ESM/NIF parsers the viewer uses, with no window.
+ * From the repo root: gradlew.bat :core:debugCli --args="help"
+ *
+ * nif — a door or wall that looks offset. cell / spawn — fog and where you
+ * arrive. exterior — the 21-cell walk grid. npc / crea / kf — how a person
+ * or creature is put together.
  */
 public final class DebugCli {
     private DebugCli() {

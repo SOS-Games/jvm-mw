@@ -10,8 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Day atmosphere dome ({@code meshes/sky_atmosphere.nif}). Camera-relative;
- * Clear-day emission. Rewrite of OpenMW {@code SkyManager} atmosphere only.
+ * Day sky dome. Moves with the camera so it always looks infinitely far.
  */
 public final class SkyAtmosphere {
     public static final String MODEL = "meshes/sky_atmosphere.nif";

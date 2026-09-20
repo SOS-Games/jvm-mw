@@ -13,7 +13,8 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Rewrite of {@code NifOsg::Loader::loadKf} + idle subset of {@code MWRender::Animation}.
+ * A Morrowind animation file: named bone tracks plus labels like idle or
+ * containeropen. NPCs and chests sample these.
  */
 public final class KfFile {
     public final String filename;

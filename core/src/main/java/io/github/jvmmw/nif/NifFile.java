@@ -8,7 +8,12 @@ package io.github.jvmmw.nif;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Morrowind NIF 4.0.0.2 reader. Maps to {@code Nif::Reader::parse}. */
+/**
+ * Reads a Morrowind .nif into records (nodes, triangles, materials, skins).
+ * Does not draw — NifSceneBuilder turns this into a scene.
+ *
+ * The root node (record 0, not the bone named bip01) is identity.
+ */
 public final class NifFile {
     public final List<NifRecord> records = new ArrayList<>();
     public final List<Integer> roots = new ArrayList<>();

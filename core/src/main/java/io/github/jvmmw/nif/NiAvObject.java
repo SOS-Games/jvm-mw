@@ -8,6 +8,10 @@ package io.github.jvmmw.nif;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * A node in a .nif with a local pose, flags, and material links. skipMeshes
+ * means collision or marker extra data — not drawn.
+ */
 public class NiAvObject extends NifRecord {
     public static final int FLAG_HIDDEN = 0x0001;
 

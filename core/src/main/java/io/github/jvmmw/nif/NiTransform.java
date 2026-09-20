@@ -8,7 +8,11 @@ package io.github.jvmmw.nif;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 
-/** Maps to {@code Nif::NiTransform} / {@code Nif::Matrix3}. */
+/**
+ * NIF rotation, translation, and scale. Copied straight into a libGDX
+ * matrix — do not transpose it again. Cave doorways have a local +90° X;
+ * transposing that opens wall seams.
+ */
 public final class NiTransform {
     public final float[] rotation = {
         1, 0, 0,

@@ -14,7 +14,10 @@ import com.badlogic.gdx.math.Matrix4;
 
 import java.util.Map;
 
-/** Pretty-print a Morrowind NIF for agents. */
+/**
+ * Pretty-print a parsed .nif: node tree, local transforms, skins.
+ * Used by debugCli nif when a door or wall looks offset.
+ */
 public final class NifDump {
     private NifDump() {
     }

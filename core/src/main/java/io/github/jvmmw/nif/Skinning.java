@@ -13,8 +13,10 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Rest-pose CPU skin. Maps to {@code SceneUtil::RigGeometry}:
- * {@code v' = skinT * sum(w * boneWorld * invBind) * v} in GL column-vector layout.
+ * Moves skinned vertices on the CPU: each vertex is a weighted blend of
+ * bone poses. Rest pose first, then again after idle animation moves the
+ * bones. Skin bind-pose data is rotation, then translation, then scale —
+ * the other order flattens people onto the ground.
  */
 public final class Skinning {
     private Skinning() {

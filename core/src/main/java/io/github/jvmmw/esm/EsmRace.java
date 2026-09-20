@@ -5,7 +5,10 @@
  */
 package io.github.jvmmw.esm;
 
-/** TES3 {@code RACE}. Maps to {@code ESM::Race}. */
+/**
+ * A race: male/female height and weight, beast flag. NPC scale comes from
+ * here.
+ */
 public final class EsmRace {
     public static final int FLAG_BEAST = 0x02;
 

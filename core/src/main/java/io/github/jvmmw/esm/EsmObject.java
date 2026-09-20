@@ -8,7 +8,10 @@ package io.github.jvmmw.esm;
 import java.util.ArrayList;
 import java.util.List;
 
-/** NAME + MODL for a placeable TES3 record. Rewrite of {@code MWClass::getClassModel}. */
+/**
+ * One placeable object from the ESM (furniture, door, chest, …): id, mesh
+ * path, flags. Clothes and armor also list which body parts they cover.
+ */
 public final class EsmObject {
     public static final int CLOT_PANTS = 0;
     public static final int CLOT_SHOES = 1;

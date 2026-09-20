@@ -16,7 +16,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Last archive wins a given path. Maps to {@code VFS::Manager} + {@code registerArchives}.
+ * Looks up a mesh or texture by path. Last registered source wins
+ * (BSA, then extra data folders).
  */
 public final class VfsManager {
     public sealed interface Source permits Loose, Bsa {

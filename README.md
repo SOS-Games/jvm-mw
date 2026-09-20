@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 34 (current)
+## Phase 35 (current)
 
-Town skips meshes smaller than 2 pixels and small objects farther than 7168. Trees and shacks still draw across the 5×5. Water cameras stay at 20 pixels on the 512 maps. See [docs/phase34-small-feature.md](docs/phase34-small-feature.md). Phase 33 water: [docs/phase33-water-rtt.md](docs/phase33-water-rtt.md).
+Town land textures mix with linear 17×17 blendmaps instead of 2× nearest blocks. Phase 34 cull stays. See [docs/phase35-land-blend.md](docs/phase35-land-blend.md). Phase 34 cull: [docs/phase34-small-feature.md](docs/phase34-small-feature.md).
 
 ```bat
 gradlew.bat lwjgl3:run

@@ -8,6 +8,11 @@ import com.badlogic.gdx.math.Matrix4;
 
 import java.util.Map;
 
+/**
+ * A GPU mesh hung on a scene node. Furniture shares the cached original.
+ * Skinned copies keep a pointer back to the .nif so idle animation can
+ * rewrite vertices.
+ */
 public final class MeshInstance {
     public final MeshGpu mesh;
     public boolean frontClockwise;

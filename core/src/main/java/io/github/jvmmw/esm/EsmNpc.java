@@ -8,7 +8,11 @@ package io.github.jvmmw.esm;
 import java.util.ArrayList;
 import java.util.List;
 
-/** TES3 {@code NPC_}. Maps to {@code ESM::NPC}. */
+/**
+ * One NPC from the ESM: race, head, hair, female flag, equipped clothes.
+ * The viewer ignores the mesh on this record and builds a dressed skeleton
+ * instead.
+ */
 public final class EsmNpc {
     public static final int FLAG_FEMALE = 0x01;
 

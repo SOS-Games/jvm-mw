@@ -11,7 +11,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** TES3 ESM stream. Maps to {@code ESM::ESMReader}. */
+/**
+ * Byte stream over Morrowind.esm: record headers, leftover counts,
+ * little-endian strings. EsmFile is the only caller.
+ */
 public final class EsmReader {
     private final ByteBuffer buf;
     private int leftFile;

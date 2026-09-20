@@ -2,7 +2,10 @@ package io.github.jvmmw.render;
 
 import io.github.jvmmw.esm.EsmObject;
 
-/** One placed TES3 LIGH. Rewrite of {@code SceneUtil::LightSource} / {@code LightController}. */
+/**
+ * One placed light: position, color, radius, flicker. Carry lights can be
+ * taken; fixture lights stay.
+ */
 public final class CellLight {
     public static final int TYPE_NORMAL = 0;
     public static final int TYPE_FLICKER = 1;

@@ -5,7 +5,10 @@
  */
 package io.github.jvmmw.esm;
 
-/** TES3 {@code CREA}. Maps to {@code ESM::Creature}. */
+/**
+ * One creature from the ESM: mesh, flags (biped / swim / fly / walk), scale.
+ * Placed from its own mesh file, not body parts.
+ */
 public final class EsmCreature {
     public static final int BIPEDAL = 0x01;
     public static final int WEAPON = 0x04;

@@ -13,6 +13,13 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 
+/**
+ * GPU mesh the renderer actually draws: vertices, indices, and Morrowind
+ * textures (base, dark, detail, glow).
+ *
+ * Chairs and trees share one copy. People and creatures each get their own
+ * so idle animation can move vertices without changing the shared original.
+ */
 public final class MeshGpu {
     public static final int COLOR_NONE = 0;
     public static final int COLOR_EMISSION = 1;

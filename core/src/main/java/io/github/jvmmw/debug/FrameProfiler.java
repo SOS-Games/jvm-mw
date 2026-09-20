@@ -4,8 +4,8 @@ import java.util.Arrays;
 import java.util.Locale;
 
 /**
- * CPU section timers and draw counters for F3 / the perf overlay.
- * Rewrite of the idea of OpenMW {@code Resource::Profiler} / osg F3 stats — not OSG.
+ * How long each part of the frame took, plus draw counts, for F3 Dump and
+ * the F4 overlay. Wait until n=60 before treating fps as settled.
  */
 public final class FrameProfiler {
     public static final int WALK_STEP = 0;

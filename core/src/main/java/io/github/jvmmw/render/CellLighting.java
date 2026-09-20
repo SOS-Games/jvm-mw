@@ -4,7 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-/** Interior mood + point lights for one cell. Rewrite of {@code configureAmbient} + LightManager feed. */
+/**
+ * Mood for one cell: ambient, sun, fog, and placed point lights. The
+ * renderer binds the eight closest lights. Viewing distance is 7168.
+ * Town exteriors turn fog off when density is 0.
+ */
 public final class CellLighting {
     public static final float VIEW_DISTANCE = 7168f;
     /** {@code Water_UnderwaterDayFog}. */

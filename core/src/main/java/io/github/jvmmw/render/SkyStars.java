@@ -10,7 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Night star dome. Rewrite of OpenMW atmosphere-night mesh ({@code skynight01/02}).
+ * Night star dome. Fades in after sunset. Moves with the camera.
  */
 public final class SkyStars {
     public static final String NIGHT_02 = "meshes/sky_night_02.nif";

@@ -9,8 +9,10 @@ import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.LandRecord;
 
 /**
- * TES3 water plane. Rewrite of {@code SceneUtil::createWaterGeometry} plus
- * shader-on {@code Water::createShaderWaterStateSet} with refraction.
+ * The water plane, sitting at height −1 in the Y-up cell. Two 512 cameras
+ * capture what’s under and what’s mirrored; the main pass mixes them so
+ * looking down shows the bottom and glancing shows the sky. Tiny meshes
+ * skip those extra cameras.
  */
 public final class WaterMesh {
     public static final float HEIGHT = -1f;

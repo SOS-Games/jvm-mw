@@ -6,7 +6,15 @@ import com.badlogic.gdx.math.collision.BoundingBox;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Owned scene graph. Rewrite of OSG {@code osg::Node}, not a 1:1 port. */
+/**
+ * One node in the cell: a local pose, children, and optional meshes.
+ * World pose is parent’s world times local. The renderer walks this tree
+ * after world poses are updated.
+ *
+ * actor marks NPCs and creatures so water reflections skip them.
+ * skipMeshes is collision or marker extra data from the .nif (not drawn).
+ * Picking up an item unparents it instead.
+ */
 public final class SceneNode {
     public String name = "";
     public SceneNode parent;

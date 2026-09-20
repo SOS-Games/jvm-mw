@@ -14,7 +14,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Load placeable NAME+MODL records and CELL refs from Morrowind.esm. */
+/**
+ * Everything we care about from Morrowind.esm: objects, NPCs, interiors,
+ * land textures, and who sits where in a cell. Not a full game simulation.
+ *
+ * Walking outdoors keeps a 5×5 of cells with the corners cut (21 cells).
+ * When you enter an interior, you arrive at the inbound door, not the
+ * room’s center.
+ */
 public final class EsmFile {
     public static final int CELL_INTERIOR = 0x01;
     /** Bounding half-size of the active exterior grid (5×5). Corners are cut in {@link #inCellGrid}. */
