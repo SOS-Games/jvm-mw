@@ -87,6 +87,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/cell.cpp` | TES3 exterior water | always on, height −1 | same |
 | `components/sceneutil/waterutil.cpp` | `createWaterGeometry` | `render.WaterMesh` on cell root | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `createSimpleWaterStateSet` | blend, no cull, no depth write, water## flip | rewrite |
+| `apps/openmw/mwrender/water.cpp` | `Water::updateWaterMaterial` shader | reflection FBO + water shader | rewrite |
+| `apps/openmw/mwrender/water.cpp` | `Water::Reflection` | flipped Path B RTT, 512 | rewrite |
+| `files/shaders/compatibility/water.frag` | no-refract path | `ForwardRenderer` water fragment | rewrite |
+| `files/data/textures/omw/water_nm.png` | `water_nm.png` | `assets/textures/omw/water_nm.png` | same |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |

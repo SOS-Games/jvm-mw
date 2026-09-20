@@ -64,6 +64,7 @@ public final class MeshGpu {
     public boolean depthWrite = true;
     public int depthFunc = GL20.GL_LEQUAL;
     public boolean cull = true;
+    public boolean waterShader;
 
     public int textureId;
 
