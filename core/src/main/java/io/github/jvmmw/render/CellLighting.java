@@ -7,6 +7,12 @@ import java.util.Random;
 /** Interior mood + point lights for one cell. Rewrite of {@code configureAmbient} + LightManager feed. */
 public final class CellLighting {
     public static final float VIEW_DISTANCE = 7168f;
+    /** {@code Water_UnderwaterDayFog}. */
+    public static final float UNDERWATER_DAY_FOG = 2.5f;
+    /** {@code Water_UnderwaterColorWeight}. */
+    public static final float UNDERWATER_WEIGHT = 0.85f;
+    /** {@code Water_UnderwaterColor} 012,030,037 / 255. */
+    public static final float[] UNDERWATER_COLOR = {12f / 255f, 30f / 255f, 37f / 255f};
 
     public final float[] ambient = {0.35f, 0.35f, 0.35f};
     public final float[] sunDiffuse = {1f, 1f, 1f};
@@ -47,6 +53,25 @@ public final class CellLighting {
             fogEnd = VIEW_DISTANCE;
             fogScale = 1f / (fogEnd - fogStart);
         }
+    }
+
+    public static float underwaterFogEnd() {
+        return Math.min(VIEW_DISTANCE, 7168f);
+    }
+
+    public static float underwaterFogStart() {
+        return underwaterFogEnd() * (1f - UNDERWATER_DAY_FOG);
+    }
+
+    public static float underwaterFogScale() {
+        return 1f / (underwaterFogEnd() - underwaterFogStart());
+    }
+
+    public void underwaterFogColor(float[] out) {
+        float w = UNDERWATER_WEIGHT;
+        out[0] = UNDERWATER_COLOR[0] * w + fogColor[0] * (1f - w);
+        out[1] = UNDERWATER_COLOR[1] * w + fogColor[1] * (1f - w);
+        out[2] = UNDERWATER_COLOR[2] * w + fogColor[2] * (1f - w);
     }
 
     public void updateFlicker(float dt) {

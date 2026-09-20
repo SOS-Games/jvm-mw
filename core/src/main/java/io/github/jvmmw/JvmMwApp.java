@@ -42,6 +42,7 @@ import io.github.jvmmw.render.DoorSwing;
 import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.NifSceneBuilder;
 import io.github.jvmmw.render.SceneNode;
+import io.github.jvmmw.render.WaterMesh;
 import io.github.jvmmw.resource.TestData;
 
 import java.nio.file.Files;
@@ -526,7 +527,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 22", skin);
+        Window win = new Window("JVM-MW Phase 23", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -673,6 +674,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(" fogStart=").append(fog.fogStart)
                 .append(" fogEnd=").append(fog.fogEnd)
                 .append(" fogEnabled=").append(fog.fogEnabled)
+                .append(" underwater=").append(eye.y < WaterMesh.HEIGHT && loadedCell != null && !loadedCell.interior)
                 .append(" lights=").append(fog.lights.size()).append('\n');
             if (loadedCell != null && loadedCell.hasSpawn) {
                 sb.append("spawn inbound tes=(").append(loadedCell.spawnPos[0]).append(',')

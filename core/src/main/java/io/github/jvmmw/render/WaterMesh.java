@@ -8,11 +8,9 @@ package io.github.jvmmw.render;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.LandRecord;
 
-import com.badlogic.gdx.graphics.GL20;
-
 /**
  * TES3 water plane. Rewrite of {@code SceneUtil::createWaterGeometry} plus
- * shader-on {@code Water::createShaderWaterStateSet} (no refraction).
+ * shader-on {@code Water::createShaderWaterStateSet} with refraction.
  */
 public final class WaterMesh {
     public static final float HEIGHT = -1f;
@@ -88,12 +86,10 @@ public final class WaterMesh {
         }
         MeshGpu mesh = new MeshGpu(interleaved, indices);
         mesh.waterShader = true;
-        mesh.alphaBlend = true;
+        mesh.alphaBlend = false;
         mesh.cull = false;
         mesh.depthTest = true;
-        mesh.depthWrite = false;
-        mesh.blendSrc = GL20.GL_SRC_ALPHA;
-        mesh.blendDst = GL20.GL_ONE_MINUS_SRC_ALPHA;
+        mesh.depthWrite = true;
         return mesh;
     }
 }

@@ -18,6 +18,7 @@ import java.util.List;
 public final class ForwardRenderer {
     public static final int MAX_LIGHTS = 8;
     private static final int GL_CLIP_DISTANCE0 = 0x3000;
+    private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
     private final int program;
     private final int uMvp;
@@ -69,14 +70,24 @@ public final class ForwardRenderer {
     private final int uWaterAmbient;
     private final int uWaterFar;
     private final int uWaterScreen;
+    private final int uWaterRefraction;
+    private final int uWaterRefractionDepth;
+    private final int uWaterFogEnabled;
+    private final int uWaterFogStart;
+    private final int uWaterFogScale;
+    private final int uWaterFogColor;
     private final Matrix4 origCombined = new Matrix4();
     private final Matrix4 origView = new Matrix4();
     private final Matrix4 reflectMat = new Matrix4();
     private final int reflectFbo;
     private final int reflectColor;
     private final int reflectDepth;
+    private final int refractFbo;
+    private final int refractColor;
+    private final int refractDepth;
     private final Texture waterNm;
     private float waterTime;
+    private final float[] uwFog = new float[3];
     private final FloatBuffer matBuf = BufferUtils.newFloatBuffer(16);
     private final FloatBuffer pointPosBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 3);
     private final FloatBuffer pointDiffBuf = BufferUtils.newFloatBuffer(MAX_LIGHTS * 3);
@@ -137,6 +148,12 @@ public final class ForwardRenderer {
         uWaterAmbient = Gdx.gl.glGetUniformLocation(waterProgram, "u_ambientLight");
         uWaterFar = Gdx.gl.glGetUniformLocation(waterProgram, "u_cameraFar");
         uWaterScreen = Gdx.gl.glGetUniformLocation(waterProgram, "u_screenRes");
+        uWaterRefraction = Gdx.gl.glGetUniformLocation(waterProgram, "u_refractionMap");
+        uWaterRefractionDepth = Gdx.gl.glGetUniformLocation(waterProgram, "u_refractionDepthMap");
+        uWaterFogEnabled = Gdx.gl.glGetUniformLocation(waterProgram, "u_fogEnabled");
+        uWaterFogStart = Gdx.gl.glGetUniformLocation(waterProgram, "u_fogStart");
+        uWaterFogScale = Gdx.gl.glGetUniformLocation(waterProgram, "u_fogScale");
+        uWaterFogColor = Gdx.gl.glGetUniformLocation(waterProgram, "u_fogColor");
         Pixmap nmPix = new Pixmap(Gdx.files.internal("textures/omw/water_nm.png"));
         waterNm = new Texture(nmPix);
         nmPix.dispose();
@@ -144,7 +161,10 @@ public final class ForwardRenderer {
         waterNm.setWrap(Texture.TextureWrap.Repeat, Texture.TextureWrap.Repeat);
         reflectColor = allocColor(WaterMesh.RTT_SIZE);
         reflectDepth = allocDepth(WaterMesh.RTT_SIZE);
-        reflectFbo = allocFbo(reflectColor, reflectDepth);
+        reflectFbo = allocFbo(reflectColor, reflectDepth, false);
+        refractColor = allocColor(WaterMesh.RTT_SIZE);
+        refractDepth = allocDepthTex(WaterMesh.RTT_SIZE);
+        refractFbo = allocFbo(refractColor, refractDepth, true);
         reflectMat.idt();
         reflectMat.val[5] = -1f;
         reflectMat.val[13] = 2f * WaterMesh.HEIGHT;
@@ -157,7 +177,9 @@ public final class ForwardRenderer {
     public void render(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         waterTime += Gdx.graphics.getDeltaTime();
         boolean water = hasWater(root);
+        boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
         if (water) {
+            renderRefraction(cam, root, lighting);
             renderReflection(cam, root, lighting);
         }
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
@@ -169,7 +191,7 @@ public final class ForwardRenderer {
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
         Gdx.gl.glUniform4f(uClipPlane, 0f, 0f, 0f, 1f);
-        bindLighting(lighting);
+        bindLighting(lighting, false, underwater);
         Gdx.gl.glUniform1i(uBase, 0);
         Gdx.gl.glUniform1i(uDark, 1);
         Gdx.gl.glUniform1i(uDetail, 2);
@@ -180,7 +202,7 @@ public final class ForwardRenderer {
         drawNode(cam, root, 0, lighting, false);
         drawNode(cam, root, 2, lighting, false);
         if (water) {
-            drawWater(cam, root, lighting);
+            drawWater(cam, root, lighting, underwater);
         }
         Gdx.gl.glDisable(GL20.GL_POLYGON_OFFSET_FILL);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
@@ -188,22 +210,51 @@ public final class ForwardRenderer {
         Gdx.gl30.glBindVertexArray(0);
     }
 
-    private void bindLighting(CellLighting lighting) {
+    private void bindLighting(CellLighting lighting, boolean fogOff, boolean underwater) {
         if (lighting == null) {
             Gdx.gl.glUniform3f(uLightDir, 0.35f, 0.8f, 0.45f);
             Gdx.gl.glUniform3f(uAmbientLight, 0.35f, 0.35f, 0.35f);
             Gdx.gl.glUniform3f(uSunDiffuse, 1f, 1f, 1f);
             Gdx.gl.glUniform1i(uPointCount, 0);
-            Gdx.gl.glUniform1i(uFogEnabled, 0);
         } else {
             Gdx.gl.glUniform3f(uLightDir, lighting.sunDir[0], lighting.sunDir[1], lighting.sunDir[2]);
             Gdx.gl.glUniform3f(uAmbientLight, lighting.ambient[0], lighting.ambient[1], lighting.ambient[2]);
             Gdx.gl.glUniform3f(uSunDiffuse, lighting.sunDiffuse[0], lighting.sunDiffuse[1], lighting.sunDiffuse[2]);
-            Gdx.gl.glUniform1i(uFogEnabled, lighting.fogEnabled ? 1 : 0);
-            Gdx.gl.glUniform1f(uFogStart, lighting.fogStart);
-            Gdx.gl.glUniform1f(uFogScale, lighting.fogScale);
-            Gdx.gl.glUniform3f(uFogColor, lighting.fogColor[0], lighting.fogColor[1], lighting.fogColor[2]);
         }
+        bindFog(uFogEnabled, uFogStart, uFogScale, uFogColor, lighting, fogOff, underwater);
+    }
+
+    private void bindFog(int enabledLoc, int startLoc, int scaleLoc, int colorLoc, CellLighting lighting,
+        boolean fogOff, boolean underwater) {
+        if (fogOff) {
+            Gdx.gl.glUniform1i(enabledLoc, 0);
+            return;
+        }
+        if (underwater) {
+            if (lighting != null) {
+                lighting.underwaterFogColor(uwFog);
+            } else {
+                uwFog[0] = CellLighting.UNDERWATER_COLOR[0] * CellLighting.UNDERWATER_WEIGHT
+                    + 0.08f * (1f - CellLighting.UNDERWATER_WEIGHT);
+                uwFog[1] = CellLighting.UNDERWATER_COLOR[1] * CellLighting.UNDERWATER_WEIGHT
+                    + 0.09f * (1f - CellLighting.UNDERWATER_WEIGHT);
+                uwFog[2] = CellLighting.UNDERWATER_COLOR[2] * CellLighting.UNDERWATER_WEIGHT
+                    + 0.12f * (1f - CellLighting.UNDERWATER_WEIGHT);
+            }
+            Gdx.gl.glUniform1i(enabledLoc, 1);
+            Gdx.gl.glUniform1f(startLoc, CellLighting.underwaterFogStart());
+            Gdx.gl.glUniform1f(scaleLoc, CellLighting.underwaterFogScale());
+            Gdx.gl.glUniform3f(colorLoc, uwFog[0], uwFog[1], uwFog[2]);
+            return;
+        }
+        if (lighting == null || !lighting.fogEnabled) {
+            Gdx.gl.glUniform1i(enabledLoc, 0);
+            return;
+        }
+        Gdx.gl.glUniform1i(enabledLoc, 1);
+        Gdx.gl.glUniform1f(startLoc, lighting.fogStart);
+        Gdx.gl.glUniform1f(scaleLoc, lighting.fogScale);
+        Gdx.gl.glUniform3f(colorLoc, lighting.fogColor[0], lighting.fogColor[1], lighting.fogColor[2]);
     }
 
     private void renderReflection(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
@@ -227,7 +278,7 @@ public final class ForwardRenderer {
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
         Gdx.gl.glUniform4f(uClipPlane, 0f, 1f, 0f, -WaterMesh.HEIGHT);
-        bindLighting(lighting);
+        bindLighting(lighting, false, false);
         Gdx.gl.glUniform1i(uBase, 0);
         Gdx.gl.glUniform1i(uDark, 1);
         Gdx.gl.glUniform1i(uDetail, 2);
@@ -238,6 +289,33 @@ public final class ForwardRenderer {
         drawNode(cam, root, 0, lighting, true);
         cam.combined.set(origCombined);
         cam.view.set(origView);
+        Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
+        Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
+        Gdx.gl.glFrontFace(GL20.GL_CCW);
+    }
+
+    private void renderRefraction(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
+        Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, refractFbo);
+        Gdx.gl.glViewport(0, 0, WaterMesh.RTT_SIZE, WaterMesh.RTT_SIZE);
+        Gdx.gl.glClearColor(0.090195f, 0.115685f, 0.12745f, 1f);
+        Gdx.gl.glDepthMask(true);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+        Gdx.gl.glEnable(GL_CLIP_DISTANCE0);
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glEnable(GL20.GL_CULL_FACE);
+        Gdx.gl.glCullFace(GL20.GL_BACK);
+        Gdx.gl.glUseProgram(program);
+        upload(uView, cam.view);
+        Gdx.gl.glUniform4f(uClipPlane, 0f, -1f, 0f, WaterMesh.HEIGHT);
+        bindLighting(lighting, true, false);
+        Gdx.gl.glUniform1i(uBase, 0);
+        Gdx.gl.glUniform1i(uDark, 1);
+        Gdx.gl.glUniform1i(uDetail, 2);
+        Gdx.gl.glUniform1i(uGlow, 3);
+        Gdx.gl.glUniform1i(uBlendMap, 4);
+        Gdx.gl.glUniform1f(uCameraFar, cam.far);
+        drawNode(cam, root, 1, lighting, false);
+        drawNode(cam, root, 0, lighting, false);
         Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
@@ -321,11 +399,13 @@ public final class ForwardRenderer {
         }
     }
 
-    private void drawWater(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
+    private void drawWater(PerspectiveCamera cam, SceneNode root, CellLighting lighting, boolean underwater) {
         Gdx.gl.glUseProgram(waterProgram);
         upload(uWaterView, cam.view);
         Gdx.gl.glUniform1i(uWaterNormal, 0);
         Gdx.gl.glUniform1i(uWaterReflection, 1);
+        Gdx.gl.glUniform1i(uWaterRefraction, 2);
+        Gdx.gl.glUniform1i(uWaterRefractionDepth, 3);
         Gdx.gl.glUniform1f(uWaterTime, waterTime);
         Gdx.gl.glUniform3f(uWaterCamTes, cam.position.x, -cam.position.z, cam.position.y);
         if (lighting == null) {
@@ -339,6 +419,7 @@ public final class ForwardRenderer {
         }
         Gdx.gl.glUniform1f(uWaterFar, cam.far);
         Gdx.gl.glUniform2f(uWaterScreen, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        bindFog(uWaterFogEnabled, uWaterFogStart, uWaterFogScale, uWaterFogColor, lighting, false, underwater);
         Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, waterNm.getTextureObjectHandle());
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_REPEAT);
@@ -347,16 +428,23 @@ public final class ForwardRenderer {
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, reflectColor);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glActiveTexture(GL20.GL_TEXTURE2);
+        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, refractColor);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glActiveTexture(GL20.GL_TEXTURE3);
+        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, refractDepth);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL20.GL_NONE);
         Gdx.gl.glDisable(GL20.GL_CULL_FACE);
-        Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        Gdx.gl.glDisable(GL20.GL_BLEND);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
-        Gdx.gl.glDepthMask(false);
+        Gdx.gl.glDepthMask(true);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
         drawWaterNode(cam, root);
         Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
-        Gdx.gl.glDepthMask(true);
     }
 
     private void drawWaterNode(PerspectiveCamera cam, SceneNode node) {
@@ -469,10 +557,14 @@ public final class ForwardRenderer {
             waterNm.dispose();
         }
         Gdx.gl.glDeleteTexture(reflectColor);
+        Gdx.gl.glDeleteTexture(refractColor);
+        Gdx.gl.glDeleteTexture(refractDepth);
         IntBuffer ids = BufferUtils.newIntBuffer(1);
         ids.put(0, reflectDepth);
         Gdx.gl30.glDeleteRenderbuffers(1, ids);
         ids.put(0, reflectFbo);
+        Gdx.gl30.glDeleteFramebuffers(1, ids);
+        ids.put(0, refractFbo);
         Gdx.gl30.glDeleteFramebuffers(1, ids);
     }
 
@@ -514,17 +606,36 @@ public final class ForwardRenderer {
         return rb;
     }
 
-    private static int allocFbo(int color, int depth) {
+    private static int allocDepthTex(int size) {
+        int tex = Gdx.gl.glGenTexture();
+        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, tex);
+        Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL30.GL_DEPTH_COMPONENT24, size, size, 0, GL20.GL_DEPTH_COMPONENT,
+            GL20.GL_UNSIGNED_INT, null);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_NEAREST);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, GL20.GL_NEAREST);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL20.GL_NONE);
+        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, 0);
+        return tex;
+    }
+
+    private static int allocFbo(int color, int depth, boolean depthIsTexture) {
         IntBuffer ids = BufferUtils.newIntBuffer(1);
         Gdx.gl30.glGenFramebuffers(1, ids);
         int fbo = ids.get(0);
         Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, fbo);
         Gdx.gl30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL20.GL_TEXTURE_2D, color, 0);
-        Gdx.gl30.glFramebufferRenderbuffer(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL30.GL_RENDERBUFFER, depth);
+        if (depthIsTexture) {
+            Gdx.gl30.glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL20.GL_TEXTURE_2D, depth, 0);
+        } else {
+            Gdx.gl30.glFramebufferRenderbuffer(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT, GL30.GL_RENDERBUFFER,
+                depth);
+        }
         int status = Gdx.gl30.glCheckFramebufferStatus(GL30.GL_FRAMEBUFFER);
         Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
         if (status != GL30.GL_FRAMEBUFFER_COMPLETE) {
-            throw new IllegalStateException("water reflection FBO: " + status);
+            throw new IllegalStateException("water RTT FBO: " + status);
         }
         return fbo;
     }
@@ -743,6 +854,8 @@ public final class ForwardRenderer {
         in float v_viewZ;
         uniform sampler2D u_normalMap;
         uniform sampler2D u_reflectionMap;
+        uniform sampler2D u_refractionMap;
+        uniform sampler2D u_refractionDepthMap;
         uniform float u_time;
         uniform vec3 u_cameraTes;
         uniform vec3 u_sunDirTes;
@@ -750,6 +863,10 @@ public final class ForwardRenderer {
         uniform vec3 u_ambientLight;
         uniform float u_cameraFar;
         uniform vec2 u_screenRes;
+        uniform int u_fogEnabled;
+        uniform float u_fogStart;
+        uniform float u_fogScale;
+        uniform vec3 u_fogColor;
         out vec4 frag;
 
         const vec2 BIG_WAVES = vec2(0.1, 0.1);
@@ -759,12 +876,18 @@ public final class ForwardRenderer {
         const float WAVE_SCALE = 75.0;
         const float BUMP = 0.5;
         const float REFL_BUMP = 0.10;
+        const float REFR_BUMP = 0.07;
         const float SPEC_HARDNESS = 256.0;
         const float SPEC_BUMPINESS = 5.0;
         const float SPEC_BRIGHTNESS = 1.5;
         const vec2 WIND_DIR = vec2(0.5, -0.8);
         const float WIND_SPEED = 0.2;
         const vec3 WATER_COLOR = vec3(0.090195, 0.115685, 0.12745);
+        const float VISIBILITY = 2500.0;
+        const float VISIBILITY_DEPTH = VISIBILITY * 1.5;
+        const float DEPTH_FADE = 0.15;
+        const float BUMP_SUPPRESS_DEPTH = 300.0;
+        const float REFR_FOG_DISTORT_DISTANCE = 3000.0;
 
         vec2 normalCoords(vec2 uv, float scale, float speed, float time, float timer1, float timer2, vec3 previousNormal) {
             return uv * (WAVE_SCALE * scale) + WIND_DIR * time * (WIND_SPEED * speed)
@@ -781,6 +904,10 @@ public final class ForwardRenderer {
                 return 0.5 * A * A * (1.0 + B * B);
             }
             return 1.0;
+        }
+
+        float logDepthToView(float d) {
+            return exp2(clamp(d, 0.0, 1.0) * log2(max(u_cameraFar, 1.0) + 1.0)) - 1.0;
         }
 
         void main() {
@@ -803,6 +930,12 @@ public final class ForwardRenderer {
             float ior = (cameraPos.z > 0.0) ? (1.333 / 1.0) : (1.0 / 1.333);
             float fresnel = clamp(fresnel_dielectric(viewDir, normal, ior), 0.0, 1.0);
             vec2 screenCoordsOffset = normal.xy * REFL_BUMP;
+            float surfaceDepth = abs(v_viewZ);
+            float depthSample = logDepthToView(texture(u_refractionDepthMap, screenCoords).x);
+            float realWaterDepth = depthSample - surfaceDepth;
+            float depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - screenCoordsOffset).x);
+            float waterDepthDistorted = max(depthSampleDistorted - surfaceDepth, 0.0);
+            screenCoordsOffset *= clamp(realWaterDepth / BUMP_SUPPRESS_DEPTH, 0.0, 1.0);
             vec3 reflection = texture(u_reflectionMap, screenCoords + screenCoordsOffset).rgb;
             vec3 waterColor = WATER_COLOR * sunFade;
             const float SPEC_MAGIC = 1.55;
@@ -811,10 +944,28 @@ public final class ForwardRenderer {
             float phongTerm = max(dot(viewReflectDir, sunWorldDir), 0.0);
             float specular = pow(atan(phongTerm * SPEC_MAGIC), SPEC_HARDNESS) * SPEC_BRIGHTNESS;
             specular = clamp(specular, 0.0, 1.0);
-            float waterTransparency = clamp(fresnel * 6.0 + specular, 0.0, 1.0);
-            vec3 rgb = mix(waterColor, reflection, (1.0 + fresnel) * 0.5);
+            if (cameraPos.z > 0.0 && realWaterDepth <= VISIBILITY_DEPTH && waterDepthDistorted > VISIBILITY_DEPTH) {
+                screenCoordsOffset = vec2(0.0);
+            }
+            depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - screenCoordsOffset).x);
+            waterDepthDistorted = max(depthSampleDistorted - surfaceDepth, 0.0);
+            waterDepthDistorted = mix(waterDepthDistorted, realWaterDepth, min(surfaceDepth / REFR_FOG_DISTORT_DISTANCE, 1.0));
+            vec3 refraction = texture(u_refractionMap, screenCoords - screenCoordsOffset).rgb;
+            if (cameraPos.z < 0.0) {
+                refraction = clamp(refraction * 1.5, 0.0, 1.0);
+            } else {
+                float depthCorrection = sqrt(1.0 + 4.0 * DEPTH_FADE * DEPTH_FADE);
+                float factor = DEPTH_FADE * DEPTH_FADE / (-0.5 * depthCorrection + 0.5 - waterDepthDistorted / VISIBILITY)
+                    + 0.5 * depthCorrection + 0.5;
+                refraction = mix(refraction, waterColor, clamp(factor, 0.0, 1.0));
+            }
+            vec3 rgb = mix(refraction, reflection, fresnel);
             rgb += specular * u_sunDiffuse;
-            frag = vec4(rgb, waterTransparency);
+            if (u_fogEnabled != 0) {
+                float fogValue = clamp((abs(v_viewZ) - u_fogStart) * u_fogScale, 0.0, 1.0);
+                rgb = mix(rgb, u_fogColor, fogValue);
+            }
+            frag = vec4(rgb, 1.0);
             gl_FragDepth = clamp(
                 log2(max(1e-6, 1.0 + abs(v_viewZ))) / log2(max(u_cameraFar, 1.0) + 1.0),
                 0.0, 1.0);
