@@ -3,9 +3,11 @@ package io.github.jvmmw.debug;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
+import io.github.jvmmw.esm.EsmLevc;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmReader;
+import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.LandMesh;
@@ -19,14 +21,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 /**
  * Text dumps of the same ESM/NIF parsers the viewer uses, with no window.
  * From the repo root: gradlew.bat :core:debugCli --args="help"
  *
  * nif — a door or wall that looks offset. cell / spawn — fog and where you
- * arrive. exterior — the 21-cell walk grid. npc / crea / kf — how a person
- * or creature is put together.
+ * arrive. exterior — the 21-cell walk grid. npc / crea / levc / kf — how a
+ * person, creature, or wilderness spawn list is put together.
  */
 public final class DebugCli {
     private DebugCli() {
@@ -44,6 +47,7 @@ public final class DebugCli {
             case "spawn" -> spawn(require(args, 1, "spawn <interior name>"));
             case "npc" -> npc(require(args, 1, "npc <id>"));
             case "crea" -> crea(require(args, 1, "crea <id>"));
+            case "levc" -> levc(require(args, 1, "levc <id>"));
             case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
             case "exterior" -> exterior(require(args, 1, "exterior <gridX> <gridY>"));
             default -> {
@@ -65,6 +69,7 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="spawn Addamasartus"
             gradlew.bat :core:debugCli --args="npc sellus gravius"
             gradlew.bat :core:debugCli --args="crea nix-hound"
+            gradlew.bat :core:debugCli --args="levc ex_bittercoast_lev+0"
             gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
             gradlew.bat :core:debugCli --args="exterior -2 -9"
 
@@ -75,8 +80,10 @@ public final class DebugCli {
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
             crea       One CREA: model, corrected x-path, flags, scale.
+            levc       One creature leveled list: flags, chance-none, level/id rows.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
+                       crea= hardcoded, levc=/levcNone= a dry roll at player level 1.
 
             Viewer: HUD Dump or F3 copies camera/fog/perf to the clipboard and writes build/debug-snapshot.txt.
             F4 toggles the fps overlay. Wait for overlay n=60 before treating fps as settled. Headless CLI has no fps.
@@ -137,6 +144,9 @@ public final class DebugCli {
         int stat = 0;
         int npcs = 0;
         int crea = 0;
+        int levc = 0;
+        int levcNone = 0;
+        Random rng = new Random();
         for (CellRef ref : cell.refs) {
             if (ref.deleted) {
                 continue;
@@ -148,6 +158,16 @@ public final class DebugCli {
             }
             if (cell.creatures.containsKey(key)) {
                 crea++;
+                continue;
+            }
+            EsmLevc list = cell.levc.get(key);
+            if (list != null) {
+                String id = LevelledCreatures.pick(list, EsmLevc.PLAYER_LEVEL, rng, cell.levc, cell.creatures);
+                if (id.isEmpty()) {
+                    levcNone++;
+                } else {
+                    levc++;
+                }
                 continue;
             }
             EsmObject obj = cell.objects.get(key);
@@ -164,7 +184,8 @@ public final class DebugCli {
                 stat++;
             }
         }
-        System.out.println("doors=" + doors + " stat=" + stat + " npcs=" + npcs + " crea=" + crea);
+        System.out.println("doors=" + doors + " stat=" + stat + " npcs=" + npcs + " crea=" + crea
+            + " levc=" + levc + " levcNone=" + levcNone);
     }
 
     private static void cell(String name) throws Exception {
@@ -215,6 +236,10 @@ public final class DebugCli {
                     + " scl=" + (ref.scale * creature.scale)
                     + " flags=0x" + Integer.toHexString(creature.flags)
                     + " modl=" + creature.model);
+                continue;
+            }
+            EsmLevc list = cell.levc.get(key);
+            if (list != null) {
                 continue;
             }
             EsmObject obj = cell.objects.get(key);
@@ -303,6 +328,31 @@ public final class DebugCli {
             throw new IllegalStateException("No CREA matching " + id);
         }
         System.out.print(NpcMannequin.describeCreature(crea));
+    }
+
+    private static void levc(String id) throws Exception {
+        EsmFile.LoadedCell cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), TestData.CENSUS_CELL);
+        String key = id.toLowerCase(Locale.ROOT);
+        EsmLevc list = cell.levc.get(key);
+        if (list == null) {
+            for (EsmLevc candidate : cell.levc.values()) {
+                if (candidate.id.toLowerCase(Locale.ROOT).contains(key)) {
+                    list = candidate;
+                    break;
+                }
+            }
+        }
+        if (list == null) {
+            throw new IllegalStateException("No LEVC matching " + id);
+        }
+        System.out.println("levc " + list.id
+            + " flags=0x" + Integer.toHexString(list.flags)
+            + " allLevels=" + list.allLevels()
+            + " chanceNone=" + list.chanceNone
+            + " n=" + list.entries.size());
+        for (EsmLevc.Entry e : list.entries) {
+            System.out.println("  level=" + e.level + " " + e.id);
+        }
     }
 
     private static void interiors(String filter) throws Exception {

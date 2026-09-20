@@ -44,6 +44,7 @@ import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.esm.LandRecord;
+import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
@@ -386,6 +387,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         dumpedFrame = false;
         framesOnMesh = 0;
         currentVfs = wanted;
+        LevelledCreatures.forget();
         disposeScene();
         try {
             if (loadedCell == null || !loadedCell.interior || !wanted.equalsIgnoreCase(loadedCell.name)) {
@@ -416,6 +418,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         dumpedFrame = false;
         framesOnMesh = 0;
         currentVfs = grid;
+        LevelledCreatures.forget();
         try {
             int[] xy = parseGrid(grid);
             EsmFile.LoadedCell next = loadedCell;
@@ -1267,9 +1270,11 @@ public final class JvmMwApp extends ApplicationAdapter {
         scrollAccum = 0f;
         boolean shift = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
             || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT);
-        float speed = Math.max(60f, moveScale) * 0.4f * dt * (shift ? 10f : 1f);
+        float speed = Math.max(60f, moveScale) * 0.4f * dt;
         if (loadedCell != null && !loadedCell.interior) {
-            speed *= 3f;
+            speed *= shift ? 30f : 9f;
+        } else {
+            speed *= shift ? 10f : 1f;
         }
         float radYaw = (float) Math.toRadians(yaw);
         float sin = (float) Math.sin(radYaw);

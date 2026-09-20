@@ -3,9 +3,11 @@ package io.github.jvmmw.render;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
+import io.github.jvmmw.esm.EsmLevc;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.LandRecord;
+import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
 
@@ -18,13 +20,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 
 /**
  * Puts one cell on screen: land, water, furniture, doors, chests, pickups,
- * NPCs, and creatures. Walking outdoors builds the next grid in the
- * background, then swaps it in.
+ * NPCs, and creatures. Wilderness spawn markers are leveled lists — we
+ * roll a creature at chargen level and stand it there. Walking outdoors
+ * builds the next grid in the background, then swaps it in.
  *
  * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
  * north) stay out.
@@ -37,6 +41,8 @@ public final class CellSceneBuilder {
     public int skippedActor;
     public int placedNpc;
     public int placedCrea;
+    public int placedLevc;
+    public int skippedLevcNone;
     public int skippedDeleted;
     public int skippedNif;
     public int placedStat;
@@ -57,6 +63,7 @@ public final class CellSceneBuilder {
     private int refIndex;
     private int landIndex;
     private boolean finished;
+    private Random levcRng;
     private final List<PendingLight> pendingLights = new ArrayList<>();
     private final List<CollisionWorld.Pending> pendingCol = new ArrayList<>();
     private final Vector3 tmpPos = new Vector3();
@@ -73,7 +80,8 @@ public final class CellSceneBuilder {
         this.cell = cell;
         cellName = cell.name;
         placed = skippedUnknown = skippedEmpty = skippedActor = skippedDeleted = skippedNif = placedStat = placedNpc
-            = placedCrea = 0;
+            = placedCrea = placedLevc = skippedLevcNone = 0;
+        levcRng = new Random();
         log.setLength(0);
         byRec = new TreeMap<>();
         buildingRoot = new SceneNode();
@@ -139,7 +147,8 @@ public final class CellSceneBuilder {
             : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
         collision.bake(lands, pendingCol);
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
-            + " npc=" + placedNpc + " crea=" + placedCrea + " byRec=" + byRec + " empty=" + skippedEmpty
+            + " npc=" + placedNpc + " crea=" + placedCrea + " levc=" + placedLevc + " levcNone=" + skippedLevcNone
+            + " byRec=" + byRec + " empty=" + skippedEmpty
             + " actor=" + skippedActor
             + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
             + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
@@ -303,6 +312,11 @@ public final class CellSceneBuilder {
             }
             return;
         }
+        EsmLevc list = cell.levc.get(key);
+        if (list != null) {
+            placeLevc(ref, list);
+            return;
+        }
         EsmObject obj = cell.objects.get(key);
         if (obj == null) {
             skippedUnknown++;
@@ -363,6 +377,33 @@ public final class CellSceneBuilder {
                 buildingRoot.addChild(inst);
                 pendingLights.add(new PendingLight(inst, obj, ref.refId));
             }
+        }
+    }
+
+    private void placeLevc(CellRef ref, EsmLevc list) {
+        String id = LevelledCreatures.pickOrRemember(ref, list, EsmLevc.PLAYER_LEVEL, levcRng, cell.levc,
+            cell.creatures);
+        if (id.isEmpty()) {
+            skippedLevcNone++;
+            return;
+        }
+        EsmCreature crea = cell.creatures.get(id.toLowerCase(Locale.ROOT));
+        if (crea == null) {
+            skippedLevcNone++;
+            log.append("levc miss ").append(ref.refId).append(" -> ").append(id).append('\n');
+            return;
+        }
+        try {
+            SceneNode inst = mannequin.buildCreature(crea, ref);
+            buildingRoot.addChild(inst);
+            placed++;
+            placedCrea++;
+            placedLevc++;
+            byRec.merge("LEVC", 1, Integer::sum);
+        } catch (Exception e) {
+            skippedNif++;
+            log.append("levc fail ").append(ref.refId).append(" ").append(e.getMessage()).append('\n');
+            Gdx.app.error("CellSceneBuilder", "LEVC " + ref.refId, e);
         }
     }
 
