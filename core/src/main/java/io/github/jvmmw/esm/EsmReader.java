@@ -153,6 +153,12 @@ public final class EsmReader {
         return v;
     }
 
+    public int getI16() {
+        int v = buf.getShort();
+        leftSub -= 2;
+        return v;
+    }
+
     public int getI32() {
         int v = buf.getInt();
         leftSub -= 4;

@@ -78,8 +78,8 @@ public final class DebugCli {
                        Then seam meet/gap/islands: whether cave hull triangles actually touch.
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
-            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
-            crea       One CREA: model, corrected x-path, flags, scale.
+            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander distance.
+            crea       One CREA: model, corrected x-path, flags, scale, wander distance.
             levc       One creature leveled list: flags, chance-none, level/id rows.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.

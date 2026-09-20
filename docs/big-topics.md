@@ -24,8 +24,8 @@ OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is 
 | --- | --- |
 | **Combat** | No hit, health, or weapon groups. |
 | **Dialogue / journal** | NPCs are mannequins. No talk, topics, or journal. |
-| **AI packages** | No wander, follow, or travel. Walk-cycle *animation* is a small slice; packages are not. |
-| **Navmesh** | No pathfinding. |
+| **AI packages** | Follow, travel, duration, idle2–9. Cheap XY wander is [phase 38](phase38-cheap-wander.md). |
+| **Navmesh** | No pathfinding. Pathgrid (`PGRD`) lives here too. |
 | **Saves** | No `.ess` / OpenMW save. |
 | **Plugins / Lua / MWScript** | Extra data folders only. No ESP load-order UI, no Lua, no script VM. |
 | **Full physics** | Stay-on-land is a small slice. No actor collision, projectiles, or Havok-like sim. |

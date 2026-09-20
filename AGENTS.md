@@ -45,8 +45,8 @@ gradlew.bat :core:debugCli --args="exterior -2 -9"
 | `cell` | Fog, inbound spawn, door DODT/DNAM. Kit lines include `gl=` world AABB. Then `seam meet` / `seam gap` / `seam island` — whether cave hulls actually touch (not just ESM placement) |
 | `interiors` | Pick a cell large enough to see fog (`fogStart = 7168 * (1 - density)`) |
 | `spawn` | Confirm the exterior-door arrival point |
-| `npc` | Race/head/hair/skeleton/equipped parts for one `NPC_` |
-| `crea` | Model, x-path, flags, scale for one `CREA` |
+| `npc` | Race/head/hair/skeleton/equipped parts, `wander=` |
+| `crea` | Model, x-path, flags, scale, `wander=` |
 | `levc` | Creature leveled list: chance-none, flags, `level id` rows |
 | `kf` | Idle groups / bone tracks from a `.kf` |
 | `exterior` | 5×5 minus corners around a grid: 21 `grid=` lines, then center spawn/doors / `water=-1`. `crea=` hardcoded, `levc=` / `levcNone=` a dry roll at level 1 |
@@ -64,8 +64,8 @@ In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard 
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners land with linear 17×17 mix + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`), **Zain** = Zainsipilu. WASD walks on land/docks; ceilings and dock undersides stop the camera. Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. Top-right fps overlay (F4) shows frame ms, draws, culled, tex, nif, and the fattest section. Meshes outside the camera frustum are not submitted. Meshes smaller than 2 pixels are skipped on the main view. Objects farther than 7168 are skipped unless they are large (trees, shacks). Land and water stay. DDS and static NIF GPU templates intern by VFS path. Water RTTs skip NPC/creature reflections and meshes smaller than 20 pixels on the 512 map. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
 - **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as a 5×5-minus-corners around that exterior grid, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
-- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
-- Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`. Wilderness spawn markers are `LEVC`: roll at player level 1 (`AllLevels` is bit 0, not the item-list bit). Empty rolls are chance-none or entries above level 1. Walk-grid rebuilds keep the last pick for each marker.
+- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins. First `AI_W` distance > 0 slides them around spawn (idle pose, 80 units/s); distance 0 stays.
+- Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`. Wilderness spawn markers are `LEVC`: roll at player level 1 (`AllLevels` is bit 0, not the item-list bit). Empty rolls are chance-none or entries above level 1. Walk-grid rebuilds keep the last pick for each marker. LEVC uses the picked `CREA` wander.
 
 ## Class comments
 

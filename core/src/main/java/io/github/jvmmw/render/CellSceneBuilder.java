@@ -27,8 +27,9 @@ import java.util.TreeMap;
 /**
  * Puts one cell on screen: land, water, furniture, doors, chests, pickups,
  * NPCs, and creatures. Wilderness spawn markers are leveled lists — we
- * roll a creature at chargen level and stand it there. Walking outdoors
- * builds the next grid in the background, then swaps it in.
+ * roll a creature at chargen level and stand it there. Actors with a wander
+ * radius shuffle around that spawn. Walking outdoors builds the next grid
+ * in the background, then swaps it in.
  *
  * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
  * north) stay out.
@@ -167,7 +168,7 @@ public final class CellSceneBuilder {
     }
 
     public void update(float dt) {
-        mannequin.update(dt);
+        mannequin.update(dt, collision);
         waterMesh.update(dt);
         doors.process(dt);
         containers.process(dt);

@@ -358,8 +358,17 @@ public final class EsmFile {
         rgb[2] = ((clr >> 16) & 0xFF) / 255f;
     }
 
+    /** First {@code AI_W}: int16 distance. Duration, idle weights, and padding are unused. */
+    private static int readAiWander(EsmReader esm) {
+        esm.getSubHeader();
+        int dist = esm.getI16();
+        esm.skipRestOfSub();
+        return dist < 0 ? 0 : dist;
+    }
+
     private void readCreature(EsmReader esm) {
         EsmCreature crea = new EsmCreature();
+        boolean hasWander = false;
         while (esm.hasMoreSubs()) {
             String sub = esm.getSubName();
             switch (sub) {
@@ -375,6 +384,13 @@ public final class EsmFile {
                     esm.getSubHeader();
                     crea.scale = esm.getF32();
                     esm.skipRestOfSub();
+                }
+                case "AI_W" -> {
+                    int dist = readAiWander(esm);
+                    if (!hasWander) {
+                        crea.wanderDistance = dist;
+                        hasWander = true;
+                    }
                 }
                 default -> esm.skipHSub();
             }
@@ -452,6 +468,7 @@ public final class EsmFile {
 
     private void readNpc(EsmReader esm) {
         EsmNpc npc = new EsmNpc();
+        boolean hasWander = false;
         while (esm.hasMoreSubs()) {
             String sub = esm.getSubName();
             switch (sub) {
@@ -474,6 +491,13 @@ public final class EsmFile {
                     esm.skipRestOfSub();
                     if (!item.isEmpty()) {
                         npc.inventory.add(item);
+                    }
+                }
+                case "AI_W" -> {
+                    int dist = readAiWander(esm);
+                    if (!hasWander) {
+                        npc.wanderDistance = dist;
+                        hasWander = true;
                     }
                 }
                 default -> esm.skipHSub();

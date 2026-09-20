@@ -70,6 +70,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/loadlevlist.hpp` | `ESM::CreatureLevList` | `esm.EsmLevc` | same |
 | `apps/openmw/mwmechanics/levelledlist.cpp` | `getLevelledItem` (creature) | `esm.LevelledCreatures` | rewrite |
 | `apps/openmw/mwclass/creaturelevlist.cpp` | `CreatureLevList::insertObjectRendering` | `CellSceneBuilder` LEVC → `buildCreature` | rewrite |
+| `components/esm3/aipackage.hpp` | `ESM::AIWander` / `AI_W` | `EsmNpc` / `EsmCreature` wander distance | same |
+| `apps/openmw/mwmechanics/aiwander.cpp` | `wanderNearStart` / `getRandomPointAround` | `NpcMannequin` slide near spawn | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` | viewer **E** + `DoorSwing` pick | rewrite |
 | `apps/openmw/mwworld/actiondoor.cpp` | `ActionDoor` | `DoorSwing.activateDoor` | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `activateDoor` / `rotateDoor` / `processDoors` | `render.DoorSwing` | rewrite |

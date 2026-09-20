@@ -6,8 +6,8 @@
 package io.github.jvmmw.esm;
 
 /**
- * One creature from the ESM: mesh, flags (biped / swim / fly / walk), scale.
- * Placed from its own mesh file, not body parts.
+ * One creature from the ESM: mesh, flags (biped / swim / fly / walk), scale,
+ * and the first wander radius. Placed from its own mesh file, not body parts.
  */
 public final class EsmCreature {
     public static final int BIPEDAL = 0x01;
@@ -21,6 +21,8 @@ public final class EsmCreature {
     public String model = "";
     public int flags;
     public float scale = 1f;
+    /** First AI_W distance. 0 means stay (no package or radius 0). */
+    public int wanderDistance;
 
     public boolean bipedal() {
         return (flags & BIPEDAL) != 0;

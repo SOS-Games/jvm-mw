@@ -9,9 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * One NPC from the ESM: race, head, hair, female flag, equipped clothes.
- * The viewer ignores the mesh on this record and builds a dressed skeleton
- * instead.
+ * One NPC from the ESM: race, head, hair, female flag, equipped clothes,
+ * and the first wander radius. The viewer ignores the mesh on this record
+ * and builds a dressed skeleton instead.
  */
 public final class EsmNpc {
     public static final int FLAG_FEMALE = 0x01;
@@ -23,6 +23,8 @@ public final class EsmNpc {
     public String head = "";
     public String hair = "";
     public int flags;
+    /** First AI_W distance. 0 means stay (no package or radius 0). */
+    public int wanderDistance;
     public final List<String> inventory = new ArrayList<>();
 
     public boolean female() {

@@ -32,13 +32,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * An NPC as a dressed skeleton (head, hair, clothes on base_anim), not the
  * mesh listed on the NPC record. Faces the yaw of the placement, scaled by
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
- *
- * Creatures are not this — they use their own mesh file.
+ * A wander radius greater than 0 slides them around spawn on that idle pose
+ * — walk cycles come later. Creatures use the same tick with their own mesh.
  */
 public final class NpcMannequin {
     public static final int PRT_COUNT = 27;
@@ -120,12 +121,15 @@ public final class NpcMannequin {
     };
 
     private static final String XBASE = "meshes/xbase_anim.nif";
+    private static final float WANDER_SPEED = 80f;
+    private static final float WANDER_ARRIVE = 8f;
 
     private final Path testdata;
     private final List<MeshGpu> ownedGpus = new ArrayList<>();
     private final Map<String, PartNif> parts = new HashMap<>();
     private final Map<String, KfFile> kfs = new HashMap<>();
     private final List<NpcActor> actors = new ArrayList<>();
+    private final Random wanderRng = new Random();
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
     private final Vector3 tmpS = new Vector3();
@@ -230,7 +234,11 @@ public final class NpcMannequin {
             height = npc.female() ? race.femaleHeight : race.maleHeight;
         }
         float s = ref.scale;
-        EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s * weight, s * weight, s * height);
+        float sx = s * weight;
+        float sy = s * weight;
+        float sz = s * height;
+        EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], sx, sy, sz);
+        beginWander(actor, ref.pos, ref.rot[2], sx, sy, sz, npc.wanderDistance);
         return placed;
     }
 
@@ -265,11 +273,13 @@ public final class NpcMannequin {
         actors.add(actor);
         float s = ref.scale * crea.scale;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s, s, s);
+        beginWander(actor, ref.pos, ref.rot[2], s, s, s, crea.wanderDistance);
         return placed;
     }
 
-    public void update(float dt) {
+    public void update(float dt, CollisionWorld collision) {
         for (NpcActor actor : actors) {
+            wander(actor, dt, collision);
             if (actor.idle == null) {
                 continue;
             }
@@ -281,6 +291,80 @@ public final class NpcMannequin {
             }
             pose(actor);
         }
+    }
+
+    private void beginWander(NpcActor actor, float[] spawn, float yaw, float sx, float sy, float sz, int distance) {
+        actor.tesPos[0] = spawn[0];
+        actor.tesPos[1] = spawn[1];
+        actor.tesPos[2] = spawn[2];
+        actor.spawnX = spawn[0];
+        actor.spawnY = spawn[1];
+        actor.spawnZ = spawn[2];
+        actor.yaw = yaw;
+        actor.sx = sx;
+        actor.sy = sy;
+        actor.sz = sz;
+        actor.wanderDistance = distance;
+        actor.walking = false;
+        actor.idleLeft = distance > 0 ? 0.5f + wanderRng.nextFloat() * 1.5f : 0f;
+    }
+
+    private void wander(NpcActor actor, float dt, CollisionWorld collision) {
+        if (actor.wanderDistance <= 0) {
+            return;
+        }
+        if (actor.walking) {
+            float dx = actor.destX - actor.tesPos[0];
+            float dy = actor.destY - actor.tesPos[1];
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            if (dist <= WANDER_ARRIVE) {
+                actor.tesPos[0] = actor.destX;
+                actor.tesPos[1] = actor.destY;
+                actor.walking = false;
+                actor.idleLeft = 2f + wanderRng.nextFloat() * 3f;
+            } else {
+                float step = Math.min(WANDER_SPEED * dt, dist);
+                actor.tesPos[0] += dx / dist * step;
+                actor.tesPos[1] += dy / dist * step;
+                actor.yaw = (float) Math.atan2(dx, dy);
+            }
+        } else {
+            actor.idleLeft -= dt;
+            if (actor.idleLeft <= 0f) {
+                pickWanderDest(actor);
+            }
+        }
+        stickLand(actor, collision);
+        EsmTransforms.setActorLocal(actor.placed.local, actor.tesPos, actor.yaw, actor.sx, actor.sy, actor.sz);
+    }
+
+    private void pickWanderDest(NpcActor actor) {
+        float radius = (0.2f + wanderRng.nextFloat() * 0.8f) * actor.wanderDistance;
+        float theta = wanderRng.nextFloat() * ((float) Math.PI * 2f);
+        actor.destX = actor.spawnX + radius * (float) Math.cos(theta);
+        actor.destY = actor.spawnY + radius * (float) Math.sin(theta);
+        float dx = actor.destX - actor.tesPos[0];
+        float dy = actor.destY - actor.tesPos[1];
+        if (dx * dx + dy * dy < 1f) {
+            actor.idleLeft = 2f + wanderRng.nextFloat() * 3f;
+            actor.walking = false;
+            return;
+        }
+        actor.yaw = (float) Math.atan2(dx, dy);
+        actor.walking = true;
+    }
+
+    private static void stickLand(NpcActor actor, CollisionWorld collision) {
+        if (collision == null) {
+            actor.tesPos[2] = actor.spawnZ;
+            return;
+        }
+        float land = collision.landHeight(actor.tesPos[0], -actor.tesPos[1]);
+        if (Float.isNaN(land)) {
+            actor.tesPos[2] = actor.spawnZ;
+            return;
+        }
+        actor.tesPos[2] = land;
     }
 
     public static String skeletonPath(EsmNpc npc, EsmFile.LoadedCell cell) {
@@ -316,6 +400,7 @@ public final class NpcMannequin {
             .append(" female=").append(npc.female())
             .append(" head=").append(npc.head)
             .append(" hair=").append(npc.hair)
+            .append(" wander=").append(npc.wanderDistance)
             .append('\n');
         sb.append("skeleton=").append(skeletonPath(npc, cell)).append('\n');
         EsmObject[] equipped = autoEquip(npc, cell);
@@ -359,6 +444,7 @@ public final class NpcMannequin {
             .append(" flies=").append(crea.flies())
             .append(" walks=").append(crea.walks())
             .append(" scale=").append(crea.scale)
+            .append(" wander=").append(crea.wanderDistance)
             .append('\n');
         sb.append("kf=").append(TexturePaths.nifToKf(corrected)).append('\n');
         return sb.toString();
@@ -727,6 +813,19 @@ public final class NpcMannequin {
         final Map<String, Matrix4> boneWorld = new HashMap<>();
         KfFile kf;
         KfFile.IdleLoop idle;
+        final float[] tesPos = new float[3];
+        float spawnX;
+        float spawnY;
+        float spawnZ;
+        float destX;
+        float destY;
+        float yaw;
+        float sx = 1f;
+        float sy = 1f;
+        float sz = 1f;
+        int wanderDistance;
+        float idleLeft;
+        boolean walking;
 
         NpcActor(SceneNode placed, SceneNode skeleton, Map<String, SceneNode> boneNodes) {
             this.placed = placed;
