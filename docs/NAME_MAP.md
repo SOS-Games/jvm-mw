@@ -61,6 +61,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/nif/data.hpp` | `Nif::NiKeyframeData` | `nif.NiKeyframeData` | same |
 | `components/nifosg/nifloader.cpp` | `NifOsg::Loader::loadKf` | `nif.KfFile` | rewrite |
 | `apps/openmw/mwrender/animation.cpp` | `MWRender::Animation::play` idle | `render.NpcMannequin` idle | rewrite |
+| `apps/openmw/mwmechanics/character.cpp` | `movementStateToAnimGroup(WalkForward)` | `KfFile.play("walkforward", …)` | rewrite |
+| `apps/openmw/mwrender/animation.cpp` | `ResetAccumRootCallback` (XY) | `NpcMannequin` zero `Bip01` / `root bone` XY | rewrite |
 | `components/esm3/loadcrea.hpp` | `ESM::Creature` | `esm.EsmCreature` | same |
 | `apps/openmw/mwclass/creature.cpp` | `Creature::insertObjectRendering` | `CellSceneBuilder` CREA place | rewrite |
 | `apps/openmw/mwrender/objects.cpp` | `Objects::insertCreature` | `NpcMannequin.buildCreature` | rewrite |
@@ -72,6 +74,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwclass/creaturelevlist.cpp` | `CreatureLevList::insertObjectRendering` | `CellSceneBuilder` LEVC → `buildCreature` | rewrite |
 | `components/esm3/aipackage.hpp` | `ESM::AIWander` / `AI_W` | `EsmNpc` / `EsmCreature` wander distance | same |
 | `apps/openmw/mwmechanics/aiwander.cpp` | `wanderNearStart` / `getRandomPointAround` | `NpcMannequin` slide near spawn | rewrite |
+| `apps/openmw/mwmechanics/steering.cpp` | `zTurn` / `getAngularVelocity` | wander yaw toward dest | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` | viewer **E** + `DoorSwing` pick | rewrite |
 | `apps/openmw/mwworld/actiondoor.cpp` | `ActionDoor` | `DoorSwing.activateDoor` | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `activateDoor` / `rotateDoor` / `processDoors` | `render.DoorSwing` | rewrite |

@@ -5,6 +5,7 @@
  */
 package io.github.jvmmw.render;
 
+import io.github.jvmmw.debug.DebugVars;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmBodyPart;
 import io.github.jvmmw.esm.EsmCreature;
@@ -38,8 +39,11 @@ import java.util.Random;
  * An NPC as a dressed skeleton (head, hair, clothes on base_anim), not the
  * mesh listed on the NPC record. Faces the yaw of the placement, scaled by
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
- * A wander radius greater than 0 slides them around spawn on that idle pose
- * — walk cycles come later. Creatures use the same tick with their own mesh.
+ * A wander radius greater than 0 slides them around spawn; while they move
+ * the same .kf plays walkforward, then idle again when they stop. They turn
+ * toward the next point instead of snapping yaw. Walk clips shove Bip01 (or
+ * root bone) forward — we zero that XY so the loop does not yank them back
+ * each stride. Creatures use the same tick with their own mesh.
  */
 public final class NpcMannequin {
     public static final int PRT_COUNT = 27;
@@ -123,6 +127,10 @@ public final class NpcMannequin {
     private static final String XBASE = "meshes/xbase_anim.nif";
     private static final float WANDER_SPEED = 80f;
     private static final float WANDER_ARRIVE = 8f;
+    private static final float ANIM_BLEND = 0.2f;
+    private static final float TURN_EPS = (float) Math.toRadians(0.5f);
+    /** Walk only when facing dest; 90° plus a slow turn circles forever. */
+    private static final float WALK_ALIGN = (float) Math.toRadians(15f);
 
     private final Path testdata;
     private final List<MeshGpu> ownedGpus = new ArrayList<>();
@@ -133,9 +141,11 @@ public final class NpcMannequin {
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
     private final Vector3 tmpS = new Vector3();
+    private final Vector3 tmpFrom = new Vector3();
     private final Quaternion tmpQ = new Quaternion();
     private final Quaternion tmpQ2 = new Quaternion();
     private final Quaternion tmpQ3 = new Quaternion();
+    private final Quaternion tmpFromQ = new Quaternion();
 
     public NpcMannequin(Path testdata) {
         this.testdata = testdata;
@@ -224,7 +234,7 @@ public final class NpcMannequin {
             addAnimSource(actor, smodel);
         }
         playIdle(actor);
-        pose(actor);
+        pose(actor, 0f);
         actors.add(actor);
         EsmRace race = cell.races.get(npc.race.toLowerCase(Locale.ROOT));
         float weight = 1f;
@@ -269,7 +279,7 @@ public final class NpcMannequin {
             addAnimSource(actor, animationMesh);
         }
         playIdle(actor);
-        pose(actor);
+        pose(actor, 0f);
         actors.add(actor);
         float s = ref.scale * crea.scale;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s, s, s);
@@ -278,18 +288,21 @@ public final class NpcMannequin {
     }
 
     public void update(float dt, CollisionWorld collision) {
+        float scale = wanderScale();
         for (NpcActor actor : actors) {
-            wander(actor, dt, collision);
+            wander(actor, dt, scale, collision);
+            syncWalkAnim(actor);
             if (actor.idle == null) {
                 continue;
             }
-            actor.idle.time += dt;
+            float animDt = actor.moving ? dt * scale : dt;
+            actor.idle.time += animDt;
             float span = actor.idle.loopStop - actor.idle.loopStart;
             if (span > 0f && actor.idle.time >= actor.idle.loopStop) {
                 actor.idle.time = actor.idle.loopStart
                     + ((actor.idle.time - actor.idle.loopStart) % span);
             }
-            pose(actor);
+            pose(actor, dt);
         }
     }
 
@@ -306,13 +319,14 @@ public final class NpcMannequin {
         actor.sz = sz;
         actor.wanderDistance = distance;
         actor.walking = false;
-        actor.idleLeft = distance > 0 ? 0.5f + wanderRng.nextFloat() * 1.5f : 0f;
+        actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
     }
 
-    private void wander(NpcActor actor, float dt, CollisionWorld collision) {
+    private void wander(NpcActor actor, float dt, float scale, CollisionWorld collision) {
         if (actor.wanderDistance <= 0) {
             return;
         }
+        actor.moving = false;
         if (actor.walking) {
             float dx = actor.destX - actor.tesPos[0];
             float dy = actor.destY - actor.tesPos[1];
@@ -321,12 +335,22 @@ public final class NpcMannequin {
                 actor.tesPos[0] = actor.destX;
                 actor.tesPos[1] = actor.destY;
                 actor.walking = false;
-                actor.idleLeft = 2f + wanderRng.nextFloat() * 3f;
+                actor.idleLeft = pause(2f, 3f);
             } else {
-                float step = Math.min(WANDER_SPEED * dt, dist);
-                actor.tesPos[0] += dx / dist * step;
-                actor.tesPos[1] += dy / dist * step;
-                actor.yaw = (float) Math.atan2(dx, dy);
+                float want = (float) Math.atan2(dx, dy);
+                float diff = turnToward(actor, want, dt);
+                if (Math.abs(diff) <= WALK_ALIGN) {
+                    float step = Math.min(WANDER_SPEED * scale * dt, dist);
+                    float nx = actor.tesPos[0] + (float) Math.sin(actor.yaw) * step;
+                    float ny = actor.tesPos[1] + (float) Math.cos(actor.yaw) * step;
+                    float ndx = actor.destX - nx;
+                    float ndy = actor.destY - ny;
+                    if (ndx * ndx + ndy * ndy < dist * dist) {
+                        actor.tesPos[0] = nx;
+                        actor.tesPos[1] = ny;
+                        actor.moving = true;
+                    }
+                }
             }
         } else {
             actor.idleLeft -= dt;
@@ -339,19 +363,51 @@ public final class NpcMannequin {
     }
 
     private void pickWanderDest(NpcActor actor) {
-        float radius = (0.2f + wanderRng.nextFloat() * 0.8f) * actor.wanderDistance;
+        float range = wanderRange(actor.wanderDistance);
+        if (range <= 0f) {
+            actor.walking = false;
+            return;
+        }
+        float radius = (0.2f + wanderRng.nextFloat() * 0.8f) * range;
         float theta = wanderRng.nextFloat() * ((float) Math.PI * 2f);
         actor.destX = actor.spawnX + radius * (float) Math.cos(theta);
         actor.destY = actor.spawnY + radius * (float) Math.sin(theta);
         float dx = actor.destX - actor.tesPos[0];
         float dy = actor.destY - actor.tesPos[1];
         if (dx * dx + dy * dy < 1f) {
-            actor.idleLeft = 2f + wanderRng.nextFloat() * 3f;
+            actor.idleLeft = pause(2f, 3f);
             actor.walking = false;
             return;
         }
-        actor.yaw = (float) Math.atan2(dx, dy);
         actor.walking = true;
+    }
+
+    /** Remaining signed error after this frame's turn. */
+    private static float turnToward(NpcActor actor, float want, float dt) {
+        float diff = wrapPi(want - actor.yaw);
+        float abs = Math.abs(diff);
+        if (abs <= TURN_EPS) {
+            actor.yaw = want;
+            return 0f;
+        }
+        float limit = (float) Math.toRadians(DebugVars.wanderTurn) * dt;
+        if (abs > limit) {
+            actor.yaw += Math.signum(diff) * limit;
+            actor.yaw = wrapPi(actor.yaw);
+            return wrapPi(want - actor.yaw);
+        }
+        actor.yaw = want;
+        return 0f;
+    }
+
+    private static float wrapPi(float a) {
+        while (a > (float) Math.PI) {
+            a -= (float) (Math.PI * 2);
+        }
+        while (a < (float) -Math.PI) {
+            a += (float) (Math.PI * 2);
+        }
+        return a;
     }
 
     private static void stickLand(NpcActor actor, CollisionWorld collision) {
@@ -365,6 +421,43 @@ public final class NpcMannequin {
             return;
         }
         actor.tesPos[2] = land;
+    }
+
+    private void syncWalkAnim(NpcActor actor) {
+        if (actor.moving && !actor.playingWalk) {
+            if (actor.noWalk) {
+                return;
+            }
+            if (playGroup(actor, "walkforward")) {
+                actor.playingWalk = true;
+            } else {
+                actor.noWalk = true;
+            }
+        } else if (!actor.walking && actor.playingWalk) {
+            playGroup(actor, "idle");
+            actor.playingWalk = false;
+        }
+    }
+
+    private static float wanderScale() {
+        float s = DebugVars.wanderSpeed;
+        return s > 0.01f ? s : 0.01f;
+    }
+
+    private static float wanderRange(int esmDistance) {
+        float range = esmDistance * Math.max(0f, DebugVars.wanderRadius);
+        if (DebugVars.wanderRadiusMax > 0f) {
+            range = Math.min(range, DebugVars.wanderRadiusMax);
+        }
+        return range;
+    }
+
+    private float pause(float min, float extra) {
+        float freq = DebugVars.wanderFrequency;
+        if (freq < 0.01f) {
+            freq = 0.01f;
+        }
+        return (min + wanderRng.nextFloat() * extra) / freq;
     }
 
     public static String skeletonPath(EsmNpc npc, EsmFile.LoadedCell cell) {
@@ -627,33 +720,76 @@ public final class NpcMannequin {
     }
 
     private void playIdle(NpcActor actor) {
-        for (int i = actor.sources.size() - 1; i >= 0; i--) {
-            KfFile kf = actor.sources.get(i);
-            KfFile.IdleLoop loop = kf.playIdle();
-            if (loop == null) {
-                continue;
+        playGroup(actor, "idle");
+    }
+
+    private boolean playGroup(NpcActor actor, String group) {
+        KfFile chosen = null;
+        KfFile.IdleLoop loop = null;
+        if (actor.kf != null) {
+            loop = actor.kf.play(group, "start", "stop", true);
+            if (loop != null) {
+                chosen = actor.kf;
             }
-            actor.kf = kf;
-            actor.idle = loop;
-            for (KfFile.BoneTrack track : kf.tracks.values()) {
+        }
+        if (chosen == null) {
+            for (int i = actor.sources.size() - 1; i >= 0; i--) {
+                KfFile kf = actor.sources.get(i);
+                if (kf == actor.kf) {
+                    continue;
+                }
+                loop = kf.play(group, "start", "stop", true);
+                if (loop != null) {
+                    chosen = kf;
+                    break;
+                }
+            }
+        }
+        if (chosen == null) {
+            return false;
+        }
+        boolean hadPose = !actor.bindings.isEmpty();
+        if (chosen != actor.kf || actor.bindings.isEmpty()) {
+            actor.bindings.clear();
+            actor.accumRoot = null;
+            for (KfFile.BoneTrack track : chosen.tracks.values()) {
                 SceneNode node = actor.boneNodes.get(track.bone.toLowerCase(Locale.ROOT));
                 if (node == null) {
-                    Gdx.app.log("NpcMannequin", "idle: missing bone " + track.bone);
+                    Gdx.app.log("NpcMannequin", group + ": missing bone " + track.bone);
                     continue;
                 }
                 BoneBinding bind = new BoneBinding(node, track.controller, track.data);
                 bind.rest.set(node.local);
                 actor.bindings.add(bind);
             }
-            return;
+            actor.accumRoot = actor.boneNodes.get("bip01");
+            if (actor.accumRoot == null) {
+                actor.accumRoot = actor.boneNodes.get("root bone");
+            }
         }
+        if (hadPose) {
+            for (BoneBinding bind : actor.bindings) {
+                bind.blendFrom.set(bind.node.local);
+            }
+            actor.blendLeft = ANIM_BLEND;
+        } else {
+            actor.blendLeft = 0f;
+        }
+        actor.kf = chosen;
+        actor.idle = loop;
+        return true;
     }
 
-    private void pose(NpcActor actor) {
+    private void pose(NpcActor actor, float dt) {
         if (actor.idle == null) {
             return;
         }
         float animTime = actor.idle.time;
+        float blend = 0f;
+        if (actor.blendLeft > 0f) {
+            actor.blendLeft = Math.max(0f, actor.blendLeft - dt);
+            blend = 1f - actor.blendLeft / ANIM_BLEND;
+        }
         for (BoneBinding bind : actor.bindings) {
             float time = bind.controller.sampleTime(animTime);
             bind.rest.getTranslation(tmp);
@@ -671,6 +807,18 @@ public final class NpcMannequin {
             if (!data.scales.empty()) {
                 float sc = data.scales.interpFloat(time);
                 tmpS.set(sc, sc, sc);
+            }
+            if (bind.node == actor.accumRoot) {
+                tmp.x = 0f;
+                tmp.y = 0f;
+            }
+            if (blend > 0f && blend < 1f) {
+                bind.blendFrom.getTranslation(tmpFrom);
+                bind.blendFrom.getRotation(tmpFromQ, true);
+                tmpFrom.lerp(tmp, blend);
+                tmpFromQ.slerp(tmpQ, blend);
+                tmp.set(tmpFrom);
+                tmpQ.set(tmpFromQ);
             }
             bind.node.local.set(tmp, tmpQ, tmpS);
         }
@@ -813,6 +961,7 @@ public final class NpcMannequin {
         final Map<String, Matrix4> boneWorld = new HashMap<>();
         KfFile kf;
         KfFile.IdleLoop idle;
+        SceneNode accumRoot;
         final float[] tesPos = new float[3];
         float spawnX;
         float spawnY;
@@ -826,6 +975,10 @@ public final class NpcMannequin {
         int wanderDistance;
         float idleLeft;
         boolean walking;
+        boolean playingWalk;
+        boolean moving;
+        boolean noWalk;
+        float blendLeft;
 
         NpcActor(SceneNode placed, SceneNode skeleton, Map<String, SceneNode> boneNodes) {
             this.placed = placed;
@@ -837,6 +990,7 @@ public final class NpcMannequin {
     private static final class BoneBinding {
         final SceneNode node;
         final Matrix4 rest = new Matrix4();
+        final Matrix4 blendFrom = new Matrix4();
         final NiKeyframeController controller;
         final NiKeyframeData data;
 

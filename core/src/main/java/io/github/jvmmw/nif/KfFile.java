@@ -137,14 +137,13 @@ public final class KfFile {
         loop.loopStart = loop.startTime;
         loop.loopStop = loopFallback ? loop.stopTime : Float.MAX_VALUE;
         loop.time = loop.startTime;
-        for (int i = groupEnd; i >= startIdx; i--) {
+        // OpenMW picks up Loop Start/Stop while playing. Skipping keys after
+        // startTime meant walkforward wrapped at Stop (a plant-foot pose).
+        for (int i = startIdx; i <= groupEnd; i++) {
             TextKey key = textKeys.get(i);
-            if (key.time > loop.time) {
-                continue;
-            }
             if (equalsEvent(key.text, group, "loop start")) {
                 loop.loopStart = key.time;
-            } else if (equalsEvent(key.text, group, "loop stop")) {
+            } else if (loopFallback && equalsEvent(key.text, group, "loop stop")) {
                 loop.loopStop = key.time;
             }
         }

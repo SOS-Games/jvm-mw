@@ -12,7 +12,6 @@ These match what the viewer already is (walk Town, look, Dump) and were explicit
 | --- | --- |
 | **Keep overlapping tiles** | Walk still rebuilds land and the scene graph for cells you already have. Textures/static NIFs intern; live tiles do not. Biggest remaining swap hitch. |
 | **Moons** | Night is stars only. Masser and Secunda. |
-| **NPC / creature walk cycles** | Cheap wander slides them on the idle pose. Walk/run groups on the same skeletons come after that. |
 | **Sunglare** | Midday sun disc is there; OpenMW glare/flash is not. |
 | **One extra weather** | Clear only. Overcast or rain on the existing hour slider would test weather without a full climate system. |
 

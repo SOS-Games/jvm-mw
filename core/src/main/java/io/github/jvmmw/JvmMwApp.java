@@ -38,6 +38,7 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 
+import io.github.jvmmw.debug.DebugVars;
 import io.github.jvmmw.debug.FrameProfiler;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
@@ -1093,7 +1094,9 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
         }
         if (perfLabel != null && perfHudOn) {
-            perfLabel.setText(profiler.hudText());
+            String hud = profiler.hudText();
+            String debug = DebugVars.hudLine();
+            perfLabel.setText(debug.isEmpty() ? hud : hud + "\n" + debug);
         }
         if (status != null) {
             String err = lastError.isEmpty() ? "" : " err=" + lastError;
@@ -1186,6 +1189,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         }
         snapshotBuf.append("glError=").append(lastGlError).append('\n');
         profiler.appendDump(snapshotBuf);
+        DebugVars.appendDump(snapshotBuf);
         return snapshotBuf.toString();
     }
 
