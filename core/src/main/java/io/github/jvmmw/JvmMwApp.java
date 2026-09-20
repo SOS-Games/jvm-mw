@@ -47,6 +47,7 @@ import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
+import io.github.jvmmw.render.CollisionWorld;
 import io.github.jvmmw.render.DoorSwing;
 import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.GpuCache;
@@ -764,7 +765,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         eye.mulAdd(lookDir, -moveScale);
     }
 
-    private static final float EYE_HEIGHT = 96f;
+    private static final float EYE_HEIGHT = CollisionWorld.EYE_HEIGHT;
 
     private void frameCellCamera() {
         camera.near = 1f;
@@ -774,6 +775,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         moveScale = 220f;
         if (doorArrival) {
             placeEye(doorArrivalPos, doorArrivalYaw);
+            snapWalk();
             doorArrival = false;
             Gdx.app.log("JVM-MW", "spawn door DODT tes=(" + doorArrivalPos[0] + ','
                 + doorArrivalPos[1] + ',' + doorArrivalPos[2] + ')');
@@ -782,6 +784,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         }
         if (loadedCell.hasSpawn) {
             placeEye(loadedCell.spawnPos, loadedCell.spawnRot[2]);
+            snapWalk();
             Gdx.app.log("JVM-MW", "spawn inbound tes=(" + loadedCell.spawnPos[0] + ','
                 + loadedCell.spawnPos[1] + ',' + loadedCell.spawnPos[2] + ')');
         } else {
@@ -794,10 +797,12 @@ public final class JvmMwApp extends ApplicationAdapter {
                     door.pos[2]
                 };
                 placeEye(tes, h + (float) Math.PI);
+                snapWalk();
                 Gdx.app.log("JVM-MW", "spawn door=" + door.refId);
             } else if (aabb.isValid()) {
                 aabb.getCenter(eye);
                 eye.y = aabb.min.y + EYE_HEIGHT;
+                snapWalk();
                 yaw = START_YAW;
                 pitch = START_PITCH;
             } else {
@@ -813,6 +818,13 @@ public final class JvmMwApp extends ApplicationAdapter {
         eye.set(tes[0], tes[2] + EYE_HEIGHT, -tes[1]);
         yaw = (float) Math.toDegrees(Math.atan2(Math.sin(heading), -Math.cos(heading)));
         pitch = 0f;
+        snapWalk();
+    }
+
+    private void snapWalk() {
+        if (cellBuilder != null) {
+            cellBuilder.collision.snapSpawn(eye);
+        }
     }
 
     private static CellRef findTeleportDoor(EsmFile.LoadedCell cell) {
@@ -888,12 +900,12 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 35", skin);
+        Window win = new Window("JVM-MW Phase 36", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay.", skin))
+        win.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
@@ -1148,6 +1160,10 @@ public final class JvmMwApp extends ApplicationAdapter {
             float tesZ = eye.y - EYE_HEIGHT;
             snapshotBuf.append("tes=(").append(tesX).append(',').append(tesY).append(',').append(tesZ)
                 .append(") eyeHeight=").append(EYE_HEIGHT).append('\n');
+            CollisionWorld col = cellBuilder.collision;
+            snapshotBuf.append("onGround=").append(col.onGround)
+                .append(" floorY=").append(Float.isNaN(col.floorY) ? "none" : col.floorY)
+                .append(" ceilY=").append(Float.isNaN(col.ceilY) ? "none" : col.ceilY).append('\n');
             if (loadedCell != null && !loadedCell.interior) {
                 snapshotBuf.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
             }
@@ -1245,42 +1261,51 @@ public final class JvmMwApp extends ApplicationAdapter {
             pitch = Math.max(-89f, Math.min(89f, pitch - Gdx.input.getDeltaY() * 0.4f));
         }
         updateLookDir();
-        eye.mulAdd(lookDir, -scrollAccum * 12f);
+        float dt = Gdx.graphics.getDeltaTime();
+        float scroll = -scrollAccum * 12f;
         scrollAccum = 0f;
         boolean shift = Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
             || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT);
-        float speed = Math.max(60f, moveScale) * 0.4f * Gdx.graphics.getDeltaTime() * (shift ? 10f : 1f);
+        float speed = Math.max(60f, moveScale) * 0.4f * dt * (shift ? 10f : 1f);
         if (loadedCell != null && !loadedCell.interior) {
             speed *= 3f;
         }
         float radYaw = (float) Math.toRadians(yaw);
         float sin = (float) Math.sin(radYaw);
         float cos = (float) Math.cos(radYaw);
+        float dx = lookDir.x * scroll;
+        float dy = lookDir.y * scroll;
+        float dz = lookDir.z * scroll;
         boolean forward = Gdx.input.isKeyPressed(Input.Keys.W) || Gdx.input.isKeyPressed(Input.Keys.UP);
         boolean back = Gdx.input.isKeyPressed(Input.Keys.S) || Gdx.input.isKeyPressed(Input.Keys.DOWN);
         boolean right = Gdx.input.isKeyPressed(Input.Keys.D) || Gdx.input.isKeyPressed(Input.Keys.RIGHT);
         boolean left = Gdx.input.isKeyPressed(Input.Keys.A) || Gdx.input.isKeyPressed(Input.Keys.LEFT);
         if (forward) {
-            eye.x += sin * speed;
-            eye.z += cos * speed;
+            dx += sin * speed;
+            dz += cos * speed;
         }
         if (back) {
-            eye.x -= sin * speed;
-            eye.z -= cos * speed;
+            dx -= sin * speed;
+            dz -= cos * speed;
         }
         if (right) {
-            eye.x -= cos * speed;
-            eye.z += sin * speed;
+            dx -= cos * speed;
+            dz += sin * speed;
         }
         if (left) {
-            eye.x += cos * speed;
-            eye.z -= sin * speed;
+            dx += cos * speed;
+            dz -= sin * speed;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
-            eye.y += speed;
+            dy += speed;
         }
         if (Gdx.input.isKeyPressed(Input.Keys.CONTROL_LEFT) || Gdx.input.isKeyPressed(Input.Keys.CONTROL_RIGHT)) {
-            eye.y -= speed;
+            dy -= speed;
+        }
+        if (cellBuilder != null && !isLoading()) {
+            cellBuilder.collision.move(eye, dx, dy, dz, dt);
+        } else {
+            eye.add(dx, dy, dz);
         }
     }
 

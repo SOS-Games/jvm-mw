@@ -58,6 +58,10 @@ public final class NifSceneBuilder {
         this.exists = exists;
     }
 
+    public NifFile nif() {
+        return nif;
+    }
+
     public SceneNode build() {
         return build(true);
     }

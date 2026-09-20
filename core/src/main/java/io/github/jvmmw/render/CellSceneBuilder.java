@@ -45,6 +45,7 @@ public final class CellSceneBuilder {
     public final DoorSwing doors = new DoorSwing();
     public final ContainerOpen containers = new ContainerOpen();
     public final ItemTake items = new ItemTake();
+    public final CollisionWorld collision = new CollisionWorld();
     public Set<String> takenKeys = new HashSet<>();
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
@@ -57,6 +58,7 @@ public final class CellSceneBuilder {
     private int landIndex;
     private boolean finished;
     private final List<PendingLight> pendingLights = new ArrayList<>();
+    private final List<CollisionWorld.Pending> pendingCol = new ArrayList<>();
     private final Vector3 tmpPos = new Vector3();
 
     public SceneNode build(EsmFile.LoadedCell cell) {
@@ -84,6 +86,8 @@ public final class CellSceneBuilder {
         doors.clear();
         containers.clear();
         items.clear();
+        pendingCol.clear();
+        collision.clear();
         lighting.lights.clear();
         lighting.resetTime();
         lighting.exterior = !cell.interior;
@@ -131,6 +135,9 @@ public final class CellSceneBuilder {
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
         finishLights();
+        List<LandRecord> lands = cell.interior || cell.land == null ? List.of()
+            : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
+        collision.bake(lands, pendingCol);
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
             + " npc=" + placedNpc + " crea=" + placedCrea + " byRec=" + byRec + " empty=" + skippedEmpty
             + " actor=" + skippedActor
@@ -318,10 +325,15 @@ public final class CellSceneBuilder {
             return;
         }
         try {
-            SceneNode inst = instance(placeMesh(obj));
+            String mesh = placeMesh(obj);
+            SceneNode inst = instance(mesh);
             EsmTransforms.setLocal(inst.local, ref.pos, ref.rot, ref.scale);
             inst.name = ref.refId;
             buildingRoot.addChild(inst);
+            CollisionMesh col = CollisionMesh.intern(mesh);
+            if (!col.isEmpty()) {
+                pendingCol.add(new CollisionWorld.Pending(col, inst));
+            }
             placed++;
             if ("STAT".equals(obj.rec)) {
                 placedStat++;

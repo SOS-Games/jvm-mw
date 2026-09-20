@@ -133,6 +133,11 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `Resource::ImageManager::getImage` | `GpuCache` intern DDS by corrected VFS path | rewrite |
 | `Terrain::TextureManager::getTexture` | `LandMesh` uses `GpuCache` | rewrite |
 | `Resource::SceneManager::getTemplate` | `GpuCache` static NIF `MeshGpu` template intern | rewrite |
+| `MovementSolver::move` / `traceDown` | `CollisionWorld` player capsule traces | rewrite |
+| `Stepper` `sStepSizeUp` 34 / `sStepSizeDown` 62 | `CollisionWorld` dock/stair step | rewrite |
+| `sMaxSlope` 46 / `sGroundOffset` 1 | `CollisionWorld` walkable floor | same |
+| `HeightField` TES3 65×65 | `LandRecord` bilinear + `CollisionWorld` | rewrite |
+| `BulletNifLoader` RootCollisionNode / NC / NCC | `CollisionMesh` tris from NIF | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 5×5-minus-corners | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |

@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 35 (current)
+## Phase 36 (current)
 
-Town land textures mix with linear 17×17 blendmaps instead of 2× nearest blocks. Phase 34 cull stays. See [docs/phase35-land-blend.md](docs/phase35-land-blend.md). Phase 34 cull: [docs/phase34-small-feature.md](docs/phase34-small-feature.md).
+Town WASD stays on land and docks; ceilings and dock undersides stop the camera. Chair HUD still flies. See [docs/phase36-stay-on-land.md](docs/phase36-stay-on-land.md). Phase 35 land mix: [docs/phase35-land-blend.md](docs/phase35-land-blend.md).
 
 ```bat
 gradlew.bat lwjgl3:run
