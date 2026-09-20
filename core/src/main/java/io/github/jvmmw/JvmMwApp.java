@@ -50,6 +50,8 @@ import io.github.jvmmw.resource.TestData;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
@@ -97,6 +99,10 @@ public final class JvmMwApp extends ApplicationAdapter {
     private boolean cellStepping;
     private boolean windowFocused;
     private boolean doorArrival;
+    private boolean keepEye;
+    private int lastWalkGx = Integer.MIN_VALUE;
+    private int lastWalkGy;
+    private final Set<String> takenKeys = new HashSet<>();
     private final float[] doorArrivalPos = new float[3];
     private float doorArrivalYaw;
 
@@ -194,6 +200,7 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     private void requestLoad(String key, boolean keepAuto) {
         doorArrival = false;
+        keepEye = false;
         pendingKey = key;
         pendingKeepAuto = keepAuto;
         pendingVisibleFrames = 0;
@@ -211,7 +218,12 @@ public final class JvmMwApp extends ApplicationAdapter {
             try {
                 if (cellBuilder.step(12_000_000L)) {
                     root = cellBuilder.end();
-                    frameCamera();
+                    if (keepEye && loadedCell != null && !loadedCell.interior) {
+                        keepWalkCamera();
+                    } else {
+                        frameCamera();
+                    }
+                    keepEye = false;
                     Gdx.app.log("JVM-MW", cellBuilder.log.toString());
                     cellStepping = false;
                 }
@@ -338,6 +350,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 loadedCell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), names);
             }
             cellBuilder = new CellSceneBuilder();
+            cellBuilder.takenKeys = takenKeys;
             cellBuilder.begin(loadedCell);
             currentVfs = loadedCell.name;
             cellStepping = true;
@@ -367,7 +380,10 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
             disposeScene();
             loadedCell = next;
+            lastWalkGx = loadedCell.gridX;
+            lastWalkGy = loadedCell.gridY;
             cellBuilder = new CellSceneBuilder();
+            cellBuilder.takenKeys = takenKeys;
             cellBuilder.begin(loadedCell);
             currentVfs = loadedCell.name + " (" + loadedCell.gridX + "," + loadedCell.gridY + ")";
             cellStepping = true;
@@ -376,6 +392,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             Gdx.app.error("JVM-MW", "Exterior failed: " + grid, e);
             cellStepping = false;
             doorArrival = false;
+            keepEye = false;
         }
     }
 
@@ -416,6 +433,31 @@ public final class JvmMwApp extends ApplicationAdapter {
         doorArrivalYaw = dest.destRot[2];
         requestLoad(EXT_PREFIX + gx + "," + gy, false);
         doorArrival = true;
+    }
+
+    private void maybeRecenterGrid() {
+        if (isLoading() || cellBuilder == null || loadedCell == null || loadedCell.interior) {
+            return;
+        }
+        int[] next = LandRecord.newGridCenter(eye.x, -eye.z, loadedCell.gridX, loadedCell.gridY);
+        if (next[0] == loadedCell.gridX && next[1] == loadedCell.gridY) {
+            return;
+        }
+        if (next[0] == lastWalkGx && next[1] == lastWalkGy) {
+            return;
+        }
+        lastWalkGx = next[0];
+        lastWalkGy = next[1];
+        Gdx.app.log("JVM-MW", "walk recenter (" + loadedCell.gridX + "," + loadedCell.gridY
+            + ") -> (" + next[0] + "," + next[1] + ")");
+        requestLoad(EXT_PREFIX + next[0] + "," + next[1], false);
+        keepEye = true;
+    }
+
+    private void keepWalkCamera() {
+        camera.near = 1f;
+        camera.far = 40000f;
+        moveScale = 220f;
     }
 
     private void frameCamera() {
@@ -557,7 +599,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", sls);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 27", skin);
+        Window win = new Window("JVM-MW Phase 28", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -661,6 +703,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     public void render() {
         pumpLoad();
         handleCamera();
+        maybeRecenterGrid();
         camera.viewportWidth = Gdx.graphics.getWidth();
         camera.viewportHeight = Gdx.graphics.getHeight();
         camera.position.set(eye);
@@ -750,6 +793,9 @@ public final class JvmMwApp extends ApplicationAdapter {
             float tesZ = eye.y - EYE_HEIGHT;
             sb.append("tes=(").append(tesX).append(',').append(tesY).append(',').append(tesZ).append(") eyeHeight=")
                 .append(EYE_HEIGHT).append('\n');
+            if (loadedCell != null && !loadedCell.interior) {
+                sb.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
+            }
             CellLighting fog = cellBuilder.lighting;
             sb.append("fogDensity=").append(fog.fogDensity)
                 .append(" fogStart=").append(fog.fogStart)

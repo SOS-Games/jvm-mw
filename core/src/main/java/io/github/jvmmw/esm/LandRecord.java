@@ -18,6 +18,8 @@ public final class LandRecord {
     public static final float DEFAULT_HEIGHT = -2048f;
     public static final int TEXTURE_SIZE = 16;
     public static final int NUM_TEXTURES = TEXTURE_SIZE * TEXTURE_SIZE;
+    /** OpenMW {@code Scene::mCellLoadingThreshold}. */
+    public static final float CELL_LOADING_THRESHOLD = 1024f;
 
     public int gridX;
     public int gridY;
@@ -36,6 +38,20 @@ public final class LandRecord {
 
     public static int cellGrid(float tes) {
         return (int) Math.floor(tes / CELL_SIZE);
+    }
+
+    /**
+     * OpenMW {@code Scene::getNewGridCenter}: stay on {@code cur} while Chebyshev
+     * distance to that cell’s centre is {@code ≤ 4096 + 1024}.
+     */
+    public static int[] newGridCenter(float tesX, float tesY, int curX, int curY) {
+        float cx = curX * (float) CELL_SIZE + CELL_SIZE / 2f;
+        float cy = curY * (float) CELL_SIZE + CELL_SIZE / 2f;
+        float dist = Math.max(Math.abs(cx - tesX), Math.abs(cy - tesY));
+        if (dist <= CELL_SIZE / 2f + CELL_LOADING_THRESHOLD) {
+            return new int[] {curX, curY};
+        }
+        return new int[] {cellGrid(tesX), cellGrid(tesY)};
     }
 
     public float height(int x, int y) {

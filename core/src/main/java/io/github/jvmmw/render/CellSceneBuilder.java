@@ -18,9 +18,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /** Place cell refs that have a MODL. Rewrite of {@code MWWorld::Scene} insert for non-actors. */
@@ -40,6 +42,7 @@ public final class CellSceneBuilder {
     public final DoorSwing doors = new DoorSwing();
     public final ContainerOpen containers = new ContainerOpen();
     public final ItemTake items = new ItemTake();
+    public Set<String> takenKeys = new HashSet<>();
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
 
@@ -167,7 +170,11 @@ public final class CellSceneBuilder {
         if (contDist <= itemDist) {
             return containers.activate(cont);
         }
-        return items.activate(item, lighting);
+        String msg = items.activate(item, lighting);
+        if (!item.item.book && item.item.takeKey != null) {
+            takenKeys.add(item.item.takeKey);
+        }
+        return msg;
     }
 
     public int refCount() {
@@ -234,6 +241,9 @@ public final class CellSceneBuilder {
             log.append("skip id=").append(ref.refId).append('\n');
             return;
         }
+        if ((EsmObject.isTakeable(obj) || EsmObject.isBook(obj)) && takenKeys.contains(ref.takeKey())) {
+            return;
+        }
         if (obj.model.isEmpty()) {
             skippedEmpty++;
             log.append("skip empty=").append(obj.rec).append(' ').append(ref.refId).append('\n');
@@ -262,7 +272,7 @@ public final class CellSceneBuilder {
                 containers.add(inst, ref.refId, obj.model);
             }
             if (EsmObject.isTakeable(obj) || EsmObject.isBook(obj)) {
-                items.add(inst, ref.refId, obj);
+                items.add(inst, ref, obj);
             }
             byRec.merge(obj.rec, 1, Integer::sum);
             if (isEmittingLight(obj)) {

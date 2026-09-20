@@ -118,7 +118,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esmterrain/storage.cpp` | `getTextureName` | `LandMesh.textureName` | rewrite |
 | `components/misc/constants.hpp` | `CellGridRadius` | `EsmFile.CELL_GRID_RADIUS` (1 → 3×3) | same |
 | `apps/openmw/mwworld/scene.cpp` | `iterateOverCellsAround` | `loadExterior` one pass `|x-cx|<=1` | rewrite |
-| `apps/openmw/mwworld/scene.cpp` | `changeCellGrid` | one-shot 3×3, no walk recenter | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `playerMoved` | exterior walk → maybe recenter | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `getNewGridCenter` | `LandRecord.newGridCenter` Chebyshev + 1024 | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `changeCellGrid` | 3×3 around camera cell, keep eye | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 3×3 around it | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |

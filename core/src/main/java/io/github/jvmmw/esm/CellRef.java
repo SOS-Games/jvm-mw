@@ -17,4 +17,8 @@ public final class CellRef {
     public final float[] rot = new float[3];
     public final float[] destPos = new float[3];
     public final float[] destRot = new float[3];
+
+    public String takeKey() {
+        return frmr + ":" + refId + ":" + pos[0] + ":" + pos[1] + ":" + pos[2];
+    }
 }

@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 27 (current)
+## Phase 28 (current)
 
-Exteriors have a Clear day/night clock: HUD slider, **[ ]**, and Play. Sky, sun, stars, and land lighting follow the hour. See [docs/phase27-day-night.md](docs/phase27-day-night.md). Phase 26 sun: [docs/phase26-sky-sun.md](docs/phase26-sky-sun.md).
+Walking an exterior recenters the 3×3 on the camera cell. Phase 27 clock stays. See [docs/phase28-walk-grid.md](docs/phase28-walk-grid.md). Phase 27 day/night: [docs/phase27-day-night.md](docs/phase27-day-night.md).
 
 ```bat
 gradlew.bat lwjgl3:run

@@ -10,6 +10,7 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.math.collision.Ray;
 
+import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmObject;
 
 import java.util.ArrayList;
@@ -36,13 +37,15 @@ public final class ItemTake {
         public final String refId;
         public final String rec;
         public final boolean book;
+        public final String takeKey;
         CellLight light;
 
-        Placed(SceneNode node, String refId, String rec, boolean book) {
+        Placed(SceneNode node, String refId, String rec, boolean book, String takeKey) {
             this.node = node;
             this.refId = refId;
             this.rec = rec;
             this.book = book;
+            this.takeKey = takeKey;
         }
     }
 
@@ -55,8 +58,8 @@ public final class ItemTake {
         items.clear();
     }
 
-    public Placed add(SceneNode node, String refId, EsmObject obj) {
-        Placed placed = new Placed(node, refId, obj.rec, "BOOK".equals(obj.rec));
+    public Placed add(SceneNode node, CellRef ref, EsmObject obj) {
+        Placed placed = new Placed(node, ref.refId, obj.rec, "BOOK".equals(obj.rec), ref.takeKey());
         items.add(placed);
         return placed;
     }
