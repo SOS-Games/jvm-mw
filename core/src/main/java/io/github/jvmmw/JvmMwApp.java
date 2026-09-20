@@ -880,7 +880,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 30", skin);
+        Window win = new Window("JVM-MW Phase 31", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

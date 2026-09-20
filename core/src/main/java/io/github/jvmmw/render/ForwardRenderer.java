@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.utils.BufferUtils;
 
 import io.github.jvmmw.debug.FrameProfiler;
@@ -101,6 +102,8 @@ public final class ForwardRenderer {
     private final Matrix4 origCombined = new Matrix4();
     private final Matrix4 origView = new Matrix4();
     private final Matrix4 reflectMat = new Matrix4();
+    private final Matrix4 frustumInv = new Matrix4();
+    private final BoundingBox cullBox = new BoundingBox();
     private final int reflectFbo;
     private final int reflectColor;
     private final int reflectDepth;
@@ -402,6 +405,7 @@ public final class ForwardRenderer {
         origView.set(cam.view);
         cam.combined.mul(reflectMat);
         cam.view.mul(reflectMat);
+        syncFrustum(cam);
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
@@ -422,6 +426,7 @@ public final class ForwardRenderer {
         drawNode(cam, root, 0, lighting, true);
         cam.combined.set(origCombined);
         cam.view.set(origView);
+        syncFrustum(cam);
         Gdx.gl30.glBindFramebuffer(GL30.GL_FRAMEBUFFER, 0);
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
@@ -463,6 +468,12 @@ public final class ForwardRenderer {
                 }
                 int meshPass = mesh.terrainPass ? 1 : mesh.alphaBlend ? 2 : 0;
                 if (meshPass != pass) {
+                    continue;
+                }
+                if (frustumCulled(cam, node, mesh)) {
+                    if (profiler != null) {
+                        profiler.addCulled();
+                    }
                     continue;
                 }
                 if (lighting != null) {
@@ -535,6 +546,20 @@ public final class ForwardRenderer {
         }
     }
 
+    private void syncFrustum(PerspectiveCamera cam) {
+        frustumInv.set(cam.combined).inv();
+        cam.frustum.update(frustumInv);
+    }
+
+    private boolean frustumCulled(PerspectiveCamera cam, SceneNode node, MeshGpu mesh) {
+        if (mesh.localMin[0] > mesh.localMax[0]) {
+            return false;
+        }
+        cullBox.inf();
+        mesh.expandWorldAabb(node.world, cullBox);
+        return !cam.frustum.boundsInFrustum(cullBox);
+    }
+
     private void drawWater(PerspectiveCamera cam, SceneNode root, CellLighting lighting, boolean underwater) {
         Gdx.gl.glUseProgram(waterProgram);
         upload(uWaterView, cam.view);
@@ -592,6 +617,9 @@ public final class ForwardRenderer {
                 if (!mesh.waterShader) {
                     continue;
                 }
+                mvp.set(cam.combined).mul(node.world);
+                upload(uWaterMvp, mvp);
+                upload(uWaterModel, node.world);
                 Gdx.gl30.glBindVertexArray(mesh.vao);
                 Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
                 if (profiler != null) {

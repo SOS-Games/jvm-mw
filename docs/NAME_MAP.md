@@ -124,6 +124,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/scene.cpp` | `requestChangeCellGrid` | walk load without overlay | rewrite |
 | `apps/openmw/mwworld/cellpreloader.cpp` | `CellPreloader` work queue | worker `loadExterior` + GL step | rewrite |
 | `Resource::Profiler` / osg F3 stats | `debug.FrameProfiler` CPU sections + F3 keys | rewrite |
+| OSG `VIEW_FRUSTUM_CULLING` | `ForwardRenderer` mesh AABB vs `cam.frustum` | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 5×5-minus-corners | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |

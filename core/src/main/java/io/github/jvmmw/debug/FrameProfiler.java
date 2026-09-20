@@ -38,6 +38,7 @@ public final class FrameProfiler {
     private int drawsOpaque;
     private int drawsAlpha;
     private int drawsRtt;
+    private int drawsCulled;
     private boolean rtt;
 
     public int lastDraws;
@@ -46,6 +47,7 @@ public final class FrameProfiler {
     public int lastDrawsOpaque;
     public int lastDrawsAlpha;
     public int lastDrawsRtt;
+    public int lastDrawsCulled;
     public int meshes;
     public int placed;
     public int npc;
@@ -68,6 +70,7 @@ public final class FrameProfiler {
         drawsOpaque = 0;
         drawsAlpha = 0;
         drawsRtt = 0;
+        drawsCulled = 0;
         rtt = false;
         begin(FRAME);
     }
@@ -81,6 +84,7 @@ public final class FrameProfiler {
         lastDrawsOpaque = drawsOpaque;
         lastDrawsAlpha = drawsAlpha;
         lastDrawsRtt = drawsRtt;
+        lastDrawsCulled = drawsCulled;
         float nowMs = sectionNs[FRAME] / 1_000_000f;
         frameHist[histIndex] = nowMs;
         histIndex = (histIndex + 1) % WINDOW;
@@ -130,6 +134,10 @@ public final class FrameProfiler {
         }
     }
 
+    public void addCulled() {
+        drawsCulled++;
+    }
+
     public void addWalkGpuNs(long nanos) {
         walkGpuMs += nanos / 1_000_000f;
         hadWalk = true;
@@ -163,7 +171,8 @@ public final class FrameProfiler {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format(Locale.US, "%.0f fps  %.1f ms  max %.1f  n=%d%n",
             fps, frameMs, frameMaxMs, histCount));
-        sb.append("draws ").append(lastDraws).append("  rtt ").append(lastDrawsRtt).append('\n');
+        sb.append("draws ").append(lastDraws).append("  rtt ").append(lastDrawsRtt)
+            .append("  cull ").append(lastDrawsCulled).append('\n');
         sb.append("fat ").append(fattestName()).append(' ')
             .append(String.format(Locale.US, "%.1f", sectionMs(fattestIndex())));
         if (hadWalk) {
@@ -190,6 +199,7 @@ public final class FrameProfiler {
             .append(" draws.opaque=").append(lastDrawsOpaque)
             .append(" draws.alpha=").append(lastDrawsAlpha)
             .append(" draws.rtt=").append(lastDrawsRtt)
+            .append(" drawsCulled=").append(lastDrawsCulled)
             .append('\n');
         sb.append("meshes=").append(meshes)
             .append(" placed=").append(placed)

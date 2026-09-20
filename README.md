@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 30 (current)
+## Phase 31 (current)
 
-Town shows an fps overlay (F4) and F3 writes `fps=` / `ms.update=` / draw counts so later speed work has numbers. Phase 29 walk-grid stays. See [docs/phase30-perf-debug.md](docs/phase30-perf-debug.md). Phase 29 background grid: [docs/phase29-bg-grid.md](docs/phase29-bg-grid.md).
+Town frustum-culls meshes outside the camera so the 5×5 does not submit every shack three times. Phase 30 Dump stays. See [docs/phase31-frustum-cull.md](docs/phase31-frustum-cull.md). Phase 30 perf overlay: [docs/phase30-perf-debug.md](docs/phase30-perf-debug.md).
 
 ```bat
 gradlew.bat lwjgl3:run
