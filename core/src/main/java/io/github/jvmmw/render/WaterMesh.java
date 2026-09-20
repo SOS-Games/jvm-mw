@@ -15,6 +15,7 @@ import io.github.jvmmw.esm.LandRecord;
 public final class WaterMesh {
     public static final float HEIGHT = -1f;
     public static final int RTT_SIZE = 512;
+    public static final float RTT_FEATURE_PIXELS = 20f;
     public static final float REPEATS_PER_CELL = 900f / 150f;
 
     private MeshGpu gpu;

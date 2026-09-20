@@ -8,7 +8,7 @@ Align with `apps/openmw/mwworld/scene.cpp` (`playerMoved` / `getNewGridCenter` /
 
 Same viewer. Phase 27 clock stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
-**Walking an exterior recenters the 3×3** on the camera’s cell, the way OpenMW does while you move. Ground, buildings, and water keep up. The eye does not snap back to Census `DODT`. Interiors still load one cell. Moons stay out (delayed-features).
+**Walking an exterior recenters the 3×3** on the camera’s cell, the way OpenMW does while you move. Ground, buildings, and water keep up. The eye does not snap back to Census `DODT`. Interiors still load one cell. Moons stay out.
 
 ## Why this slice
 
@@ -37,7 +37,7 @@ TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plu
 - Open door / chest pose across a rebuild
 - Physics, navmesh, actor AI
 - ESM4 larger grid
-- Moons (delayed-features), weather types, sunglare
+- Moons, weather types, sunglare
 - Walk-into-void interior reset (`lowestPoint - 90`)
 - Plugins, Lua, GPU skinning / `ModelBatch`
 

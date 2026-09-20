@@ -92,6 +92,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `files/shaders/compatibility/water.frag` | no-refract path | `ForwardRenderer` water fragment | rewrite |
 | `files/data/textures/omw/water_nm.png` | `water_nm.png` | `assets/textures/omw/water_nm.png` | same |
 | `apps/openmw/mwrender/water.cpp` | `Water::Refraction` | second RTT, 512, clip keep below | rewrite |
+| `Reflection::calcNodeMask` detail 2 | skip `SceneNode.actor` in reflection RTT | rewrite |
+| `[Water] small feature culling pixel size = 20` | RTT AABB pixel test | rewrite |
 | `files/shaders/compatibility/water.frag` | `@waterRefraction` path | `ForwardRenderer` water mix refraction | rewrite |
 | `files/shaders/compatibility/water.frag` | `sunSpec.a` visibility | water specular × `ClearCycle.sunVis` | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `Water::isUnderwater` | camera TES3 z `<` −1 | rewrite |

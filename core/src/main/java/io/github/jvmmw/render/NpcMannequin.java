@@ -157,6 +157,7 @@ public final class NpcMannequin {
         SceneNode skeleton = cloneTree(skeleton(smodel));
         SceneNode placed = new SceneNode();
         placed.name = npc.id;
+        placed.actor = true;
         placed.addChild(skeleton);
         skeleton.updateWorld(id);
         Map<String, Matrix4> boneWorld = new HashMap<>();
@@ -240,6 +241,7 @@ public final class NpcMannequin {
         SceneNode skeleton = cloneTree(skeleton(animationMesh));
         SceneNode placed = new SceneNode();
         placed.name = crea.id;
+        placed.actor = true;
         placed.addChild(skeleton);
         skeleton.updateWorld(id);
         Map<String, Matrix4> boneWorld = new HashMap<>();
@@ -696,6 +698,7 @@ public final class NpcMannequin {
         n.name = src.name;
         n.local.set(src.local);
         n.skipMeshes = src.skipMeshes;
+        n.actor = src.actor;
         for (MeshInstance inst : src.meshes) {
             MeshInstance copy = new MeshInstance(inst.mesh);
             copy.frontClockwise = inst.frontClockwise;

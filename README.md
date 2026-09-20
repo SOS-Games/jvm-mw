@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 32 (current)
+## Phase 33 (current)
 
-Town uploads each DDS once and keeps static NIF GPU templates across a walk swap. Phase 31 frustum cull stays. See [docs/phase32-tex-cache.md](docs/phase32-tex-cache.md). Phase 31 cull: [docs/phase31-frustum-cull.md](docs/phase31-frustum-cull.md).
+Town water cameras skip people in reflections and drop tiny meshes from the 512 maps. Phase 32 intern stays. See [docs/phase33-water-rtt.md](docs/phase33-water-rtt.md). Phase 32 cache: [docs/phase32-tex-cache.md](docs/phase32-tex-cache.md).
 
 ```bat
 gradlew.bat lwjgl3:run

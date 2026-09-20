@@ -15,6 +15,7 @@ public final class SceneNode {
     public final Matrix4 world = new Matrix4();
     public final List<MeshInstance> meshes = new ArrayList<>();
     public boolean skipMeshes;
+    public boolean actor;
 
     public void addChild(SceneNode child) {
         child.parent = this;

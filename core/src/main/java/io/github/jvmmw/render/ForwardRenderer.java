@@ -104,6 +104,9 @@ public final class ForwardRenderer {
     private final Matrix4 reflectMat = new Matrix4();
     private final Matrix4 frustumInv = new Matrix4();
     private final BoundingBox cullBox = new BoundingBox();
+    private final Vector3 aabbMin = new Vector3();
+    private final Vector3 aabbMax = new Vector3();
+    private boolean waterRtt;
     private final int reflectFbo;
     private final int reflectColor;
     private final int reflectDepth;
@@ -266,6 +269,7 @@ public final class ForwardRenderer {
         boolean water = hasWater(root);
         boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
         if (water) {
+            waterRtt = true;
             if (profiler != null) {
                 profiler.setRtt(true);
                 profiler.begin(FrameProfiler.RTT_REFRACT);
@@ -280,6 +284,7 @@ public final class ForwardRenderer {
                 profiler.end(FrameProfiler.RTT_REFLECT);
                 profiler.setRtt(false);
             }
+            waterRtt = false;
         }
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
@@ -405,7 +410,8 @@ public final class ForwardRenderer {
         origView.set(cam.view);
         cam.combined.mul(reflectMat);
         cam.view.mul(reflectMat);
-        syncFrustum(cam);
+        // Keep the player frustum. Rebuilding it from the reflected combined
+        // inverts the clip planes, so every mesh fails the cull and only sky remains.
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
@@ -460,6 +466,9 @@ public final class ForwardRenderer {
     }
 
     private void drawNode(PerspectiveCamera cam, SceneNode node, int pass, CellLighting lighting, boolean reflection) {
+        if (reflection && node.actor) {
+            return;
+        }
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 MeshGpu mesh = inst.mesh;
@@ -470,7 +479,7 @@ public final class ForwardRenderer {
                 if (meshPass != pass) {
                     continue;
                 }
-                if (frustumCulled(cam, node, mesh)) {
+                if (frustumCulled(cam, node, mesh, reflection)) {
                     if (profiler != null) {
                         profiler.addCulled();
                     }
@@ -551,13 +560,48 @@ public final class ForwardRenderer {
         cam.frustum.update(frustumInv);
     }
 
-    private boolean frustumCulled(PerspectiveCamera cam, SceneNode node, MeshGpu mesh) {
+    private boolean frustumCulled(PerspectiveCamera cam, SceneNode node, MeshGpu mesh, boolean reflection) {
         if (mesh.localMin[0] > mesh.localMax[0]) {
             return false;
         }
         cullBox.inf();
         mesh.expandWorldAabb(node.world, cullBox);
-        return !cam.frustum.boundsInFrustum(cullBox);
+        boolean tiny = waterRtt && !mesh.terrainPass && rttFeatureCulled(cam);
+        if (reflection) {
+            reflectCullBoxOverWater();
+        }
+        if (!cam.frustum.boundsInFrustum(cullBox)) {
+            return true;
+        }
+        return tiny;
+    }
+
+    /** Mirror the world AABB over the water plane so it can be tested against the player frustum. */
+    private void reflectCullBoxOverWater() {
+        aabbMin.set(cullBox.min);
+        aabbMax.set(cullBox.max);
+        float minY = 2f * WaterMesh.HEIGHT - aabbMax.y;
+        float maxY = 2f * WaterMesh.HEIGHT - aabbMin.y;
+        aabbMin.y = minY;
+        aabbMax.y = maxY;
+        cullBox.set(aabbMin, aabbMax);
+    }
+
+    /** OpenMW water camera {@code small feature culling pixel size = 20} on the 512 RTT. */
+    private boolean rttFeatureCulled(PerspectiveCamera cam) {
+        cullBox.getCenter(meshCenter);
+        float dx = cullBox.max.x - cullBox.min.x;
+        float dy = cullBox.max.y - cullBox.min.y;
+        float dz = cullBox.max.z - cullBox.min.z;
+        float radius = 0.5f * (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+        meshCenter.mul(cam.view);
+        float dist = Math.abs(meshCenter.z);
+        if (dist <= radius) {
+            return false;
+        }
+        float pixels = radius * WaterMesh.RTT_SIZE
+            / (dist * 2f * (float) Math.tan(Math.toRadians(cam.fieldOfView) * 0.5f));
+        return pixels < WaterMesh.RTT_FEATURE_PIXELS;
     }
 
     private void drawWater(PerspectiveCamera cam, SceneNode root, CellLighting lighting, boolean underwater) {
@@ -1195,14 +1239,15 @@ public final class ForwardRenderer {
             float sunFade = length(u_ambientLight);
             float ior = (cameraPos.z > 0.0) ? (1.333 / 1.0) : (1.0 / 1.333);
             float fresnel = clamp(fresnel_dielectric(viewDir, normal, ior), 0.0, 1.0);
-            vec2 screenCoordsOffset = normal.xy * REFL_BUMP;
+            vec2 reflOffset = normal.xy * REFL_BUMP;
+            vec2 refrOffset = normal.xy * REFR_BUMP;
             float surfaceDepth = abs(v_viewZ);
             float depthSample = logDepthToView(texture(u_refractionDepthMap, screenCoords).x);
             float realWaterDepth = depthSample - surfaceDepth;
-            float depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - screenCoordsOffset).x);
+            float depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - refrOffset).x);
             float waterDepthDistorted = max(depthSampleDistorted - surfaceDepth, 0.0);
-            screenCoordsOffset *= clamp(realWaterDepth / BUMP_SUPPRESS_DEPTH, 0.0, 1.0);
-            vec3 reflection = texture(u_reflectionMap, screenCoords + screenCoordsOffset).rgb;
+            refrOffset *= clamp(realWaterDepth / BUMP_SUPPRESS_DEPTH, 0.0, 1.0);
+            vec3 reflection = texture(u_reflectionMap, screenCoords + reflOffset).rgb;
             vec3 waterColor = WATER_COLOR * sunFade;
             const float SPEC_MAGIC = 1.55;
             vec3 specNormal = normalize(vec3(normal.x * SPEC_BUMPINESS, normal.y * SPEC_BUMPINESS, normal.z));
@@ -1211,12 +1256,12 @@ public final class ForwardRenderer {
             float specular = pow(atan(phongTerm * SPEC_MAGIC), SPEC_HARDNESS) * SPEC_BRIGHTNESS;
             specular = clamp(specular, 0.0, 1.0) * min(1.0, u_sunVis / SUN_SPEC_FADING_THRESHOLD);
             if (cameraPos.z > 0.0 && realWaterDepth <= VISIBILITY_DEPTH && waterDepthDistorted > VISIBILITY_DEPTH) {
-                screenCoordsOffset = vec2(0.0);
+                refrOffset = vec2(0.0);
             }
-            depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - screenCoordsOffset).x);
+            depthSampleDistorted = logDepthToView(texture(u_refractionDepthMap, screenCoords - refrOffset).x);
             waterDepthDistorted = max(depthSampleDistorted - surfaceDepth, 0.0);
             waterDepthDistorted = mix(waterDepthDistorted, realWaterDepth, min(surfaceDepth / REFR_FOG_DISTORT_DISTANCE, 1.0));
-            vec3 refraction = texture(u_refractionMap, screenCoords - screenCoordsOffset).rgb;
+            vec3 refraction = texture(u_refractionMap, screenCoords - refrOffset).rgb;
             if (cameraPos.z < 0.0) {
                 refraction = clamp(refraction * 1.5, 0.0, 1.0);
             } else {
