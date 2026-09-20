@@ -35,6 +35,10 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+
+import io.github.jvmmw.debug.FrameProfiler;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmObject;
@@ -76,6 +80,8 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Label hourLabel;
     private Slider hourSlider;
     private TextButton playClock;
+    private TextButton dumpButton;
+    private float dumpCopiedLeft;
     private boolean settingHour;
     private Table loader;
     private Image loaderImage;
@@ -85,6 +91,10 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Label walkTileCaption;
     private ProgressBar[][] walkBars;
     private float walkHudHold;
+    private Label perfLabel;
+    private Table perfHud;
+    private final FrameProfiler profiler = new FrameProfiler();
+    private boolean perfHudOn = true;
     private float yaw = START_YAW;
     private float pitch = START_PITCH;
     private float moveScale = 180f;
@@ -131,6 +141,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         camera.near = 1f;
         camera.far = 8000f;
         renderer = new ForwardRenderer();
+        renderer.profiler = profiler;
         buildUi();
         requestLoad(EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y, false);
         InputAdapter look = new InputAdapter() {
@@ -146,6 +157,13 @@ public final class JvmMwApp extends ApplicationAdapter {
                 }
                 if (keycode == Input.Keys.F3) {
                     debugSnapshot();
+                    return true;
+                }
+                if (keycode == Input.Keys.F4) {
+                    perfHudOn = !perfHudOn;
+                    if (perfHud != null) {
+                        perfHud.setVisible(perfHudOn);
+                    }
                     return true;
                 }
                 if (keycode == Input.Keys.E) {
@@ -490,12 +508,15 @@ public final class JvmMwApp extends ApplicationAdapter {
         int gen = walkGen.incrementAndGet();
         walkReady = null;
         walkParseError = null;
+        profiler.resetWalk();
         Gdx.app.log("JVM-MW", "walk recenter (" + loadedCell.gridX + "," + loadedCell.gridY
             + ") -> (" + gx + "," + gy + ")");
         Thread worker = new Thread(() -> {
             try {
+                long parseStart = System.nanoTime();
                 EsmFile.LoadedCell cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
                 if (gen == walkGen.get()) {
+                    profiler.setWalkParseNs(System.nanoTime() - parseStart);
                     walkReadyGen = gen;
                     walkReady = cell;
                 }
@@ -546,9 +567,11 @@ public final class JvmMwApp extends ApplicationAdapter {
             EsmFile.LoadedCell cell = walkReady;
             walkReady = null;
             try {
+                long gpuStart = System.nanoTime();
                 walkBuilder = new CellSceneBuilder();
                 walkBuilder.takenKeys = takenKeys;
                 walkBuilder.begin(cell);
+                profiler.addWalkGpuNs(System.nanoTime() - gpuStart);
                 walkIncoming = cell;
                 walkStepping = true;
                 applyExteriorCycle(walkBuilder.lighting);
@@ -568,10 +591,15 @@ public final class JvmMwApp extends ApplicationAdapter {
             return;
         }
         try {
-            if (!walkBuilder.step(12_000_000L)) {
+            long stepStart = System.nanoTime();
+            boolean done = walkBuilder.step(12_000_000L);
+            profiler.addWalkGpuNs(System.nanoTime() - stepStart);
+            if (!done) {
                 return;
             }
+            long swapStart = System.nanoTime();
             SceneNode nextRoot = walkBuilder.end();
+            profiler.addWalkGpuNs(System.nanoTime() - swapStart);
             CellSceneBuilder old = cellBuilder;
             cellBuilder = walkBuilder;
             root = nextRoot;
@@ -589,6 +617,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             if (old != null) {
                 old.dispose();
             }
+            profiler.setWalkSwapNs(System.nanoTime() - swapStart);
             walkHudHold = 0.45f;
             startPendingWalk();
         } catch (Exception e) {
@@ -851,12 +880,12 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 29", skin);
+        Window win = new Window("JVM-MW Phase 30", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, E activate, scroll dolly, [ ] hour, F3 dump.", skin))
+        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
@@ -868,7 +897,15 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
         win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
         win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
-        win.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y)).row();
+        win.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y));
+        dumpButton = new TextButton("Dump", skin);
+        dumpButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                debugSnapshot();
+            }
+        });
+        win.add(dumpButton).row();
         hourLabel = new Label(hourText(), skin);
         win.add(hourLabel).width(80);
         hourSlider = new Slider(0f, 24f, 0.05f, false, skin);
@@ -935,6 +972,14 @@ public final class JvmMwApp extends ApplicationAdapter {
         walkTiles.add(grid);
         walkTiles.setVisible(false);
         stage.addActor(walkTiles);
+
+        perfLabel = new Label("", skin);
+        perfHud = new Table();
+        perfHud.setFillParent(true);
+        perfHud.top().right().pad(12);
+        perfHud.setTouchable(Touchable.disabled);
+        perfHud.add(perfLabel).right();
+        stage.addActor(perfHud);
     }
 
     private TextButton meshButton(String label, String vfs) {
@@ -979,8 +1024,11 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     @Override
     public void render() {
+        profiler.beginFrame();
         pumpLoad();
+        profiler.begin(FrameProfiler.WALK_STEP);
         pumpWalkLoad();
+        profiler.end(FrameProfiler.WALK_STEP);
         handleCamera();
         maybeRecenterGrid();
         camera.viewportWidth = Gdx.graphics.getWidth();
@@ -997,7 +1045,9 @@ public final class JvmMwApp extends ApplicationAdapter {
         if (mood != null) {
             applyExteriorCycle(mood);
             mood.updateFlicker(Gdx.graphics.getDeltaTime());
+            profiler.begin(FrameProfiler.UPDATE);
             cellBuilder.update(Gdx.graphics.getDeltaTime());
+            profiler.end(FrameProfiler.UPDATE);
             Gdx.gl.glClearColor(mood.fogColor[0], mood.fogColor[1], mood.fogColor[2], 1f);
         } else {
             Gdx.gl.glClearColor(0.08f, 0.09f, 0.12f, 1f);
@@ -1008,8 +1058,19 @@ public final class JvmMwApp extends ApplicationAdapter {
         }
         lastGlError = Gdx.gl.glGetError();
         ForwardRenderer.resetForScene2d();
+        profiler.begin(FrameProfiler.HUD);
         updateLoader();
         updateWalkTiles();
+        fillSceneCounts();
+        if (dumpCopiedLeft > 0f) {
+            dumpCopiedLeft -= Gdx.graphics.getDeltaTime();
+            if (dumpCopiedLeft <= 0f && dumpButton != null) {
+                dumpButton.setText("Dump");
+            }
+        }
+        if (perfLabel != null && perfHudOn) {
+            perfLabel.setText(profiler.hudText());
+        }
         if (status != null) {
             String err = lastError.isEmpty() ? "" : " err=" + lastError;
             String shortName = currentVfs.isEmpty() ? "?" : currentVfs.substring(currentVfs.lastIndexOf('/') + 1);
@@ -1021,11 +1082,14 @@ public final class JvmMwApp extends ApplicationAdapter {
                     + "+" + cellBuilder.skippedEmpty + "+" + cellBuilder.skippedActor
                     + "+" + cellBuilder.skippedNif;
             }
+            String fps = String.format(java.util.Locale.US, " fps=%.0f", profiler.fps);
             status.setText(isLoading() ? loaderCaption.replace('\n', ' ')
-                : shortName + "  glError=" + lastGlError + extra + walkStatus() + err);
+                : shortName + "  glError=" + lastGlError + extra + walkStatus() + fps + err);
         }
         stage.act(Gdx.graphics.getDeltaTime());
         stage.draw();
+        profiler.end(FrameProfiler.HUD);
+        profiler.endFrame();
         if (isLoading()) {
             return;
         }
@@ -1063,22 +1127,24 @@ public final class JvmMwApp extends ApplicationAdapter {
             + (lastError.isEmpty() ? "" : " err=" + lastError));
     }
 
-    private void debugSnapshot() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("cell=").append(currentVfs).append('\n');
-        sb.append("gl=(").append(eye.x).append(',').append(eye.y).append(',').append(eye.z).append(") yaw=")
+    private final StringBuilder snapshotBuf = new StringBuilder(1024);
+
+    private String snapshotText() {
+        snapshotBuf.setLength(0);
+        snapshotBuf.append("cell=").append(currentVfs).append('\n');
+        snapshotBuf.append("gl=(").append(eye.x).append(',').append(eye.y).append(',').append(eye.z).append(") yaw=")
             .append(yaw).append(" pitch=").append(pitch).append('\n');
         if (cellBuilder != null) {
             float tesX = eye.x;
             float tesY = -eye.z;
             float tesZ = eye.y - EYE_HEIGHT;
-            sb.append("tes=(").append(tesX).append(',').append(tesY).append(',').append(tesZ).append(") eyeHeight=")
-                .append(EYE_HEIGHT).append('\n');
+            snapshotBuf.append("tes=(").append(tesX).append(',').append(tesY).append(',').append(tesZ)
+                .append(") eyeHeight=").append(EYE_HEIGHT).append('\n');
             if (loadedCell != null && !loadedCell.interior) {
-                sb.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
+                snapshotBuf.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
             }
             CellLighting fog = cellBuilder.lighting;
-            sb.append("fogDensity=").append(fog.fogDensity)
+            snapshotBuf.append("fogDensity=").append(fog.fogDensity)
                 .append(" fogStart=").append(fog.fogStart)
                 .append(" fogEnd=").append(fog.fogEnd)
                 .append(" fogEnabled=").append(fog.fogEnabled)
@@ -1086,20 +1152,62 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(" lights=").append(fog.lights.size())
                 .append(" hour=").append(renderer.cycle.hour).append('\n');
             if (loadedCell != null && loadedCell.hasSpawn) {
-                sb.append("spawn inbound tes=(").append(loadedCell.spawnPos[0]).append(',')
+                snapshotBuf.append("spawn inbound tes=(").append(loadedCell.spawnPos[0]).append(',')
                     .append(loadedCell.spawnPos[1]).append(',').append(loadedCell.spawnPos[2]).append(")\n");
             }
         }
-        sb.append("glError=").append(lastGlError).append('\n');
-        String text = sb.toString();
-        Gdx.app.log("JVM-MW", "F3\n" + text.trim());
+        snapshotBuf.append("glError=").append(lastGlError).append('\n');
+        profiler.appendDump(snapshotBuf);
+        return snapshotBuf.toString();
+    }
+
+    private void writeSnapshotFile(String text) {
         try {
             Path out = Path.of("build/debug-snapshot.txt");
             Files.createDirectories(out.getParent());
             Files.writeString(out, text);
         } catch (Exception e) {
-            Gdx.app.error("JVM-MW", "F3 write failed", e);
+            Gdx.app.error("JVM-MW", "snapshot write failed", e);
         }
+    }
+
+    private static void copySnapshot(String text) {
+        try {
+            Gdx.app.getClipboard().setContents(text);
+        } catch (Exception e) {
+            try {
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+            } catch (Exception e2) {
+                Gdx.app.error("JVM-MW", "snapshot clipboard failed", e2);
+            }
+        }
+    }
+
+    private void debugSnapshot() {
+        String text = snapshotText();
+        Gdx.app.log("JVM-MW", "F3\n" + text.trim());
+        copySnapshot(text);
+        writeSnapshotFile(text);
+        if (dumpButton != null) {
+            dumpButton.setText("Copied");
+            dumpCopiedLeft = 1.5f;
+        }
+    }
+
+    private void fillSceneCounts() {
+        profiler.meshes = countMeshes(root);
+        if (cellBuilder != null) {
+            profiler.placed = cellBuilder.placed;
+            profiler.npc = cellBuilder.placedNpc;
+            profiler.crea = cellBuilder.placedCrea;
+            profiler.lights = cellBuilder.lighting.lights.size();
+        } else {
+            profiler.placed = 0;
+            profiler.npc = 0;
+            profiler.crea = 0;
+            profiler.lights = 0;
+        }
+        profiler.landTiles = loadedCell != null && !loadedCell.interior ? loadedCell.tiles.size() : 0;
     }
 
     private static int countMeshes(SceneNode node) {

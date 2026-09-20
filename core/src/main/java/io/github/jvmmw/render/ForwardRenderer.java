@@ -10,6 +10,8 @@ import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.BufferUtils;
 
+import io.github.jvmmw.debug.FrameProfiler;
+
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.Arrays;
@@ -93,6 +95,7 @@ public final class ForwardRenderer {
     private SkyClouds clouds;
     private SkyStars stars;
     public final ClearCycle cycle = new ClearCycle();
+    public FrameProfiler profiler;
     private final Matrix4 skyView = new Matrix4();
     private final Matrix4 skyCombined = new Matrix4();
     private final Matrix4 origCombined = new Matrix4();
@@ -260,8 +263,20 @@ public final class ForwardRenderer {
         boolean water = hasWater(root);
         boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
         if (water) {
+            if (profiler != null) {
+                profiler.setRtt(true);
+                profiler.begin(FrameProfiler.RTT_REFRACT);
+            }
             renderRefraction(cam, root, lighting);
+            if (profiler != null) {
+                profiler.end(FrameProfiler.RTT_REFRACT);
+                profiler.begin(FrameProfiler.RTT_REFLECT);
+            }
             renderReflection(cam, root, lighting);
+            if (profiler != null) {
+                profiler.end(FrameProfiler.RTT_REFLECT);
+                profiler.setRtt(false);
+            }
         }
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
@@ -270,7 +285,13 @@ public final class ForwardRenderer {
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
         Gdx.gl.glCullFace(GL20.GL_BACK);
         if (water || (lighting != null && lighting.exterior)) {
+            if (profiler != null) {
+                profiler.begin(FrameProfiler.SKY);
+            }
             drawSky(cam, false);
+            if (profiler != null) {
+                profiler.end(FrameProfiler.SKY);
+            }
         }
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
@@ -282,16 +303,38 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform1i(uGlow, 3);
         Gdx.gl.glUniform1i(uBlendMap, 4);
         Gdx.gl.glUniform1f(uCameraFar, cam.far);
+        if (profiler != null) {
+            profiler.begin(FrameProfiler.TERRAIN);
+        }
         drawNode(cam, root, 1, lighting, false);
+        if (profiler != null) {
+            profiler.end(FrameProfiler.TERRAIN);
+            profiler.begin(FrameProfiler.OPAQUE);
+        }
         drawNode(cam, root, 0, lighting, false);
+        if (profiler != null) {
+            profiler.end(FrameProfiler.OPAQUE);
+        }
         if (water) {
+            if (profiler != null) {
+                profiler.begin(FrameProfiler.WATER);
+            }
             drawWater(cam, root, lighting, underwater);
+            if (profiler != null) {
+                profiler.end(FrameProfiler.WATER);
+            }
         }
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
         Gdx.gl.glUniform4f(uClipPlane, 0f, 0f, 0f, 1f);
         bindLighting(lighting, false, underwater);
+        if (profiler != null) {
+            profiler.begin(FrameProfiler.ALPHA);
+        }
         drawNode(cam, root, 2, lighting, false);
+        if (profiler != null) {
+            profiler.end(FrameProfiler.ALPHA);
+        }
         Gdx.gl.glDisable(GL20.GL_POLYGON_OFFSET_FILL);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
         Gdx.gl.glUseProgram(0);
@@ -482,6 +525,9 @@ public final class ForwardRenderer {
                 }
                 Gdx.gl30.glBindVertexArray(mesh.vao);
                 Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
+                if (profiler != null) {
+                    profiler.addDraw(pass, mesh.indexCount);
+                }
             }
         }
         for (SceneNode child : node.children) {
@@ -546,11 +592,11 @@ public final class ForwardRenderer {
                 if (!mesh.waterShader) {
                     continue;
                 }
-                mvp.set(cam.combined).mul(node.world);
-                upload(uWaterMvp, mvp);
-                upload(uWaterModel, node.world);
                 Gdx.gl30.glBindVertexArray(mesh.vao);
                 Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
+                if (profiler != null) {
+                    profiler.addDraw(-1, mesh.indexCount);
+                }
             }
         }
         for (SceneNode child : node.children) {

@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 29 (current)
+## Phase 30 (current)
 
-Walking an exterior recenters a 5×5-minus-corners grid in the background: look and WASD stay live, then the new cells swap in. A small per-tile bar grid in the corner shows parse/land/refs so the swap is easy to catch. See [docs/phase29-bg-grid.md](docs/phase29-bg-grid.md). Phase 28 walk-recenter: [docs/phase28-walk-grid.md](docs/phase28-walk-grid.md).
+Town shows an fps overlay (F4) and F3 writes `fps=` / `ms.update=` / draw counts so later speed work has numbers. Phase 29 walk-grid stays. See [docs/phase30-perf-debug.md](docs/phase30-perf-debug.md). Phase 29 background grid: [docs/phase29-bg-grid.md](docs/phase29-bg-grid.md).
 
 ```bat
 gradlew.bat lwjgl3:run

@@ -73,7 +73,8 @@ public final class DebugCli {
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
 
-            Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
+            Viewer: HUD Dump or F3 copies camera/fog/perf to the clipboard and writes build/debug-snapshot.txt.
+            F4 toggles the fps overlay. Wait for overlay n=60 before treating fps as settled. Headless CLI has no fps.
             E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
             Empty-DNAM dest loads a 5x5-minus-corners around that exterior grid. HUD Town loads exterior (-2, -9).
             """;
