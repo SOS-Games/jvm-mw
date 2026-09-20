@@ -29,7 +29,8 @@ import java.util.TreeMap;
  * NPCs, and creatures. Wilderness spawn markers are leveled lists — we
  * roll a creature at chargen level and stand it there. Actors with a wander
  * radius shuffle around that spawn. Walking outdoors builds the next grid
- * in the background, then swaps it in.
+ * in the background, then swaps it in. F5 shows the cell’s pathgrid as
+ * spheres and lines.
  *
  * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
  * north) stay out.
@@ -56,6 +57,7 @@ public final class CellSceneBuilder {
     public Set<String> takenKeys = new HashSet<>();
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
+    private final PathgridDebug pathgridDebug = new PathgridDebug();
 
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
     private EsmFile.LoadedCell cell;
@@ -96,6 +98,7 @@ public final class CellSceneBuilder {
         containers.clear();
         items.clear();
         pendingCol.clear();
+        pathgridDebug.dispose();
         collision.clear();
         lighting.lights.clear();
         lighting.resetTime();
@@ -141,12 +144,13 @@ public final class CellSceneBuilder {
                 return false;
             }
         }
-        Matrix4 id = new Matrix4();
-        buildingRoot.updateWorld(id);
-        finishLights();
         List<LandRecord> lands = cell.interior || cell.land == null ? List.of()
             : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
         collision.bake(lands, pendingCol);
+        pathgridDebug.attach(buildingRoot, cell);
+        Matrix4 id = new Matrix4();
+        buildingRoot.updateWorld(id);
+        finishLights();
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
             + " npc=" + placedNpc + " crea=" + placedCrea + " levc=" + placedLevc + " levcNone=" + skippedLevcNone
             + " byRec=" + byRec + " empty=" + skippedEmpty
@@ -482,6 +486,7 @@ public final class CellSceneBuilder {
     }
 
     public void dispose() {
+        pathgridDebug.dispose();
         landMesh.dispose();
         waterMesh.dispose();
         mannequin.dispose();

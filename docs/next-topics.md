@@ -10,7 +10,7 @@ These match what the viewer already is (walk Town, look, Dump) and were explicit
 
 | Topic | Why |
 | --- | --- |
-| **Keep overlapping tiles** | Walk still rebuilds land and the scene graph for cells you already have. Textures/static NIFs intern; live tiles do not. Biggest remaining swap hitch. |
+| **Keep overlapping tiles** | Walk still rebuilds land and the scene graph for cells you already have. Textures/static NIFs intern; live tiles do not. Biggest remaining swap hitch. Prerequisite for [distant land](distant-land.md). |
 | **Moons** | Night is stars only. Masser and Secunda. |
 | **Sunglare** | Midday sun disc is there; OpenMW glare/flash is not. |
 | **One extra weather** | Clear only. Overcast or rain on the existing hour slider would test weather without a full climate system. |

@@ -75,6 +75,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/aipackage.hpp` | `ESM::AIWander` / `AI_W` | `EsmNpc` / `EsmCreature` wander distance | same |
 | `apps/openmw/mwmechanics/aiwander.cpp` | `wanderNearStart` / `getRandomPointAround` | `NpcMannequin` slide near spawn | rewrite |
 | `apps/openmw/mwmechanics/steering.cpp` | `zTurn` / `getAngularVelocity` | wander yaw toward dest | rewrite |
+| `components/esm3/loadpgrd.hpp` | `ESM::Pathgrid` / `REC_PGRD` | `esm.EsmPathgrid` | same |
+| `Store<ESM::Pathgrid>::load` key | bind by interior name vs grid XY | rewrite |
+| `components/sceneutil/pathgridutil.cpp` | `createPathgridGeometry` | `render.PathgridDebug` spheres + lines, F5 | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` | viewer **E** + `DoorSwing` pick | rewrite |
 | `apps/openmw/mwworld/actiondoor.cpp` | `ActionDoor` | `DoorSwing.activateDoor` | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `activateDoor` / `rotateDoor` / `processDoors` | `render.DoorSwing` | rewrite |

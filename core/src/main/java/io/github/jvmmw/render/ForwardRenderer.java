@@ -527,6 +527,9 @@ public final class ForwardRenderer {
             // OpenMW reflection detail 2: sky + land + statics, not NPCs or creatures.
             return;
         }
+        if (node.debugDraw && (!PathgridDebug.visible || reflection || waterRtt)) {
+            return;
+        }
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 MeshGpu mesh = inst.mesh;
@@ -605,7 +608,7 @@ public final class ForwardRenderer {
                     Gdx.gl.glDisable(GL20.GL_POLYGON_OFFSET_FILL);
                 }
                 Gdx.gl30.glBindVertexArray(mesh.vao);
-                Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
+                Gdx.gl.glDrawElements(mesh.primitive, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
                 if (profiler != null) {
                     profiler.addDraw(pass, mesh.indexCount);
                 }

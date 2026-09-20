@@ -165,6 +165,10 @@ public final class EsmReader {
         return v;
     }
 
+    public int getU32() {
+        return getI32();
+    }
+
     public float getF32() {
         float v = buf.getFloat();
         leftSub -= 4;

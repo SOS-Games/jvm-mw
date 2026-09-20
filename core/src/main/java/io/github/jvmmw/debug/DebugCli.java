@@ -6,6 +6,7 @@ import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmLevc;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
+import io.github.jvmmw.esm.EsmPathgrid;
 import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.nif.NifFile;
@@ -29,7 +30,8 @@ import java.util.Random;
  *
  * nif — a door or wall that looks offset. cell / spawn — fog and where you
  * arrive. exterior — the 21-cell walk grid. npc / crea / levc / kf — how a
- * person, creature, or wilderness spawn list is put together.
+ * person, creature, or wilderness spawn list is put together. pgrd — that
+ * cell’s walk-graph nodes.
  */
 public final class DebugCli {
     private DebugCli() {
@@ -50,6 +52,7 @@ public final class DebugCli {
             case "levc" -> levc(require(args, 1, "levc <id>"));
             case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
             case "exterior" -> exterior(require(args, 1, "exterior <gridX> <gridY>"));
+            case "pgrd" -> pgrd(require(args, 1, "pgrd <interior name> | <gridX> <gridY>"));
             default -> {
                 System.err.println("Unknown command: " + args[0]);
                 System.out.print(help());
@@ -72,10 +75,12 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="levc ex_bittercoast_lev+0"
             gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
             gradlew.bat :core:debugCli --args="exterior -2 -9"
+            gradlew.bat :core:debugCli --args="pgrd -2 -9"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
             cell       One interior: fog, spawn, doors, NPCs. Kit STAT lines include world AABB.
                        Then seam meet/gap/islands: whether cave hull triangles actually touch.
+                       Header includes pgrd=N e=M.
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander distance.
@@ -83,7 +88,8 @@ public final class DebugCli {
             levc       One creature leveled list: flags, chance-none, level/id rows.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
-                       crea= hardcoded, levc=/levcNone= a dry roll at player level 1.
+                       crea= hardcoded, levc=/levcNone= a dry roll at player level 1. Each grid= has pgrd=.
+            pgrd       One cell's pathgrid nodes and edges. Interior name or exterior grid.
 
             Viewer: HUD Dump or F3 copies camera/fog/perf to the clipboard and writes build/debug-snapshot.txt.
             F4 toggles the fps overlay. Wait for overlay n=60 before treating fps as settled. Headless CLI has no fps.
@@ -125,7 +131,8 @@ public final class DebugCli {
                 + " refs=" + tile.refs
                 + " land=" + (int) tile.land.minHeight + ".." + (int) tile.land.maxHeight
                 + " vtex=" + tile.land.uniqueVtex()
-                + " layers=" + LandMesh.layerCount(tile.land, cell.lands, cell.landTextures));
+                + " layers=" + LandMesh.layerCount(tile.land, cell.lands, cell.landTextures)
+                + " " + pgrdCounts(tile.pathgrid));
         }
         System.out.println("cell=" + cell.name
             + " grid=(" + cell.gridX + "," + cell.gridY + ")"
@@ -195,7 +202,8 @@ public final class DebugCli {
             + " refs=" + cell.refs.size()
             + " fogDensity=" + cell.fogDensity
             + " fogStart=" + (int) fogStart
-            + " fogEnd=" + (int) CellLighting.VIEW_DISTANCE);
+            + " fogEnd=" + (int) CellLighting.VIEW_DISTANCE
+            + " " + pgrdCounts(cell.pathgrid));
         if (cell.hasSpawn) {
             System.out.println("spawn inbound tes=" + xyz(cell.spawnPos)
                 + " heading=" + cell.spawnRot[2]);
@@ -400,6 +408,52 @@ public final class DebugCli {
         System.out.println("cell=" + hit.name
             + " spawn inbound tes=" + xyz(hit.spawnPos)
             + " rot=" + xyz(hit.spawnRot));
+    }
+
+    private static void pgrd(String spec) throws Exception {
+        String[] parts = spec.trim().split("[,\\s]+");
+        EsmFile.LoadedCell cell;
+        EsmPathgrid grid;
+        if (parts.length >= 2 && isInt(parts[0]) && isInt(parts[1])) {
+            int gx = Integer.parseInt(parts[0]);
+            int gy = Integer.parseInt(parts[1]);
+            cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+            grid = EsmPathgrid.NONE;
+            for (EsmFile.GridTile tile : cell.tiles) {
+                if (tile.gridX == gx && tile.gridY == gy) {
+                    grid = tile.pathgrid;
+                    break;
+                }
+            }
+        } else {
+            cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), spec);
+            grid = cell.pathgrid;
+        }
+        System.out.println("cell=" + cell.name
+            + " grid=(" + grid.gridX + "," + grid.gridY + ")"
+            + " interior=" + cell.interior
+            + " " + pgrdCounts(grid));
+        for (int i = 0; i < grid.points.size(); i++) {
+            EsmPathgrid.Point p = grid.points.get(i);
+            System.out.println("node=" + i + " tes=" + p.x + " " + p.y + " " + p.z
+                + " conn=" + p.connections);
+        }
+        for (EsmPathgrid.Edge e : grid.edges) {
+            System.out.println("edge=" + e.v0 + " " + e.v1);
+        }
+    }
+
+    private static String pgrdCounts(EsmPathgrid grid) {
+        return "pgrd=" + grid.points.size() + " e=" + grid.edges.size();
+    }
+
+    private static boolean isInt(String s) {
+        try {
+            Integer.parseInt(s);
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private static String containerKf(String model) {

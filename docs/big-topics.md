@@ -1,6 +1,6 @@
 # Big topics
 
-Large holes. **Do not spec these as a small phase.** Small slices live in [next-topics.md](next-topics.md).
+Large holes. **Do not spec these as a small phase.** Small slices live in [next-topics.md](next-topics.md). A breakdown of a hole (work order, not a phase) may live as a linked doc; split **one** row into next-topics before writing Java.
 
 OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is sun glare and rain. Rows here are missing from the viewer, not a promise they exist in the pin.
 
@@ -10,7 +10,7 @@ OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is 
 | --- | --- |
 | **Occlusion** | Frustum + small-feature only. Docks behind a hill still draw. Not OpenMW’s default; a real occluder pass is its own project. |
 | **Shadows** | No shadow maps. Town is flat-lit. |
-| **Distant land / object paging** | Fog + 5×5 grid only. No far terrain or batched distant STAT. |
+| **Distant land / object paging** | Fog + 5×5 grid only. Work order: [distant-land.md](distant-land.md). |
 | **Grass / groundcover** | No `grass` / groundcover paging. |
 | **GPU skinning** | CPU reskin per actor. `ModelBatch` stays forbidden. |
 | **Postprocessing** | No OpenMW shader chain (AA, AO, etc.). |
@@ -24,8 +24,8 @@ OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is 
 | --- | --- |
 | **Combat** | No hit, health, or weapon groups. |
 | **Dialogue / journal** | NPCs are mannequins. No talk, topics, or journal. |
-| **AI packages** | Follow, travel, duration, idle2–9. Cheap XY wander is [phase 38](phase38-cheap-wander.md); walkforward is [phase 39](phase39-walk-cycle.md). |
-| **Navmesh** | No pathfinding. Pathgrid (`PGRD`) lives here too. |
+| **AI packages** | Follow, travel, duration, idle2–9. Cheap XY wander is [phase 38](phase38-cheap-wander.md); walkforward is [phase 39](phase39-walk-cycle.md). Pathgrid follow is [nav-paths.md](nav-paths.md) (3). |
+| **Navmesh** | No pathfinding. Pathgrid (`PGRD`) plus Detour. Work order: [nav-paths.md](nav-paths.md). |
 | **Saves** | No `.ess` / OpenMW save. |
 | **Plugins / Lua / MWScript** | Extra data folders only. No ESP load-order UI, no Lua, no script VM. |
 | **Full physics** | Stay-on-land is a small slice. No actor collision, projectiles, or Havok-like sim. |
@@ -45,4 +45,4 @@ OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is 
 | **Inventory / magic / stats sheets** | Take unparents a mesh. No paper doll. |
 | **Sound / music** | libGDX audio is available; no region music, FX, or voice. |
 
-When a topic is split into a small slice and that slice ships, add the small row to [next-topics.md](next-topics.md) and leave the rest here.
+When a topic is split into a small slice and that slice ships, check it off on the breakdown if there is one, add the small row to [next-topics.md](next-topics.md) only if more of that slice remains, and leave the rest here.
