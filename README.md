@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 25 (current)
+## Phase 26 (current)
 
-Exteriors draw a camera-relative Clear-day atmosphere and scrolling clouds. Water still uses reflection + refraction and underwater fog. See [docs/phase25-sky-clouds.md](docs/phase25-sky-clouds.md). Phase 24 atmosphere: [docs/phase24-sky-atmosphere.md](docs/phase24-sky-atmosphere.md).
+Exteriors draw a camera-relative Clear-day atmosphere, scrolling clouds, and a midday sun disc. Water still uses reflection + refraction and underwater fog. See [docs/phase26-sky-sun.md](docs/phase26-sky-sun.md). Phase 25 clouds: [docs/phase25-sky-clouds.md](docs/phase25-sky-clouds.md).
 
 ```bat
 gradlew.bat lwjgl3:run

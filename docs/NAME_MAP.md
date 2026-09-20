@@ -103,6 +103,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwrender/skyutil.cpp` | `CloudUpdater` | `SkyClouds` tex / emission / UV timer | rewrite |
 | `files/shaders/compatibility/sky.frag` | `paintClouds` | `ForwardRenderer` sky pass 2 | rewrite |
 | `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Clouds | `MeshGpu.applyCloudsVertexAlpha` | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `CelestialBody` / `Sun` | `render.SkySun` camera-relative quad | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `createTexturedQuad` | `SkySun` 1×1 × 450 at 1000 | rewrite |
+| `files/shaders/compatibility/sky.frag` | `paintSun` | `ForwardRenderer` sky pass 4 | rewrite |
+| `apps/openmw/mwrender/renderingmanager.cpp` | `setSunDirection` midday | freeze TES3 `(0,-75,400)` | rewrite |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |

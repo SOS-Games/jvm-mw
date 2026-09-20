@@ -88,6 +88,7 @@ public final class ForwardRenderer {
     private final int uSkyFog;
     private final int uSkyScroll;
     private SkyAtmosphere sky;
+    private SkySun sun;
     private SkyClouds clouds;
     private final Matrix4 skyView = new Matrix4();
     private final Matrix4 skyCombined = new Matrix4();
@@ -212,6 +213,16 @@ public final class ForwardRenderer {
             if (clouds != null) {
                 clouds.dispose();
                 clouds = null;
+            }
+        }
+        try {
+            sun = new SkySun();
+            sun.load();
+        } catch (Exception e) {
+            Gdx.app.error("ForwardRenderer", "sky sun", e);
+            if (sun != null) {
+                sun.dispose();
+                sun = null;
             }
         }
     }
@@ -537,7 +548,10 @@ public final class ForwardRenderer {
     }
 
     private void drawSky(PerspectiveCamera cam, boolean reflection) {
-        if ((sky == null || sky.root == null) && (clouds == null || clouds.root == null)) {
+        boolean haveSky = sky != null && sky.root != null;
+        boolean haveClouds = clouds != null && clouds.root != null;
+        boolean haveSun = !reflection && sun != null && sun.root != null;
+        if (!haveSky && !haveClouds && !haveSun) {
             return;
         }
         skyView.set(cam.view);
@@ -555,13 +569,18 @@ public final class ForwardRenderer {
         Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
         Gdx.gl.glDepthMask(false);
         Gdx.gl.glDisable(GL20.GL_CULL_FACE);
-        if (sky != null && sky.root != null) {
+        if (haveSky) {
             Gdx.gl.glUniform1i(uSkyPass, 0);
             Gdx.gl.glUniform3f(uSkyEmission, SkyAtmosphere.CLEAR_DAY[0], SkyAtmosphere.CLEAR_DAY[1],
                 SkyAtmosphere.CLEAR_DAY[2]);
             drawSkyNode(sky.root, reflection);
         }
-        if (clouds != null && clouds.root != null) {
+        if (haveSun) {
+            Gdx.gl.glUniform1i(uSkyPass, SkySun.PASS);
+            Gdx.gl.glUniform1f(uSkyOpacity, 1f);
+            drawSkyNode(sun.root, reflection);
+        }
+        if (haveClouds) {
             Gdx.gl.glUniform1i(uSkyPass, SkyClouds.PASS);
             Gdx.gl.glUniform3f(uSkyEmission, SkyClouds.EMISSION[0], SkyClouds.EMISSION[1], SkyClouds.EMISSION[2]);
             Gdx.gl.glUniform3f(uSkyFog, SkyClouds.CLEAR_FOG[0], SkyClouds.CLEAR_FOG[1], SkyClouds.CLEAR_FOG[2]);
@@ -582,7 +601,7 @@ public final class ForwardRenderer {
                 if (!mesh.skyShader) {
                     continue;
                 }
-                if (mesh.skyPass == SkyClouds.PASS) {
+                if (mesh.skyPass == SkyClouds.PASS || mesh.skyPass == SkySun.PASS) {
                     bindUnit(GL20.GL_TEXTURE0, mesh.baseTex, mesh.baseWrapS, mesh.baseWrapT);
                 }
                 mvp.set(skyCombined).mul(node.world);
@@ -674,6 +693,10 @@ public final class ForwardRenderer {
         if (sky != null) {
             sky.dispose();
             sky = null;
+        }
+        if (sun != null) {
+            sun.dispose();
+            sun = null;
         }
         if (clouds != null) {
             clouds.dispose();
@@ -1142,6 +1165,9 @@ public final class ForwardRenderer {
             vec4 color;
             if (u_pass == 0) {
                 color = vec4(u_emission, v_alpha);
+            } else if (u_pass == 4) {
+                color = texture(u_diffuse, v_uv);
+                color.a *= u_opacity;
             } else {
                 color = texture(u_diffuse, v_uv);
                 color.a *= v_alpha * u_opacity;
