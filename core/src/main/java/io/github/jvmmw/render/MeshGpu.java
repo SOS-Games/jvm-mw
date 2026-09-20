@@ -66,6 +66,7 @@ public final class MeshGpu {
     public boolean cull = true;
     public boolean waterShader;
     public boolean skyShader;
+    public int skyPass;
 
     public int textureId;
 
@@ -139,6 +140,32 @@ public final class MeshGpu {
             scratch.put(o + 9, 0f);
             scratch.put(o + 10, 0f);
             scratch.put(o + 11, (i % 2) != 0 ? 0f : 1f);
+        }
+        scratch.position(0);
+        scratch.limit(n * STRIDE_FLOATS);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, vbo);
+        Gdx.gl.glBufferSubData(GL20.GL_ARRAY_BUFFER, 0, vertexBytes, scratch);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
+    }
+
+    /**
+     * OpenMW {@code ModVertexAlphaVisitor} Clouds: 65-vert cylinder, bottom row
+     * alpha 0, second row {@code 0.25098}, the rest 1.
+     */
+    public void applyCloudsVertexAlpha() {
+        int n = vertexBytes / (STRIDE_FLOATS * 4);
+        for (int i = 0; i < n; i++) {
+            float alpha = 1f;
+            if (i >= 49 && i <= 64) {
+                alpha = 0f;
+            } else if (i >= 33 && i <= 48) {
+                alpha = 0.25098f;
+            }
+            int o = i * STRIDE_FLOATS;
+            scratch.put(o + 8, 0f);
+            scratch.put(o + 9, 0f);
+            scratch.put(o + 10, 0f);
+            scratch.put(o + 11, alpha);
         }
         scratch.position(0);
         scratch.limit(n * STRIDE_FLOATS);

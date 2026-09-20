@@ -82,7 +82,13 @@ public final class ForwardRenderer {
     private final int uSkyView;
     private final int uSkyFar;
     private final int uSkyEmission;
+    private final int uSkyPass;
+    private final int uSkyDiffuse;
+    private final int uSkyOpacity;
+    private final int uSkyFog;
+    private final int uSkyScroll;
     private SkyAtmosphere sky;
+    private SkyClouds clouds;
     private final Matrix4 skyView = new Matrix4();
     private final Matrix4 skyCombined = new Matrix4();
     private final Matrix4 origCombined = new Matrix4();
@@ -183,6 +189,11 @@ public final class ForwardRenderer {
         uSkyView = Gdx.gl.glGetUniformLocation(skyProgram, "u_view");
         uSkyFar = Gdx.gl.glGetUniformLocation(skyProgram, "u_cameraFar");
         uSkyEmission = Gdx.gl.glGetUniformLocation(skyProgram, "u_emission");
+        uSkyPass = Gdx.gl.glGetUniformLocation(skyProgram, "u_pass");
+        uSkyDiffuse = Gdx.gl.glGetUniformLocation(skyProgram, "u_diffuse");
+        uSkyOpacity = Gdx.gl.glGetUniformLocation(skyProgram, "u_opacity");
+        uSkyFog = Gdx.gl.glGetUniformLocation(skyProgram, "u_fogColor");
+        uSkyScroll = Gdx.gl.glGetUniformLocation(skyProgram, "u_scroll");
         try {
             sky = new SkyAtmosphere();
             sky.load();
@@ -193,6 +204,16 @@ public final class ForwardRenderer {
                 sky = null;
             }
         }
+        try {
+            clouds = new SkyClouds();
+            clouds.load();
+        } catch (Exception e) {
+            Gdx.app.error("ForwardRenderer", "sky clouds", e);
+            if (clouds != null) {
+                clouds.dispose();
+                clouds = null;
+            }
+        }
     }
 
     public void render(PerspectiveCamera cam, SceneNode root) {
@@ -201,6 +222,9 @@ public final class ForwardRenderer {
 
     public void render(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         waterTime += Gdx.graphics.getDeltaTime();
+        if (clouds != null) {
+            clouds.update(Gdx.graphics.getDeltaTime());
+        }
         boolean water = hasWater(root);
         boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
         if (water) {
@@ -513,7 +537,7 @@ public final class ForwardRenderer {
     }
 
     private void drawSky(PerspectiveCamera cam, boolean reflection) {
-        if (sky == null || sky.root == null) {
+        if ((sky == null || sky.root == null) && (clouds == null || clouds.root == null)) {
             return;
         }
         skyView.set(cam.view);
@@ -524,15 +548,27 @@ public final class ForwardRenderer {
         Gdx.gl.glUseProgram(skyProgram);
         upload(uSkyView, skyView);
         Gdx.gl.glUniform1f(uSkyFar, cam.far);
-        Gdx.gl.glUniform3f(uSkyEmission, SkyAtmosphere.CLEAR_DAY[0], SkyAtmosphere.CLEAR_DAY[1],
-            SkyAtmosphere.CLEAR_DAY[2]);
+        Gdx.gl.glUniform1i(uSkyDiffuse, 0);
         Gdx.gl.glEnable(GL20.GL_BLEND);
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
         Gdx.gl.glDepthMask(false);
         Gdx.gl.glDisable(GL20.GL_CULL_FACE);
-        drawSkyNode(sky.root, reflection);
+        if (sky != null && sky.root != null) {
+            Gdx.gl.glUniform1i(uSkyPass, 0);
+            Gdx.gl.glUniform3f(uSkyEmission, SkyAtmosphere.CLEAR_DAY[0], SkyAtmosphere.CLEAR_DAY[1],
+                SkyAtmosphere.CLEAR_DAY[2]);
+            drawSkyNode(sky.root, reflection);
+        }
+        if (clouds != null && clouds.root != null) {
+            Gdx.gl.glUniform1i(uSkyPass, SkyClouds.PASS);
+            Gdx.gl.glUniform3f(uSkyEmission, SkyClouds.EMISSION[0], SkyClouds.EMISSION[1], SkyClouds.EMISSION[2]);
+            Gdx.gl.glUniform3f(uSkyFog, SkyClouds.CLEAR_FOG[0], SkyClouds.CLEAR_FOG[1], SkyClouds.CLEAR_FOG[2]);
+            Gdx.gl.glUniform1f(uSkyOpacity, 1f);
+            Gdx.gl.glUniform1f(uSkyScroll, clouds.timer);
+            drawSkyNode(clouds.root, reflection);
+        }
         Gdx.gl.glDisable(GL20.GL_BLEND);
         Gdx.gl.glDepthMask(true);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
@@ -545,6 +581,9 @@ public final class ForwardRenderer {
                 MeshGpu mesh = inst.mesh;
                 if (!mesh.skyShader) {
                     continue;
+                }
+                if (mesh.skyPass == SkyClouds.PASS) {
+                    bindUnit(GL20.GL_TEXTURE0, mesh.baseTex, mesh.baseWrapS, mesh.baseWrapT);
                 }
                 mvp.set(skyCombined).mul(node.world);
                 upload(uSkyMvp, mvp);
@@ -635,6 +674,10 @@ public final class ForwardRenderer {
         if (sky != null) {
             sky.dispose();
             sky = null;
+        }
+        if (clouds != null) {
+            clouds.dispose();
+            clouds = null;
         }
         Gdx.gl.glDeleteProgram(program);
         Gdx.gl.glDeleteProgram(waterProgram);
@@ -1061,14 +1104,22 @@ public final class ForwardRenderer {
     private static final String SKY_VERT = """
         #version 330
         layout(location = 0) in vec3 a_pos;
+        layout(location = 2) in vec2 a_uv;
         layout(location = 3) in vec4 a_color;
         uniform mat4 u_mvp;
         uniform mat4 u_model;
         uniform mat4 u_view;
+        uniform int u_pass;
+        uniform float u_scroll;
         out float v_viewZ;
         out float v_alpha;
+        out vec2 v_uv;
         void main() {
             v_alpha = a_color.a;
+            v_uv = a_uv;
+            if (u_pass == 2) {
+                v_uv.y += u_scroll;
+            }
             vec4 world = u_model * vec4(a_pos, 1.0);
             v_viewZ = (u_view * world).z;
             gl_Position = u_mvp * vec4(a_pos, 1.0);
@@ -1079,11 +1130,25 @@ public final class ForwardRenderer {
         #version 330
         in float v_viewZ;
         in float v_alpha;
+        in vec2 v_uv;
         uniform vec3 u_emission;
+        uniform vec3 u_fogColor;
         uniform float u_cameraFar;
+        uniform float u_opacity;
+        uniform int u_pass;
+        uniform sampler2D u_diffuse;
         out vec4 frag;
         void main() {
-            frag = vec4(u_emission, v_alpha);
+            vec4 color;
+            if (u_pass == 0) {
+                color = vec4(u_emission, v_alpha);
+            } else {
+                color = texture(u_diffuse, v_uv);
+                color.a *= v_alpha * u_opacity;
+                color.xyz = clamp(color.xyz * u_emission, 0.0, 1.0);
+                color = mix(vec4(u_fogColor, color.a), color, v_alpha);
+            }
+            frag = color;
             gl_FragDepth = clamp(
                 log2(max(1e-6, 1.0 + abs(v_viewZ))) / log2(max(u_cameraFar, 1.0) + 1.0),
                 0.0, 1.0);

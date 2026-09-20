@@ -99,6 +99,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwrender/skyutil.cpp` | `CameraRelativeTransform` | zero view translation when drawing sky | rewrite |
 | `files/shaders/compatibility/sky.frag` | `paintAtmosphere` | `ForwardRenderer` sky emission × vertex alpha | rewrite |
 | `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Atmosphere | `MeshGpu.applyAtmosphereVertexAlpha` | rewrite |
+| `apps/openmw/mwrender/sky.cpp` | `SkyManager::create` clouds | `render.SkyClouds` camera-relative nif | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `CloudUpdater` | `SkyClouds` tex / emission / UV timer | rewrite |
+| `files/shaders/compatibility/sky.frag` | `paintClouds` | `ForwardRenderer` sky pass 2 | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Clouds | `MeshGpu.applyCloudsVertexAlpha` | rewrite |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |
