@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 26 (current)
+## Phase 27 (current)
 
-Exteriors draw a camera-relative Clear-day atmosphere, scrolling clouds, and a midday sun disc. Water still uses reflection + refraction and underwater fog. See [docs/phase26-sky-sun.md](docs/phase26-sky-sun.md). Phase 25 clouds: [docs/phase25-sky-clouds.md](docs/phase25-sky-clouds.md).
+Exteriors have a Clear day/night clock: HUD slider, **[ ]**, and Play. Sky, sun, stars, and land lighting follow the hour. See [docs/phase27-day-night.md](docs/phase27-day-night.md). Phase 26 sun: [docs/phase26-sky-sun.md](docs/phase26-sky-sun.md).
 
 ```bat
 gradlew.bat lwjgl3:run

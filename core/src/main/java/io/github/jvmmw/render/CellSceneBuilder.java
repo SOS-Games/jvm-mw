@@ -80,6 +80,7 @@ public final class CellSceneBuilder {
         items.clear();
         lighting.lights.clear();
         lighting.resetTime();
+        lighting.exterior = !cell.interior;
         System.arraycopy(cell.ambient, 0, lighting.ambient, 0, 3);
         System.arraycopy(cell.sunlight, 0, lighting.sunDiffuse, 0, 3);
         if (cell.interior) {

@@ -67,6 +67,7 @@ public final class ForwardRenderer {
     private final int uWaterCamTes;
     private final int uWaterSunDir;
     private final int uWaterSunDiffuse;
+    private final int uWaterSunVis;
     private final int uWaterAmbient;
     private final int uWaterFar;
     private final int uWaterScreen;
@@ -90,6 +91,8 @@ public final class ForwardRenderer {
     private SkyAtmosphere sky;
     private SkySun sun;
     private SkyClouds clouds;
+    private SkyStars stars;
+    public final ClearCycle cycle = new ClearCycle();
     private final Matrix4 skyView = new Matrix4();
     private final Matrix4 skyCombined = new Matrix4();
     private final Matrix4 origCombined = new Matrix4();
@@ -161,6 +164,7 @@ public final class ForwardRenderer {
         uWaterCamTes = Gdx.gl.glGetUniformLocation(waterProgram, "u_cameraTes");
         uWaterSunDir = Gdx.gl.glGetUniformLocation(waterProgram, "u_sunDirTes");
         uWaterSunDiffuse = Gdx.gl.glGetUniformLocation(waterProgram, "u_sunDiffuse");
+        uWaterSunVis = Gdx.gl.glGetUniformLocation(waterProgram, "u_sunVis");
         uWaterAmbient = Gdx.gl.glGetUniformLocation(waterProgram, "u_ambientLight");
         uWaterFar = Gdx.gl.glGetUniformLocation(waterProgram, "u_cameraFar");
         uWaterScreen = Gdx.gl.glGetUniformLocation(waterProgram, "u_screenRes");
@@ -225,6 +229,16 @@ public final class ForwardRenderer {
                 sun = null;
             }
         }
+        try {
+            stars = new SkyStars();
+            stars.load();
+        } catch (Exception e) {
+            Gdx.app.error("ForwardRenderer", "sky stars", e);
+            if (stars != null) {
+                stars.dispose();
+                stars = null;
+            }
+        }
     }
 
     public void render(PerspectiveCamera cam, SceneNode root) {
@@ -233,8 +247,15 @@ public final class ForwardRenderer {
 
     public void render(PerspectiveCamera cam, SceneNode root, CellLighting lighting) {
         waterTime += Gdx.graphics.getDeltaTime();
+        cycle.evaluate();
+        if (lighting != null && lighting.exterior) {
+            cycle.applyLighting(lighting);
+        }
+        if (sun != null) {
+            sun.placeTes(cycle.sunPosTes[0], cycle.sunPosTes[1], cycle.sunPosTes[2]);
+        }
         if (clouds != null) {
-            clouds.update(Gdx.graphics.getDeltaTime());
+            clouds.setFromHour(cycle.hour);
         }
         boolean water = hasWater(root);
         boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
@@ -476,10 +497,12 @@ public final class ForwardRenderer {
         if (lighting == null) {
             Gdx.gl.glUniform3f(uWaterSunDir, 0.35f, -0.45f, 0.8f);
             Gdx.gl.glUniform3f(uWaterSunDiffuse, 1f, 1f, 1f);
+            Gdx.gl.glUniform1f(uWaterSunVis, 1f);
             Gdx.gl.glUniform3f(uWaterAmbient, 0.35f, 0.35f, 0.35f);
         } else {
             Gdx.gl.glUniform3f(uWaterSunDir, lighting.sunDir[0], -lighting.sunDir[2], lighting.sunDir[1]);
             Gdx.gl.glUniform3f(uWaterSunDiffuse, lighting.sunDiffuse[0], lighting.sunDiffuse[1], lighting.sunDiffuse[2]);
+            Gdx.gl.glUniform1f(uWaterSunVis, lighting.exterior ? cycle.sunVis : 1f);
             Gdx.gl.glUniform3f(uWaterAmbient, lighting.ambient[0], lighting.ambient[1], lighting.ambient[2]);
         }
         Gdx.gl.glUniform1f(uWaterFar, cam.far);
@@ -550,8 +573,9 @@ public final class ForwardRenderer {
     private void drawSky(PerspectiveCamera cam, boolean reflection) {
         boolean haveSky = sky != null && sky.root != null;
         boolean haveClouds = clouds != null && clouds.root != null;
-        boolean haveSun = !reflection && sun != null && sun.root != null;
-        if (!haveSky && !haveClouds && !haveSun) {
+        boolean haveSun = !reflection && sun != null && sun.root != null && cycle.sunAlpha > 0.01f;
+        boolean haveStars = stars != null && stars.root != null && cycle.night && cycle.nightFade > 0.01f;
+        if (!haveSky && !haveClouds && !haveSun && !haveStars) {
             return;
         }
         skyView.set(cam.view);
@@ -571,19 +595,23 @@ public final class ForwardRenderer {
         Gdx.gl.glDisable(GL20.GL_CULL_FACE);
         if (haveSky) {
             Gdx.gl.glUniform1i(uSkyPass, 0);
-            Gdx.gl.glUniform3f(uSkyEmission, SkyAtmosphere.CLEAR_DAY[0], SkyAtmosphere.CLEAR_DAY[1],
-                SkyAtmosphere.CLEAR_DAY[2]);
+            Gdx.gl.glUniform3f(uSkyEmission, cycle.sky[0], cycle.sky[1], cycle.sky[2]);
             drawSkyNode(sky.root, reflection);
+        }
+        if (haveStars) {
+            Gdx.gl.glUniform1i(uSkyPass, SkyStars.PASS);
+            Gdx.gl.glUniform1f(uSkyOpacity, cycle.nightFade);
+            drawSkyNode(stars.root, reflection);
         }
         if (haveSun) {
             Gdx.gl.glUniform1i(uSkyPass, SkySun.PASS);
-            Gdx.gl.glUniform1f(uSkyOpacity, 1f);
+            Gdx.gl.glUniform1f(uSkyOpacity, cycle.sunAlpha);
             drawSkyNode(sun.root, reflection);
         }
         if (haveClouds) {
             Gdx.gl.glUniform1i(uSkyPass, SkyClouds.PASS);
-            Gdx.gl.glUniform3f(uSkyEmission, SkyClouds.EMISSION[0], SkyClouds.EMISSION[1], SkyClouds.EMISSION[2]);
-            Gdx.gl.glUniform3f(uSkyFog, SkyClouds.CLEAR_FOG[0], SkyClouds.CLEAR_FOG[1], SkyClouds.CLEAR_FOG[2]);
+            Gdx.gl.glUniform3f(uSkyEmission, cycle.cloudEmission[0], cycle.cloudEmission[1], cycle.cloudEmission[2]);
+            Gdx.gl.glUniform3f(uSkyFog, cycle.fog[0], cycle.fog[1], cycle.fog[2]);
             Gdx.gl.glUniform1f(uSkyOpacity, 1f);
             Gdx.gl.glUniform1f(uSkyScroll, clouds.timer);
             drawSkyNode(clouds.root, reflection);
@@ -601,7 +629,8 @@ public final class ForwardRenderer {
                 if (!mesh.skyShader) {
                     continue;
                 }
-                if (mesh.skyPass == SkyClouds.PASS || mesh.skyPass == SkySun.PASS) {
+                if (mesh.skyPass == SkyClouds.PASS || mesh.skyPass == SkySun.PASS
+                    || mesh.skyPass == SkyStars.PASS) {
                     bindUnit(GL20.GL_TEXTURE0, mesh.baseTex, mesh.baseWrapS, mesh.baseWrapT);
                 }
                 mvp.set(skyCombined).mul(node.world);
@@ -697,6 +726,10 @@ public final class ForwardRenderer {
         if (sun != null) {
             sun.dispose();
             sun = null;
+        }
+        if (stars != null) {
+            stars.dispose();
+            stars = null;
         }
         if (clouds != null) {
             clouds.dispose();
@@ -1012,6 +1045,7 @@ public final class ForwardRenderer {
         uniform vec3 u_cameraTes;
         uniform vec3 u_sunDirTes;
         uniform vec3 u_sunDiffuse;
+        uniform float u_sunVis;
         uniform vec3 u_ambientLight;
         uniform float u_cameraFar;
         uniform vec2 u_screenRes;
@@ -1032,6 +1066,7 @@ public final class ForwardRenderer {
         const float SPEC_HARDNESS = 256.0;
         const float SPEC_BUMPINESS = 5.0;
         const float SPEC_BRIGHTNESS = 1.5;
+        const float SUN_SPEC_FADING_THRESHOLD = 0.15;
         const vec2 WIND_DIR = vec2(0.5, -0.8);
         const float WIND_SPEED = 0.2;
         const vec3 WATER_COLOR = vec3(0.090195, 0.115685, 0.12745);
@@ -1095,7 +1130,7 @@ public final class ForwardRenderer {
             vec3 viewReflectDir = reflect(viewDir, specNormal);
             float phongTerm = max(dot(viewReflectDir, sunWorldDir), 0.0);
             float specular = pow(atan(phongTerm * SPEC_MAGIC), SPEC_HARDNESS) * SPEC_BRIGHTNESS;
-            specular = clamp(specular, 0.0, 1.0);
+            specular = clamp(specular, 0.0, 1.0) * min(1.0, u_sunVis / SUN_SPEC_FADING_THRESHOLD);
             if (cameraPos.z > 0.0 && realWaterDepth <= VISIBILITY_DEPTH && waterDepthDistorted > VISIBILITY_DEPTH) {
                 screenCoordsOffset = vec2(0.0);
             }
@@ -1165,6 +1200,9 @@ public final class ForwardRenderer {
             vec4 color;
             if (u_pass == 0) {
                 color = vec4(u_emission, v_alpha);
+            } else if (u_pass == 1) {
+                color = texture(u_diffuse, v_uv);
+                color.a *= v_alpha * u_opacity;
             } else if (u_pass == 4) {
                 color = texture(u_diffuse, v_uv);
                 color.a *= u_opacity;

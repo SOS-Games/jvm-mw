@@ -22,7 +22,12 @@ public final class SkySun {
 
     private DdsTexture texture;
     private MeshGpu mesh;
+    private SceneNode body;
     public SceneNode root;
+    private final Vector3 dir = new Vector3();
+    private final Vector3 fromZ = new Vector3(0f, 0f, 1f);
+    private final Quaternion rot = new Quaternion();
+    private final Matrix4 ident = new Matrix4();
 
     public void load() throws Exception {
         String vfs = TexturePaths.correctTexturePath(TEXTURE, TestData::vfsExists);
@@ -40,27 +45,31 @@ public final class SkySun {
         root = new SceneNode();
         root.name = "sky-sun";
         root.local.setToRotation(1, 0, 0, -90);
-        SceneNode body = new SceneNode();
+        body = new SceneNode();
         body.name = "sun";
         body.meshes.add(new MeshInstance(mesh));
-        placeMidday(body.local);
+        placeTes(0f, -75f, 400f);
         root.addChild(body);
-        root.updateWorld(new Matrix4());
         Gdx.app.log("SkySun", "loaded " + vfs);
     }
 
-    /**
-     * Midday: weather orbit 0 → {@code sunDir (0, 75, -100)};
-     * {@code setSunDirection} → TES3 {@code (0, -75, 400)}.
-     */
-    private static void placeMidday(Matrix4 local) {
-        Vector3 dir = new Vector3(0f, -75f, 400f).nor();
-        Vector3 pos = new Vector3(dir).scl(DISTANCE);
-        Quaternion rot = new Quaternion().setFromCross(new Vector3(0f, 0f, 1f), dir);
-        local.idt();
-        local.translate(pos.x, pos.y, pos.z);
-        local.mul(new Matrix4().set(rot));
-        local.scale(SCALE, SCALE, SCALE);
+    /** {@code Sun::setDirection} in TES3, parent already has −90° X. */
+    public void placeTes(float x, float y, float z) {
+        if (body == null) {
+            return;
+        }
+        dir.set(x, y, z);
+        if (dir.len2() < 1e-8f) {
+            dir.set(0f, 0f, 1f);
+        } else {
+            dir.nor();
+        }
+        rot.setFromCross(fromZ, dir);
+        body.local.idt();
+        body.local.translate(dir.x * DISTANCE, dir.y * DISTANCE, dir.z * DISTANCE);
+        body.local.mul(ident.set(rot));
+        body.local.scale(SCALE, SCALE, SCALE);
+        root.updateWorld(ident.idt());
     }
 
     private static MeshGpu uploadQuad() {
@@ -97,5 +106,6 @@ public final class SkySun {
             texture = null;
         }
         root = null;
+        body = null;
     }
 }

@@ -44,10 +44,12 @@ public final class SkyClouds {
         Gdx.app.log("SkyClouds", "loaded " + MODEL + " tex=" + vfs);
     }
 
-    public void update(float dt) {
-        timer += dt * SPEED / 400f;
-        if (timer >= 4f) {
-            timer -= 4f;
+    /** UV offset from game hour so the HUD slider / Play / [ ] scrub the dome. One wrap per 24h. */
+    public void setFromHour(float hour) {
+        timer = hour * SPEED / 6f;
+        timer -= 4f * (float) Math.floor(timer / 4f);
+        if (timer < 0f) {
+            timer += 4f;
         }
     }
 

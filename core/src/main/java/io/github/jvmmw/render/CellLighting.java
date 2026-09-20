@@ -18,6 +18,7 @@ public final class CellLighting {
     public final float[] sunDiffuse = {1f, 1f, 1f};
     public final float[] sunDir = {0.35f, 0.8f, 0.45f};
     public final float[] fogColor = {0.08f, 0.09f, 0.12f};
+    public boolean exterior;
     public float fogDensity;
     public boolean fogEnabled;
     public float fogStart;

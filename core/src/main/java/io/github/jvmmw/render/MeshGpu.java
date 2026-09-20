@@ -174,6 +174,27 @@ public final class MeshGpu {
         Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
     }
 
+    /**
+     * OpenMW {@code ModVertexAlphaVisitor} Stars: keep vertices whose original
+     * colour.x is 1, fade the rest.
+     */
+    public void applyStarsVertexAlpha() {
+        int n = vertexBytes / (STRIDE_FLOATS * 4);
+        for (int i = 0; i < n; i++) {
+            int o = i * STRIDE_FLOATS;
+            float alpha = scratch.get(o + 8) == 1f ? 1f : 0f;
+            scratch.put(o + 8, 0f);
+            scratch.put(o + 9, 0f);
+            scratch.put(o + 10, 0f);
+            scratch.put(o + 11, alpha);
+        }
+        scratch.position(0);
+        scratch.limit(n * STRIDE_FLOATS);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, vbo);
+        Gdx.gl.glBufferSubData(GL20.GL_ARRAY_BUFFER, 0, vertexBytes, scratch);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
+    }
+
     public void updateVertices(float[] interleaved) {
         scratch.clear();
         scratch.put(interleaved).flip();

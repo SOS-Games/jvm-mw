@@ -21,11 +21,14 @@ import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
+import com.badlogic.gdx.scenes.scene2d.ui.Slider;
+import com.badlogic.gdx.scenes.scene2d.ui.Slider.SliderStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton.TextButtonStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Window;
 import com.badlogic.gdx.scenes.scene2d.ui.Window.WindowStyle;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
@@ -65,6 +68,10 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Stage stage;
     private Skin skin;
     private Label status;
+    private Label hourLabel;
+    private Slider hourSlider;
+    private TextButton playClock;
+    private boolean settingHour;
     private Table loader;
     private Image loaderImage;
     private Texture loaderTexture;
@@ -78,7 +85,6 @@ public final class JvmMwApp extends ApplicationAdapter {
     private final BoundingBox aabb = new BoundingBox();
     private String lastError = "";
     private int lastGlError;
-    private int hudClicks;
     private int framesOnMesh;
     private boolean dumpedFrame;
     private boolean autoCycling;
@@ -130,6 +136,16 @@ public final class JvmMwApp extends ApplicationAdapter {
                             }
                         }
                     }
+                    return true;
+                }
+                if (keycode == Input.Keys.LEFT_BRACKET) {
+                    stepHour(-(Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
+                        || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT) ? 2f : 0.25f));
+                    return true;
+                }
+                if (keycode == Input.Keys.RIGHT_BRACKET) {
+                    stepHour(Gdx.input.isKeyPressed(Input.Keys.SHIFT_LEFT)
+                        || Gdx.input.isKeyPressed(Input.Keys.SHIFT_RIGHT) ? 2f : 0.25f);
                     return true;
                 }
                 return false;
@@ -525,14 +541,28 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", tbs);
         WindowStyle ws = new WindowStyle(font, Color.WHITE, panel);
         skin.add("default", ws);
+        Pixmap barPm = new Pixmap(8, 6, Pixmap.Format.RGBA8888);
+        barPm.setColor(0.18f, 0.22f, 0.28f, 1f);
+        barPm.fill();
+        Texture barTex = new Texture(barPm);
+        barPm.dispose();
+        Pixmap knobPm = new Pixmap(10, 16, Pixmap.Format.RGBA8888);
+        knobPm.setColor(0.75f, 0.82f, 0.9f, 1f);
+        knobPm.fill();
+        Texture knobTex = new Texture(knobPm);
+        knobPm.dispose();
+        SliderStyle sls = new SliderStyle();
+        sls.background = new TextureRegionDrawable(barTex);
+        sls.knob = new TextureRegionDrawable(knobTex);
+        skin.add("default-horizontal", sls);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 26", skin);
+        Window win = new Window("JVM-MW Phase 27", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, E activate, scroll dolly, F3 dump.", skin))
+        win.add(new Label("WASD walk, mouse look (click lock, Esc unlock), Space/Ctrl up-down, E activate, scroll dolly, [ ] hour, F3 dump.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
@@ -545,14 +575,34 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
         win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
         win.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y)).row();
-        TextButton click = new TextButton("Click me", skin);
-        click.addListener(new ClickListener() {
+        hourLabel = new Label(hourText(), skin);
+        win.add(hourLabel).width(80);
+        hourSlider = new Slider(0f, 24f, 0.05f, false, skin);
+        hourSlider.setValue(renderer.cycle.hour);
+        hourSlider.addListener(new ChangeListener() {
             @Override
-            public void clicked(InputEvent event, float x, float y) {
-                hudClicks++;
+            public void changed(ChangeEvent event, com.badlogic.gdx.scenes.scene2d.Actor actor) {
+                if (settingHour) {
+                    return;
+                }
+                renderer.cycle.hour = hourSlider.getValue();
+                renderer.cycle.playing = false;
+                if (playClock != null) {
+                    playClock.setText("Play");
+                }
+                hourLabel.setText(hourText());
             }
         });
-        win.add(click).padTop(8).row();
+        win.add(hourSlider).width(250).padRight(6);
+        playClock = new TextButton("Play", skin);
+        playClock.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                renderer.cycle.playing = !renderer.cycle.playing;
+                playClock.setText(renderer.cycle.playing ? "Pause" : "Play");
+            }
+        });
+        win.add(playClock).row();
         win.pack();
         win.setPosition(12, Gdx.graphics.getHeight() - win.getHeight() - 12);
         stage.addActor(win);
@@ -578,6 +628,35 @@ public final class JvmMwApp extends ApplicationAdapter {
         return b;
     }
 
+    private void stepHour(float delta) {
+        renderer.cycle.playing = false;
+        if (playClock != null) {
+            playClock.setText("Play");
+        }
+        renderer.cycle.hour += delta;
+        renderer.cycle.wrapHour();
+        syncHourHud();
+    }
+
+    private String hourText() {
+        int h = (int) renderer.cycle.hour;
+        int m = (int) ((renderer.cycle.hour - h) * 60f);
+        return String.format("hour %02d:%02d", h, m);
+    }
+
+    private void syncHourHud() {
+        if (hourSlider == null || hourLabel == null) {
+            return;
+        }
+        settingHour = true;
+        hourSlider.setValue(renderer.cycle.hour);
+        settingHour = false;
+        hourLabel.setText(hourText());
+        if (playClock != null) {
+            playClock.setText(renderer.cycle.playing ? "Pause" : "Play");
+        }
+    }
+
     @Override
     public void render() {
         pumpLoad();
@@ -590,6 +669,8 @@ public final class JvmMwApp extends ApplicationAdapter {
         camera.update();
 
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        renderer.cycle.tick(Gdx.graphics.getDeltaTime());
+        syncHourHud();
         CellLighting mood = (cellBuilder != null && !isLoading()) ? cellBuilder.lighting : null;
         if (mood != null) {
             mood.updateFlicker(Gdx.graphics.getDeltaTime());
@@ -617,7 +698,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                     + "+" + cellBuilder.skippedNif;
             }
             status.setText(isLoading() ? loaderCaption.replace('\n', ' ')
-                : shortName + "  clicks=" + hudClicks + " glError=" + lastGlError + extra + err);
+                : shortName + "  glError=" + lastGlError + extra + err);
         }
         stage.act(Gdx.graphics.getDeltaTime());
         stage.draw();
@@ -675,7 +756,8 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(" fogEnd=").append(fog.fogEnd)
                 .append(" fogEnabled=").append(fog.fogEnabled)
                 .append(" underwater=").append(eye.y < WaterMesh.HEIGHT && loadedCell != null && !loadedCell.interior)
-                .append(" lights=").append(fog.lights.size()).append('\n');
+                .append(" lights=").append(fog.lights.size())
+                .append(" hour=").append(renderer.cycle.hour).append('\n');
             if (loadedCell != null && loadedCell.hasSpawn) {
                 sb.append("spawn inbound tes=(").append(loadedCell.spawnPos[0]).append(',')
                     .append(loadedCell.spawnPos[1]).append(',').append(loadedCell.spawnPos[2]).append(")\n");

@@ -93,6 +93,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `files/data/textures/omw/water_nm.png` | `water_nm.png` | `assets/textures/omw/water_nm.png` | same |
 | `apps/openmw/mwrender/water.cpp` | `Water::Refraction` | second Path B RTT, 512, clip keep below | rewrite |
 | `files/shaders/compatibility/water.frag` | `@waterRefraction` path | `ForwardRenderer` water mix refraction | rewrite |
+| `files/shaders/compatibility/water.frag` | `sunSpec.a` visibility | water specular × `ClearCycle.sunVis` | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `Water::isUnderwater` | camera TES3 z `<` −1 | rewrite |
 | `apps/openmw/mwrender/fogmanager.cpp` | underwater fog | exterior fog while submerged | rewrite |
 | `apps/openmw/mwrender/sky.cpp` | `SkyManager::create` atmosphere | `render.SkyAtmosphere` camera-relative nif | rewrite |
@@ -100,13 +101,17 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `files/shaders/compatibility/sky.frag` | `paintAtmosphere` | `ForwardRenderer` sky emission × vertex alpha | rewrite |
 | `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Atmosphere | `MeshGpu.applyAtmosphereVertexAlpha` | rewrite |
 | `apps/openmw/mwrender/sky.cpp` | `SkyManager::create` clouds | `render.SkyClouds` camera-relative nif | rewrite |
-| `apps/openmw/mwrender/skyutil.cpp` | `CloudUpdater` | `SkyClouds` tex / emission / UV timer | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `CloudUpdater` | `SkyClouds` tex / emission / UV from hour | rewrite |
 | `files/shaders/compatibility/sky.frag` | `paintClouds` | `ForwardRenderer` sky pass 2 | rewrite |
 | `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Clouds | `MeshGpu.applyCloudsVertexAlpha` | rewrite |
 | `apps/openmw/mwrender/skyutil.cpp` | `CelestialBody` / `Sun` | `render.SkySun` camera-relative quad | rewrite |
 | `apps/openmw/mwrender/skyutil.cpp` | `createTexturedQuad` | `SkySun` 1×1 × 450 at 1000 | rewrite |
 | `files/shaders/compatibility/sky.frag` | `paintSun` | `ForwardRenderer` sky pass 4 | rewrite |
 | `apps/openmw/mwrender/renderingmanager.cpp` | `setSunDirection` midday | freeze TES3 `(0,-75,400)` | rewrite |
+| `apps/openmw/mwworld/weather.cpp` | `TimeOfDayInterpolator` | `render.ClearCycle` | rewrite |
+| `apps/openmw/mwworld/weather.cpp` | sun orbit / `getSunPercentage` | `ClearCycle` hour → disc + light | rewrite |
+| `files/shaders/compatibility/sky.frag` | `paintAtmosphereNight` | `ForwardRenderer` sky pass 1 | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Stars | `MeshGpu.applyStarsVertexAlpha` | rewrite |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |
