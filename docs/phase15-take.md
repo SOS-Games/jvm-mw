@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/class.cpp` (`defaultItemActivate`), `apps/openmw
 
 ## Goal
 
-Same Path B viewer. Phase 14 VFS and container lids stay. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
+Same viewer. Phase 14 VFS and container lids stay. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
 
 **E on a world item (quill, ink, weapon, carryable candle) removes it from the cell.** No inventory window. The mesh unparents like `Objects::removeObject`. Doors, chests, and books keep their current activate path.
 

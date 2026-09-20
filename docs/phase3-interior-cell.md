@@ -6,7 +6,7 @@ Align with `components/esm3/loadcell.cpp`, `cellref.cpp`, `loadstat.cpp`, `compo
 
 ## Goal
 
-Same Path B viewer. Load **one named interior** from vanilla `Morrowind.esm` and draw its **STAT** references with Phase 2 materials. The room should look like OpenMW’s statics in that cell, not a single mesh on an empty backdrop.
+Same viewer. Load **one named interior** from vanilla `Morrowind.esm` and draw its **STAT** references with Phase 2 materials. The room should look like OpenMW’s statics in that cell, not a single mesh on an empty backdrop.
 
 Phase 1–2 HUD meshes still load from their buttons.
 

@@ -6,7 +6,7 @@ Align with `components/esmterrain/storage.cpp` (`getBlendmaps` TES3), `component
 
 ## Goal
 
-Same Path B viewer. Phase 19 `VTEX`/`LTEX` stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
+Same viewer. Phase 19 `VTEX`/`LTEX` stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
 
 **Land layers mix at square edges the OpenMW TES3 way: per-layer blendmaps (2× nearest) and alpha passes.** Hard 4×4 seams from Phase 19 go away. The 3×3 still does not recenter as you walk. No water or sky.
 
@@ -23,7 +23,7 @@ TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plu
 - Same 3×3 load as Phase 18/19. Same `LTEX` / `VTEX` / `_land_default.dds`.
 - Per land tile, `chunkSize = 1`: `blendmapSize = 16 * 1 + 1` (**17**). Sample this cell’s 16×16 `VTEX` plus the neighbor’s first row/col for the extra line (Phase 18 already loaded those lands). Unique texture ids → layers (`getTextureName` as Phase 19).
 - Each layer: `GL_ALPHA` image **34×34** (`17 * 2`). For each sample, write four 255s at `(2x, 2y)…(2x+1, 2y+1)`. If only one layer, skip blendmaps (draw that texture alone).
-- One Path B mesh **per layer** covering the whole 65×65 heightfield (not the Phase 19 per-square split). Diffuse UV tiles **16** times across the cell (`getTextureTileCount(1) = 16`). Blendmap UV: scale `16/17` about the center, then the vanilla nudge `(1/(16*4), -1/(16*4))`.
+- One mesh **per layer** covering the whole 65×65 heightfield (not the Phase 19 per-square split). Diffuse UV tiles **16** times across the cell (`getTextureTileCount(1) = 16`). Blendmap UV: scale `16/17` about the center, then the vanilla nudge `(1/(16*4), -1/(16*4))`.
 - Draw layers with blendmaps: first `SRC_ALPHA, ZERO` + depth `LEQUAL`; later `SRC_ALPHA, ONE` + depth `EQUAL`. Fragment alpha *= blendmap `.a`. Never `ModelBatch`.
 - Interiors unchanged. Fog still off on exteriors. No `VCLR`. No layer normal/specular maps.
 - Debug CLI `exterior -2 -9`: keep today’s `grid=` / `vtex=` / `ltex=` lines; add `layers=` unique-texture count per tile (same as vtex-resolved layers).

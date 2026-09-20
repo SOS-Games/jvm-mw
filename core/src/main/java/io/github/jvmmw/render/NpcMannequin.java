@@ -118,10 +118,8 @@ public final class NpcMannequin {
     private static final String XBASE = "meshes/xbase_anim.nif";
 
     private final Path testdata;
-    private final List<NifSceneBuilder> builders = new ArrayList<>();
-    private final Map<String, SceneNode> skeletonTemplates = new HashMap<>();
+    private final List<MeshGpu> ownedGpus = new ArrayList<>();
     private final Map<String, PartNif> parts = new HashMap<>();
-    private final Map<String, NifSceneBuilder> nifBuilders = new HashMap<>();
     private final Map<String, KfFile> kfs = new HashMap<>();
     private final List<NpcActor> actors = new ArrayList<>();
     private final Matrix4 id = new Matrix4();
@@ -136,12 +134,10 @@ public final class NpcMannequin {
     }
 
     public void dispose() {
-        for (NifSceneBuilder b : builders) {
-            b.dispose();
+        for (MeshGpu gpu : ownedGpus) {
+            gpu.dispose();
         }
-        builders.clear();
-        skeletonTemplates.clear();
-        nifBuilders.clear();
+        ownedGpus.clear();
         parts.clear();
         kfs.clear();
         actors.clear();
@@ -249,7 +245,7 @@ public final class NpcMannequin {
         Map<String, Matrix4> boneWorld = new HashMap<>();
         Map<String, SceneNode> boneNodes = new HashMap<>();
         collectBones(skeleton, boneWorld, boneNodes);
-        builder.copyCreatureGeometry(boneWorld, placed, skeleton);
+        builder.copyCreatureGeometry(boneWorld, placed, skeleton, ownedGpus);
         NpcActor actor = new NpcActor(placed, skeleton, boneNodes);
         collectSkins(placed, actor.skins);
         if (crea.bipedal()) {
@@ -419,7 +415,7 @@ public final class NpcMannequin {
         String filter = type == PRT_HAIR ? "hair" : bone;
         PartNif part = partNif(mesh);
         if (part.builder.isSkeleton()) {
-            part.builder.copyMatchingSkinned(filter, boneWorld, actor);
+            part.builder.copyMatchingSkinned(filter, boneWorld, actor, ownedGpus);
             return;
         }
         SceneNode attach = boneNodes.get(bone.toLowerCase(Locale.ROOT));
@@ -632,14 +628,7 @@ public final class NpcMannequin {
     }
 
     private SceneNode skeleton(String vfs) throws Exception {
-        SceneNode template = skeletonTemplates.get(vfs);
-        if (template != null) {
-            return template;
-        }
-        NifSceneBuilder builder = loadNif(vfs);
-        template = builder.buildBones();
-        skeletonTemplates.put(vfs, template);
-        return template;
+        return GpuCache.boneTemplate(vfs);
     }
 
     private PartNif partNif(String vfs) throws Exception {
@@ -647,23 +636,14 @@ public final class NpcMannequin {
         if (cached != null) {
             return cached;
         }
-        NifSceneBuilder builder = loadNif(vfs);
-        PartNif part = new PartNif(builder, builder.isSkeleton() ? null : builder.build(false));
+        NifSceneBuilder builder = GpuCache.nif(vfs);
+        PartNif part = new PartNif(builder, builder.isSkeleton() ? null : GpuCache.meshTemplate(vfs));
         parts.put(vfs, part);
         return part;
     }
 
     private NifSceneBuilder loadNif(String vfs) throws Exception {
-        NifSceneBuilder cached = nifBuilders.get(vfs);
-        if (cached != null) {
-            return cached;
-        }
-        Path nifPath = TestData.ensureNif(vfs);
-        NifFile nif = NifFile.parse(Files.readAllBytes(nifPath), vfs);
-        NifSceneBuilder builder = new NifSceneBuilder(nif, testdata, TestData::vfsExists);
-        builders.add(builder);
-        nifBuilders.put(vfs, builder);
-        return builder;
+        return GpuCache.nif(vfs);
     }
 
     private static void collectBones(SceneNode node, Map<String, Matrix4> world, Map<String, SceneNode> nodes) {

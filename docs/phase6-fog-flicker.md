@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/fogmanager.cpp` (`configure`), `files/shaders/c
 
 ## Goal
 
-Same Path B viewer, same Census office. Phase 5 lights are static. This phase makes candles **breathe** (flicker/pulse from `LHDT` flags) and applies the cell’s **AMBI fog** so distance falls into Morrowind haze instead of a hard grey clear color.
+Same viewer, same Census office. Phase 5 lights are static. This phase makes candles **breathe** (flicker/pulse from `LHDT` flags) and applies the cell’s **AMBI fog** so distance falls into Morrowind haze instead of a hard grey clear color.
 
 Chair / other HUD meshes stay unfogged and unflickered (not a cell).
 

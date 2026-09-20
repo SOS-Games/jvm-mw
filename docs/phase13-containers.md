@@ -6,7 +6,7 @@ Align with `apps/openmw/mwclass/container.cpp` (`useAnim`, `insertObjectRenderin
 
 ## Goal
 
-Same Path B viewer. Phase 12 interior teleport stays. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
+Same viewer. Phase 12 interior teleport stays. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
 
 **E on a container runs OpenMW `onOpen`.** If the mesh has a `"containeropen"` kf group, that clip plays once (lid lifts). Vanilla `Morrowind.bsa` has no container `x*.kf`, so Census `stolen_goods` (`Contain_Com_Chest_02`) stays still — OpenMW would then `pushGuiMode(GM_Container)`; this port skips the loot window. Baskets and sacks with no that group stay still.
 

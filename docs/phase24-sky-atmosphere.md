@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/sky.cpp` (`SkyManager` ctor / `create` / `setWe
 
 ## Goal
 
-Same Path B viewer. Phase 23 refraction water stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 23 refraction water stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Exteriors get OpenMW’s day atmosphere dome** (`meshes/sky_atmosphere.nif`), camera-relative, Clear-day sky colour, drawn before the world and into the water reflection. Looking up from the docks is blue, not empty clear-color. Clouds, sun, moons, stars, weather, and rain stay out.
 
@@ -20,7 +20,7 @@ Smallest sky: that day atmosphere on Town. Skip weather clocks.
 
 TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plugins. **Do not commit** `sky_atmosphere.nif` (Bethesda); load it through VFS/`testdata/` like other meshes.
 
-- Load `Settings::models().mSkyatmosphere` default **`meshes/sky_atmosphere.nif`**. Instance under a camera-relative root, **not** the cell root’s world translation. `CameraRelativeTransform` (RELATIVE_RF) zeros the modelview translation so children sit at the eye. Path B: when drawing sky, use the current view with translation zeroed (also after the reflection view multiply). Keep the nif’s TES3 Z-up via the same −90° X as the cell, or equivalent. Never `ModelBatch`.
+- Load `Settings::models().mSkyatmosphere` default **`meshes/sky_atmosphere.nif`**. Instance under a camera-relative root, **not** the cell root’s world translation. `CameraRelativeTransform` (RELATIVE_RF) zeros the modelview translation so children sit at the eye. When drawing sky, use the current view with translation zeroed (also after the reflection view multiply). Keep the nif’s TES3 Z-up via the same −90° X as the cell, or equivalent. Never `ModelBatch`.
 - Draw sky **first** (`RenderBin_Sky = -1`): blend on, **depth write off**, fog off, clip plane off (OpenMW turns `GL_CLIP_PLANE0` off so the water clip does not slice the dome). Then terrain / objects / water as now.
 - Atmosphere shader (`pass == PASS_ATMOSPHERE` which is **0**): `paintAtmosphere` sets `color = gl_FrontMaterial.emission` and `color.a *= passColor.a`. Unlit. `AtmosphereUpdater` sets emission to the sky colour.
 - No weather yet: freeze **Clear day** `Weather_Clear_Sky_Day_Color` **095,135,203** (each / 255).
@@ -76,7 +76,7 @@ Pin: `openmw-0.51.0` (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
 | OpenMW | Java | Status |
 | --- | --- | --- |
-| `SkyManager::create` atmosphere | Path B sky nif, camera-relative | rewrite |
+| `SkyManager::create` atmosphere | sky nif, camera-relative | rewrite |
 | `CameraRelativeTransform` | zero view translation when drawing sky | rewrite |
 | `sky.frag` `paintAtmosphere` | sky pass, emission × vertex alpha | rewrite |
 | `ModVertexAlphaVisitor` Atmosphere | cylinder even/odd alpha | rewrite |

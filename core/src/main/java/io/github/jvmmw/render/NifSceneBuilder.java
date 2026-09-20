@@ -17,17 +17,14 @@ import io.github.jvmmw.nif.NiZBufferProperty;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.nif.NifRecord;
 import io.github.jvmmw.resource.DdsTexture;
-import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.math.Matrix4;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -39,11 +36,12 @@ public final class NifSceneBuilder {
     private final NifFile nif;
     private final Path testdata;
     private final Predicate<String> exists;
-    private final Map<String, DdsTexture> textures = new HashMap<>();
     private final List<MeshGpu> gpus = new ArrayList<>();
+    private List<MeshGpu> instanceGpus;
     private int whiteTex;
     private boolean bonesOnly;
     private boolean hasMarkers;
+    boolean shared;
 
     public NifSceneBuilder(NifFile nif, Path testdata, Predicate<String> exists) {
         this.nif = nif;
@@ -94,8 +92,11 @@ public final class NifSceneBuilder {
         return false;
     }
 
-    public void copyMatchingSkinned(String filter, Map<String, Matrix4> boneWorld, SceneNode dest) {
+    public void copyMatchingSkinned(String filter, Map<String, Matrix4> boneWorld, SceneNode dest,
+        List<MeshGpu> owned) {
+        instanceGpus = owned;
         ensureWhite();
+        try {
         for (NifRecord rec : nif.records) {
             if (!(rec instanceof NiTriBasedGeom geom) || geom.skin < 0 || geom.skipMeshes || skipMwDrawable(geom.name)) {
                 continue;
@@ -114,14 +115,20 @@ public final class NifSceneBuilder {
             node.meshes.add(inst);
             dest.addChild(node);
         }
+        } finally {
+            instanceGpus = null;
+        }
     }
 
     /**
      * Creature NIF drawables onto an already-cloned bone tree. Skips names starting
      * {@code tri bip} ({@code SceneUtil::RemoveTriBipVisitor}).
      */
-    public void copyCreatureGeometry(Map<String, Matrix4> boneWorld, SceneNode dest, SceneNode skeleton) {
+    public void copyCreatureGeometry(Map<String, Matrix4> boneWorld, SceneNode dest, SceneNode skeleton,
+        List<MeshGpu> owned) {
+        instanceGpus = owned;
         ensureWhite();
+        try {
         for (NifRecord rec : nif.records) {
             if (!(rec instanceof NiTriBasedGeom geom) || geom.skipMeshes || skipMwDrawable(geom.name)) {
                 continue;
@@ -148,6 +155,9 @@ public final class NifSceneBuilder {
             }
             MeshGpu gpu = upload(data, path);
             host.meshes.add(new MeshInstance(gpu));
+        }
+        } finally {
+            instanceGpus = null;
         }
     }
 
@@ -206,14 +216,7 @@ public final class NifSceneBuilder {
             gpu.dispose();
         }
         gpus.clear();
-        for (DdsTexture t : textures.values()) {
-            t.dispose();
-        }
-        textures.clear();
-        if (whiteTex != 0) {
-            Gdx.gl.glDeleteTexture(whiteTex);
-            whiteTex = 0;
-        }
+        whiteTex = 0;
     }
 
     private SceneNode buildAv(NiAvObject av, boolean skip, List<NiAvObject> ancestors) {
@@ -246,7 +249,7 @@ public final class NifSceneBuilder {
     private MeshGpu upload(NiTriShapeData data, List<NiAvObject> path) {
         float[] interleaved = pack(data, data.vertices, data.normals);
         MeshGpu gpu = new MeshGpu(interleaved, data.triangles);
-        gpus.add(gpu);
+        trackGpu(gpu);
         flattenOnto(gpu, path, data.colors.length == data.numVertices * 4);
         return gpu;
     }
@@ -263,7 +266,7 @@ public final class NifSceneBuilder {
         }
         float[] interleaved = pack(data, verts, norms);
         MeshGpu gpu = new MeshGpu(interleaved, data.triangles, true);
-        gpus.add(gpu);
+        trackGpu(gpu);
         flattenOnto(gpu, path, data.colors.length == data.numVertices * 4);
         MeshInstance inst = new MeshInstance(gpu);
         inst.skinNif = nif;
@@ -481,27 +484,20 @@ public final class NifSceneBuilder {
         NifRecord src = nif.get(slot.source);
         if (src instanceof NiSourceTexture st && !st.file.isEmpty()) {
             String vfs = TexturePaths.correctTexturePath(st.file, exists);
-            Path resolved;
-            try {
-                resolved = TestData.openPath(vfs);
-            } catch (Exception e) {
-                resolved = testdata.resolve(vfs.replace('/', java.io.File.separatorChar));
-            }
-            final Path file = resolved;
-            try {
-                DdsTexture dds = textures.computeIfAbsent(vfs, k -> {
-                    try {
-                        return DdsTexture.load(file);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+            DdsTexture dds = GpuCache.texture(vfs);
+            if (dds != null) {
                 return dds.textureId;
-            } catch (Exception e) {
-                Gdx.app.error("NifSceneBuilder", "Texture failed: " + vfs + " " + e.getMessage());
             }
         }
         return whiteTex;
+    }
+
+    private void trackGpu(MeshGpu gpu) {
+        if (instanceGpus != null) {
+            instanceGpus.add(gpu);
+        } else {
+            gpus.add(gpu);
+        }
     }
 
     private static int wrapGl(boolean wrap) {
@@ -557,18 +553,6 @@ public final class NifSceneBuilder {
     }
 
     private void ensureWhite() {
-        if (whiteTex != 0) {
-            return;
-        }
-        whiteTex = Gdx.gl.glGenTexture();
-        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, whiteTex);
-        java.nio.ByteBuffer px = java.nio.ByteBuffer.allocateDirect(4);
-        px.put((byte) -1).put((byte) -1).put((byte) -1).put((byte) -1).flip();
-        Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL20.GL_RGBA, 1, 1, 0, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, px);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_NEAREST);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, GL20.GL_NEAREST);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_REPEAT);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_REPEAT);
-        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, 0);
+        whiteTex = GpuCache.whiteId();
     }
 }

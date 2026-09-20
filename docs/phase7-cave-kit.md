@@ -6,7 +6,7 @@ Align with `components/nif/niftypes.hpp` (`NiTransform::toMatrix`, `Matrix3::toO
 
 ## Goal
 
-Same Path B viewer. Phase 6 fog and flicker stay. **Addamasartus** (Cave button) should look like a Morrowind cave: rock modules meet, hide doors sit in their frames, fog only in the distance — not through holes in the walls.
+Same viewer. Phase 6 fog and flicker stay. **Addamasartus** (Cave button) should look like a Morrowind cave: rock modules meet, hide doors sit in their frames, fog only in the distance — not through holes in the walls.
 
 Census office (**Cell** button) must not regress. Chair HUD unchanged.
 

@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/water.cpp` (`Refraction` / `updateWaterMaterial
 
 ## Goal
 
-Same Path B viewer. Phase 22 reflection water stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 22 reflection water stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Exterior water gets OpenMW refraction (second RTT) and underwater fog.** From above, the harbor is a window onto the seafloor, not a blended sheet. Dive under −1 and the world goes murky; looking toward the surface shows the above-water scene in the water shader, not dry air. No rain ripples, sky, interior water, or walk-recenter.
 
@@ -26,7 +26,7 @@ TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plu
 - Refraction needs a **color texture and a depth texture** (depth is sampled; Phase 22’s reflection depth renderbuffer is not enough here). Bind `refractionMap` unit **2**, `refractionDepthMap` unit **3**.
 - Water shader **with** refraction: OpenMW turns **blend off**, default bin, **depth write on**. `gl_FragData[0] = mix(refraction, reflection, fresnel)` with **alpha 1**. `sampleRefractionMap(screenCoords - normal.xy * offset)` after bump suppress from linearized refraction depth (`BUMP_SUPPRESS_DEPTH` 300, `REFR_BUMP` 0.07, `VISIBILITY` 2500, `DEPTH_FADE` 0.15). If camera TES3 z `< 0`, `refraction = clamp(refraction * 1.5, 0, 1)`; else mix toward `WATER_COLOR` by the depth factor in `water.frag`. Log-depth from Phase 20 stays; invert it when emulating `linearizeDepth` so shore bump-suppress still works.
 - `@sunlightScattering` **off**, `@wobblyShores` **off** this slice. `rainIntensity = 0`.
-- Underwater fog when the camera is under the plane: `Water::isUnderwater` is `pos.z < mTop` (TES3 z; Path B: GL `cam.position.y < -1`) and water is enabled. Then use FogManager underwater start/end/color even on exteriors (land fog stays **off** above water).
+- Underwater fog when the camera is under the plane: `Water::isUnderwater` is `pos.z < mTop` (TES3 z; GL `cam.position.y < -1`) and water is enabled. Then use FogManager underwater start/end/color even on exteriors (land fog stays **off** above water).
   - Color: `Water_UnderwaterColor` **(12, 30, 37) / 255** mixed with the cell fog color by `Water_UnderwaterColorWeight` **0.85**.
   - Range (no distant fog): `start = min(viewDistance, 7168) * (1 - underwaterFog)`, `end = min(viewDistance, 7168)`, `viewDistance` 7168. No weather yet: use **day** `Water_UnderwaterDayFog` **2.5** (not sunrise/sunset/night).
   - Apply that fog to the object shader **and** the water shader while underwater. Interiors still have no water, so a Town dive is the check; **Cell** / **Cave** / **Guild** stay as they are (interior fog unchanged).
@@ -82,7 +82,7 @@ Pin: `openmw-0.51.0` (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
 | OpenMW | Java | Status |
 | --- | --- | --- |
-| `Water::Refraction` | second Path B RTT, 512, clip keep below | rewrite |
+| `Water::Refraction` | second RTT, 512, clip keep below | rewrite |
 | `water.frag` `@waterRefraction` | water fragment mix refraction | rewrite |
 | `Water::isUnderwater` | camera TES3 z `<` −1 | rewrite |
 | `FogManager` underwater | exterior fog while submerged | rewrite |

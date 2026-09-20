@@ -6,7 +6,7 @@ Align with `apps/openmw/mwclass/creature.cpp` (`insertObjectRendering`, `getMode
 
 ## Goal
 
-Same Path B viewer. Phase 9 NPC idle stays. **Cell** (Census) and **Cave** (Addamasartus) must not regress — those interiors almost never place `CREA` (they use `LEVC` or none), so this phase adds a third HUD button.
+Same viewer. Phase 9 NPC idle stays. **Cell** (Census) and **Cave** (Addamasartus) must not regress — those interiors almost never place `CREA` (they use `LEVC` or none), so this phase adds a third HUD button.
 
 **Punsabanit**: five placed `nix-hound` refs on the moldcave kit. They should stand in the `idle` loop (not T-pose, not a static NIF). Census people still breathe. Addamasartus smugglers still breathe. Chair HUD unfogged.
 

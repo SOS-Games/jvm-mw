@@ -6,7 +6,7 @@ Align with `components/esm3/landrecorddata.hpp` (`mTextures` / `sLandTextureSize
 
 ## Goal
 
-Same Path B viewer. Phase 18 3×3 grey land stays as the heightfield. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
+Same viewer. Phase 18 3×3 grey land stays as the heightfield. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
 
 **Each exterior land tile uses that cell’s `VTEX` indices and the ESM `LTEX` palette so Seyda Neen ground is dirt/sand/grass, not a white/grey slab.** No blendmaps. The 3×3 still does not recenter as you walk.
 
@@ -24,7 +24,7 @@ TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plu
 - Parse `LTEX` in that ESM pass: `NAME`, `INTV` (palette index), `DATA` (texture path). Lookup by index (this port’s only plugin is `Morrowind.esm`).
 - Parse `LAND` `VTEX` when present: 256 little-endian `uint16`, then OpenMW `transposeTextureData` (4×4 blocks of 4×4). Missing `VTEX` → all zeros (default texture). Keep Phase 16 `VHGT`.
 - Each `VTEX` square covers 4×4 height quads (`64 / 16`). UV 0–1 across that square. `VTEX` 0 or a missing `LTEX` → `_land_default.dds`. Else `getLandTexture(vtex - 1)` then existing `TexturePaths.correctTexturePath` + VFS/`DdsTexture` (never `ModelBatch`).
-- One Path B `MeshGpu` per distinct texture **per land tile** (or per square, if simpler). Shared textures across tiles are fine.
+- One `MeshGpu` per distinct texture **per land tile** (or per square, if simpler). Shared textures across tiles are fine.
 - Interiors unchanged. Fog still off on exteriors. No `VCLR`. No blendmaps.
 - Debug CLI `exterior -2 -9`: keep the nine `grid=` lines; add `vtex=` unique-index count (and `land=` as today).
 

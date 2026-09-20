@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/weather.cpp` (`TimeOfDayInterpolator::getValue` 
 
 ## Goal
 
-Same Path B viewer. Phase 26 sun disc stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 26 sun disc stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Exteriors get a Clear-weather hour** you can scrub. Sky colour, fog tint, land ambient/sun, and the sun disc follow OpenMW’s interpolator and orbit. Night brings `sky_night_01` stars. A HUD slider plus **[ ]** step the clock; **Play** runs it. Moons, other weathers, and sunglare stay out.
 

@@ -54,6 +54,8 @@ public final class FrameProfiler {
     public int crea;
     public int lights;
     public int landTiles;
+    public int texGpu;
+    public int nifGpu;
     public float fps;
     public float frameMs;
     public float frameMaxMs;
@@ -173,6 +175,7 @@ public final class FrameProfiler {
             fps, frameMs, frameMaxMs, histCount));
         sb.append("draws ").append(lastDraws).append("  rtt ").append(lastDrawsRtt)
             .append("  cull ").append(lastDrawsCulled).append('\n');
+        sb.append("tex ").append(texGpu).append("  nif ").append(nifGpu).append('\n');
         sb.append("fat ").append(fattestName()).append(' ')
             .append(String.format(Locale.US, "%.1f", sectionMs(fattestIndex())));
         if (hadWalk) {
@@ -207,6 +210,8 @@ public final class FrameProfiler {
             .append(" crea=").append(crea)
             .append(" lights=").append(lights)
             .append(" landTiles=").append(landTiles)
+            .append(" texGpu=").append(texGpu)
+            .append(" nifGpu=").append(nifGpu)
             .append('\n');
         if (hadWalk) {
             sb.append(String.format(Locale.US, "walkParseMs=%.0f walkGpuMs=%.0f walkSwapMs=%.0f%n",

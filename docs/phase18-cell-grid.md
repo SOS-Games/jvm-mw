@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/scene.cpp` (`changeCellGrid` / `iterateOverCells
 
 ## Goal
 
-Same Path B viewer. Phase 17 empty-`DNAM` exits stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
+Same viewer. Phase 17 empty-`DNAM` exits stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
 
 **An exterior load places a 3×3 of cells around the dest grid: grey `LAND` plus refs for each.** Census door `DODT` is near the south edge of `(-2, -9)`; walking south must still have ground. Do not recenter the grid as the camera walks (OpenMW would; that is a later slice).
 

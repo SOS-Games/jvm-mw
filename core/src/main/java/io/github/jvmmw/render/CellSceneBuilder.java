@@ -6,7 +6,6 @@ import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.LandRecord;
-import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
 
@@ -14,10 +13,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -46,9 +42,7 @@ public final class CellSceneBuilder {
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
 
-    private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
-    private final Map<String, SceneNode> templates = new HashMap<>();
     private EsmFile.LoadedCell cell;
     private SceneNode buildingRoot;
     private Map<String, Integer> byRec;
@@ -430,11 +424,6 @@ public final class CellSceneBuilder {
         landMesh.dispose();
         waterMesh.dispose();
         mannequin.dispose();
-        for (NifSceneBuilder b : builders) {
-            b.dispose();
-        }
-        builders.clear();
-        templates.clear();
     }
 
     private String placeMesh(EsmObject obj) {
@@ -451,16 +440,6 @@ public final class CellSceneBuilder {
 
     private SceneNode instance(String model) throws Exception {
         String vfs = TexturePaths.normalizeMeshPath(model);
-        SceneNode template = templates.get(vfs);
-        if (template == null) {
-            Path nifPath = TestData.ensureNif(vfs);
-            byte[] bytes = Files.readAllBytes(nifPath);
-            NifFile nif = NifFile.parse(bytes, vfs);
-            NifSceneBuilder builder = new NifSceneBuilder(nif, TestData.testdataRoot(), TestData::vfsExists);
-            builders.add(builder);
-            template = builder.build(false);
-            templates.put(vfs, template);
-        }
-        return NpcMannequin.cloneTree(template);
+        return NpcMannequin.cloneTree(GpuCache.meshTemplate(vfs));
     }
 }

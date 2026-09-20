@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/water.cpp` (`updateWaterMaterial` / `Reflection
 
 ## Goal
 
-Same Path B viewer. Phase 21 plane (TES3 height **−1**, 3×3, cell-root −90° X) stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 21 plane (TES3 height **−1**, 3×3, cell-root −90° X) stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Exterior water uses OpenMW shader water with a reflection RTT and `water_nm`, refraction off.** The tiled `water00`–`water31` flip goes away. No sky, rain ripples, underwater, or walk-recenter.
 
@@ -76,7 +76,7 @@ Pin: `openmw-0.51.0` (`f4bec41444214a7903bebd178389ca22ca13f646`).
 | OpenMW | Java | Status |
 | --- | --- | --- |
 | `Water::updateWaterMaterial` shader | reflection FBO + water shader | rewrite |
-| `Water::Reflection` | flipped Path B RTT, 512 | rewrite |
+| `Water::Reflection` | flipped RTT, 512 | rewrite |
 | `files/shaders/compatibility/water.frag` no refract | water fragment | rewrite |
 | `textures/omw/water_nm.png` | `assets/textures/omw/water_nm.png` | same |
 

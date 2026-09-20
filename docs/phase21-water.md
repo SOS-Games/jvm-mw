@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/cell.cpp` (TES3 exterior water height), `compone
 
 ## Goal
 
-Same Path B viewer. Phase 20 blendmaps stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
+Same viewer. Phase 20 blendmaps stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
 
 **Town (and other loaded exteriors) get OpenMW simple water: one blended plane at TES3 height −1, covering the 3×3, with the vanilla `textures/water/water##.dds` flip.** No shader reflections, refraction, ripples, underwater fog, or sky. The 3×3 still does not recenter as you walk.
 
@@ -22,7 +22,7 @@ TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plu
 
 - Same 3×3 load as Phase 18–20. Same cell-root **−90° X**. Water verts are TES3 XY with Z = water height (a child of that root, like land).
 - Exterior water is **always on**. Height is **−1** (`MWWorld::Cell` TES3 constructor). Do not read `WHGT` for this height.
-- One Path B mesh (never `ModelBatch`) large enough to cover the loaded 3×3. OpenMW’s mesh is `CellSizeInUnits * 150` with 40 segments and 900 UV repeats; a smaller patch is fine if UV density stays about **6 repeats per cell** (`900 / 150`). Center XY on the dest cell like `getSceneNodeCoordinates` (`grid * 8192 + 4096`).
+- One mesh (never `ModelBatch`) large enough to cover the loaded 3×3. OpenMW’s mesh is `CellSizeInUnits * 150` with 40 segments and 900 UV repeats; a smaller patch is fine if UV density stays about **6 repeats per cell** (`900 / 150`). Center XY on the dest cell like `getSceneNodeCoordinates` (`grid * 8192 + 4096`).
 - Simple water state: `GL_BLEND` on, cull off, depth test on, **depth write off**, material alpha **0.75** (`Water_World_Alpha`). Draw in the existing alpha pass (after terrain and opaque/alpha-test flora) so pads and beaches already in the depth buffer stay on top.
 - Bind `textures/water/water00.dds` … `water31.dds` (`Water_SurfaceTexture` + two-digit frame, `Water_SurfaceFrameCount` 32). Flip at **12** fps (`Water_SurfaceFPS`). Missing frames: use whatever exists (at least `water00.dds`). `TexturePaths.correctTexturePath` + VFS/`DdsTexture`.
 - Interiors: **no** water this slice (even if `DATA` has `HasWater`). Fog still off on exteriors.
@@ -76,7 +76,7 @@ Pin: `openmw-0.51.0` (`f4bec41444214a7903bebd178389ca22ca13f646`).
 | OpenMW | Java | Status |
 | --- | --- | --- |
 | `MWWorld::Cell` TES3 exterior water | always on, height −1 | same |
-| `SceneUtil::createWaterGeometry` | Path B water mesh on cell root | rewrite |
+| `SceneUtil::createWaterGeometry` | water mesh on cell root | rewrite |
 | `Water::createSimpleWaterStateSet` | blend, no cull, no depth write, water## flip | rewrite |
 | `Water_World_Alpha` / `Water_Surface*` | 0.75 / `water` / 32 / 12 | same |
 

@@ -6,7 +6,7 @@ Align with `components/esm3/loadligh.cpp` (`LHDT`), `apps/openmw/mwclass/light.c
 
 ## Goal
 
-Same Path B viewer, same Census office. Phase 4 drew candle **meshes** but the room is still one fake directional light. This phase makes `LIGH` refs emit, including empty-model lights (`Flame Light`, `dark_128`), and uses the cell’s `AMBI` instead of hardcoded `0.35`.
+Same viewer, same Census office. Phase 4 drew candle **meshes** but the room is still one fake directional light. This phase makes `LIGH` refs emit, including empty-model lights (`Flame Light`, `dark_128`), and uses the cell’s `AMBI` instead of hardcoded `0.35`.
 
 Walk in: desks near candles are warm; corners fall off; the office is no longer evenly lit.
 
@@ -49,7 +49,7 @@ OpenMW default `classic falloff = false`: also multiply by `1 - quickstep(dist/r
 - Skip OpenMW’s `minimum interior brightness` boost unless the office comes out implausibly black.
 - Fog density / fog color: **out of scope** (clear color can stay the Phase 2 grey).
 
-**Shader:** still Path B, owned GLSL, no ModelBatch. Point lights in **world space** (same space as `u_model`). Lambert like today’s directional term. Negative lights can darken (do not clamp each light to 0 before summing; OpenMW `clampLightingResult` is `max(lighting, 0)` when not the old clamp mode).
+**Shader:** owned GLSL, no ModelBatch. Point lights in **world space** (same space as `u_model`). Lambert like today’s directional term. Negative lights can darken (do not clamp each light to 0 before summing; OpenMW `clampLightingResult` is `max(lighting, 0)` when not the old clamp mode).
 
 HUD: `lights=` count actually bound as sources (including empty-MODL). Status still has `placed=` from Phase 4.
 

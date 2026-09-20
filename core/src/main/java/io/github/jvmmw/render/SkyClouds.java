@@ -38,7 +38,10 @@ public final class SkyClouds {
         builder = new NifSceneBuilder(nif, TestData.testdataRoot(), TestData::vfsExists);
         root = builder.build(true);
         String vfs = TexturePaths.correctTexturePath(TEXTURE, TestData::vfsExists);
-        texture = DdsTexture.load(TestData.openPath(vfs));
+        texture = GpuCache.texture(vfs);
+        if (texture == null) {
+            throw new IllegalStateException("cloud texture " + vfs);
+        }
         mark(root, texture.textureId);
         root.updateWorld(new Matrix4());
         Gdx.app.log("SkyClouds", "loaded " + MODEL + " tex=" + vfs);
@@ -76,10 +79,7 @@ public final class SkyClouds {
             builder.dispose();
             builder = null;
         }
-        if (texture != null) {
-            texture.dispose();
-            texture = null;
-        }
+        texture = null;
         root = null;
     }
 }

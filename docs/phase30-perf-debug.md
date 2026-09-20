@@ -2,11 +2,11 @@
 
 OpenMW pin: **openmw-0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-Align with the *idea* of in-game F3 stats (`scripts/HOWTO-benchmark.md`, `apps/openmw/engine.cpp` `initStatsHandler` / `Resource::Profiler`). Do **not** port OSG stats, `osg_stats.py`, or Lua profiler. Path B timers and counters only. No other-LLM prompts: those paths are read from the pin.
+Align with the *idea* of in-game F3 stats (`scripts/HOWTO-benchmark.md`, `apps/openmw/engine.cpp` `initStatsHandler` / `Resource::Profiler`). Do **not** port OSG stats, `osg_stats.py`, or Lua profiler. CPU timers and counters only. No other-LLM prompts: those paths are read from the pin.
 
 ## Goal
 
-Same Path B viewer. Phase 29 walk-grid stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load. **Do not make the 5×5 faster this slice.**
+Same viewer. Phase 29 walk-grid stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load. **Do not make the 5×5 faster this slice.**
 
 **Town shows where the frame goes.** A compact overlay plus F3 `build/debug-snapshot.txt` print stable `key=value` lines so a later agent can tell CPU update, water RTT, terrain draws, and walk-load hitch apart without guessing.
 

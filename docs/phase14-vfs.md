@@ -6,7 +6,7 @@ Align with `components/vfs/registerarchives.cpp` (`registerArchives`), `componen
 
 ## Goal
 
-Same Path B viewer. Phase 13 container **E** stays. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
+Same viewer. Phase 13 container **E** stays. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
 
 **Loose files from extra data folders join the VFS after `Morrowind.bsa`, last folder wins.** Census `stolen_goods` then finds `meshes/o/xcontain_com_chest_02.kf` from OpenMW Containers Animated, so **E** lifts the lid.
 

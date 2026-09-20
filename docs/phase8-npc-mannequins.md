@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/scene.cpp` (`makeActorOsgQuat`), `apps/openmw/mw
 
 ## Goal
 
-Same Path B viewer. Phase 7 cave seams stay. The **Census office** should have people in it: Imperial uniforms, heads and hair, standing at their refs, facing yaw. Bind pose / T-pose is fine.
+Same viewer. Phase 7 cave seams stay. The **Census office** should have people in it: Imperial uniforms, heads and hair, standing at their refs, facing yaw. Bind pose / T-pose is fine.
 
 Addamasartus smugglers should appear if the same NPC path runs there. Chair HUD unchanged. Cave walls still sealed.
 

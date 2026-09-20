@@ -88,10 +88,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/sceneutil/waterutil.cpp` | `createWaterGeometry` | `render.WaterMesh` on cell root | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `createSimpleWaterStateSet` | blend, no cull, no depth write, water## flip | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `Water::updateWaterMaterial` shader | reflection FBO + water shader | rewrite |
-| `apps/openmw/mwrender/water.cpp` | `Water::Reflection` | flipped Path B RTT, 512 | rewrite |
+| `apps/openmw/mwrender/water.cpp` | `Water::Reflection` | flipped RTT, 512 | rewrite |
 | `files/shaders/compatibility/water.frag` | no-refract path | `ForwardRenderer` water fragment | rewrite |
 | `files/data/textures/omw/water_nm.png` | `water_nm.png` | `assets/textures/omw/water_nm.png` | same |
-| `apps/openmw/mwrender/water.cpp` | `Water::Refraction` | second Path B RTT, 512, clip keep below | rewrite |
+| `apps/openmw/mwrender/water.cpp` | `Water::Refraction` | second RTT, 512, clip keep below | rewrite |
 | `files/shaders/compatibility/water.frag` | `@waterRefraction` path | `ForwardRenderer` water mix refraction | rewrite |
 | `files/shaders/compatibility/water.frag` | `sunSpec.a` visibility | water specular × `ClearCycle.sunVis` | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `Water::isUnderwater` | camera TES3 z `<` −1 | rewrite |
@@ -125,6 +125,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/cellpreloader.cpp` | `CellPreloader` work queue | worker `loadExterior` + GL step | rewrite |
 | `Resource::Profiler` / osg F3 stats | `debug.FrameProfiler` CPU sections + F3 keys | rewrite |
 | OSG `VIEW_FRUSTUM_CULLING` | `ForwardRenderer` mesh AABB vs `cam.frustum` | rewrite |
+| `Resource::ImageManager::getImage` | `GpuCache` intern DDS by corrected VFS path | rewrite |
+| `Terrain::TextureManager::getTexture` | `LandMesh` uses `GpuCache` | rewrite |
+| `Resource::SceneManager::getTemplate` | `GpuCache` static NIF `MeshGpu` template intern | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 5×5-minus-corners | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |

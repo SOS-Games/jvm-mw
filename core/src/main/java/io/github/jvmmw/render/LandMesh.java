@@ -16,7 +16,6 @@ import com.badlogic.gdx.graphics.GL30;
 import com.badlogic.gdx.utils.BufferUtils;
 
 import java.nio.ByteBuffer;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -36,9 +35,7 @@ public final class LandMesh {
     public static final int TILE_COUNT = LandRecord.TEXTURE_SIZE * CHUNK_SIZE;
 
     private final List<MeshGpu> gpus = new ArrayList<>();
-    private final Map<String, DdsTexture> textures = new HashMap<>();
     private final List<Integer> blendIds = new ArrayList<>();
-    private int whiteTex;
 
     public SceneNode attach(SceneNode cellRoot, LandRecord land, Map<Integer, String> palette,
         List<LandRecord> allLands) {
@@ -112,18 +109,10 @@ public final class LandMesh {
             gpu.dispose();
         }
         gpus.clear();
-        for (DdsTexture dds : textures.values()) {
-            dds.dispose();
-        }
-        textures.clear();
         for (int id : blendIds) {
             Gdx.gl.glDeleteTexture(id);
         }
         blendIds.clear();
-        if (whiteTex != 0) {
-            Gdx.gl.glDeleteTexture(whiteTex);
-            whiteTex = 0;
-        }
     }
 
     static String textureName(int vtex, Map<Integer, String> palette) {
@@ -269,35 +258,7 @@ public final class LandMesh {
     }
 
     private int bind(String vfs) {
-        DdsTexture cached = textures.get(vfs);
-        if (cached != null) {
-            return cached.textureId;
-        }
-        try {
-            Path file = TestData.openPath(vfs);
-            DdsTexture dds = DdsTexture.load(file);
-            textures.put(vfs, dds);
-            return dds.textureId;
-        } catch (Exception e) {
-            Gdx.app.error("LandMesh", "Texture failed: " + vfs + " " + e.getMessage());
-            return white();
-        }
-    }
-
-    private int white() {
-        if (whiteTex != 0) {
-            return whiteTex;
-        }
-        whiteTex = Gdx.gl.glGenTexture();
-        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, whiteTex);
-        java.nio.ByteBuffer px = java.nio.ByteBuffer.allocateDirect(4);
-        px.put((byte) -1).put((byte) -1).put((byte) -1).put((byte) -1).flip();
-        Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL20.GL_RGBA, 1, 1, 0, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, px);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_NEAREST);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, GL20.GL_NEAREST);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_REPEAT);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_REPEAT);
-        Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, 0);
-        return whiteTex;
+        DdsTexture dds = GpuCache.texture(vfs);
+        return dds != null ? dds.textureId : GpuCache.whiteId();
     }
 }

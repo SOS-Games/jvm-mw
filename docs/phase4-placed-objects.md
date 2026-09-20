@@ -6,7 +6,7 @@ Align with `components/esm3/loadmisc.cpp` / `loaddoor.cpp` / `loadcont.cpp` / `l
 
 ## Goal
 
-Same Path B viewer, same Census office. Phase 3 drew **STAT** only, so desks are empty and doorways have holes. Index every TES3 record that is a **placed mesh** (NAME + MODL) and draw those refs with the Phase 3 placement path.
+Same viewer, same Census office. Phase 3 drew **STAT** only, so desks are empty and doorways have holes. Index every TES3 record that is a **placed mesh** (NAME + MODL) and draw those refs with the Phase 3 placement path.
 
 The office should look furnished: bottles on tables, doors in frames, chests, candles, books. Still no NPCs, no glow from lights, no open/close.
 

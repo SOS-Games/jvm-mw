@@ -6,7 +6,7 @@ Align with `components/esm3/loadcell.hpp` (`isExterior` / `DATAstruct`), `apps/o
 
 ## Goal
 
-Same Path B viewer. Phase 15 take stays. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
+Same viewer. Phase 15 take stays. HUD **Cell** / **Cave** / **Nix** / **Guild** unchanged.
 
 **HUD Town loads one exterior grid cell: grey `LAND` heightfield plus that cell’s placed objects.** Camera at the Census office door’s world `DODT`. Empty-`DNAM` exits stay shut.
 
@@ -22,7 +22,7 @@ TES3 `Morrowind.esm` + `Morrowind.bsa` + existing extra data folders. No new plu
 
 - Load exterior `CELL` by **grid**, not by name (several cells are named Seyda Neen). Keep `DATA` `mX`/`mY` (this port currently discards those two `i32`s). `isExterior` is `!(flags & Interior)` (`Interior = 0x01`).
 - Parse the matching `LAND` (`INTV` grid). `VHGT`: float offset plus signed-byte deltas, 65×65, scale **8**. Missing land → height **-2048**. Skip `VTEX` / `LTEX` this slice. `VCLR` optional (grey is enough).
-- One Path B `MeshInstance` (never `ModelBatch`). TES3 XY on the heightfield (`cellX * 8192 + col * (8192/64)`, same for Y/row, Z = height), then the existing cell-root **−90° X**.
+- One `MeshInstance` (never `ModelBatch`). TES3 XY on the heightfield (`cellX * 8192 + col * (8192/64)`, same for Y/row, Z = height), then the existing cell-root **−90° X**.
 - Place that cell’s refs with the current `CellSceneBuilder` (doors / chests / take / NPCs / creatures).
 - Exterior fog **off** (no `AMBI` fog). Interiors keep Phase 6 fog. Bright sun so grey land reads.
 - Spawn: Census office exit `DODT` (not the cell AABB center, not an inbound interior spawn).

@@ -829,6 +829,7 @@ public final class ForwardRenderer {
         Gdx.gl30.glDeleteFramebuffers(1, ids);
         ids.put(0, refractFbo);
         Gdx.gl30.glDeleteFramebuffers(1, ids);
+        GpuCache.dispose();
     }
 
     public static void resetForScene2d() {

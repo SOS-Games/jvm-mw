@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/scene.cpp` (`playerMoved` / `getNewGridCenter` /
 
 ## Goal
 
-Same Path B viewer. Phase 27 clock stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 27 clock stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Walking an exterior recenters the 3×3** on the camera’s cell, the way OpenMW does while you move. Ground, buildings, and water keep up. The eye does not snap back to Census `DODT`. Interiors still load one cell. Moons stay out (delayed-features).
 

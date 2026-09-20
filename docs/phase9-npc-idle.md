@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/npcanimation.cpp` (`updateNpcBase` `addAnimSour
 
 ## Goal
 
-Same Path B viewer. Phase 8 people stay. Census office NPCs should stand in the **idle** loop (weight shift / breathe), not T-pose. Addamasartus smugglers the same. Chair HUD, cave seams, fog, and clothes-on-skeleton still hold.
+Same viewer. Phase 8 people stay. Census office NPCs should stand in the **idle** loop (weight shift / breathe), not T-pose. Addamasartus smugglers the same. Chair HUD, cave seams, fog, and clothes-on-skeleton still hold.
 
 ## Why this slice
 

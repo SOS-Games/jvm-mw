@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/sky.cpp` (`SkyManager::create` cloud meshes / `
 
 ## Goal
 
-Same Path B viewer. Phase 24 atmosphere stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 24 atmosphere stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Exteriors get OpenMW’s day cloud dome** (`meshes/sky_clouds_01.nif`) over the atmosphere: Clear `Tx_Sky_Clear.dds`, UV scroll, horizon fade, drawn into the water reflection. Looking up from the docks shows drifting clouds on the blue dome. Sun, moons, stars, weather swaps, and rain stay out.
 
@@ -75,7 +75,7 @@ None. Pin excerpts above are enough.
 
 | OpenMW | Java | Status |
 | --- | --- | --- |
-| `SkyManager::create` clouds | Path B cloud nif on sky root | rewrite |
+| `SkyManager::create` clouds | cloud nif on sky root | rewrite |
 | `CloudUpdater` | cloud tex / emission / UV timer | rewrite |
 | `sky.frag` `paintClouds` | sky pass 2, tex × emission, fog mix | rewrite |
 | `ModVertexAlphaVisitor` Clouds | 65-vert row alphas | rewrite |

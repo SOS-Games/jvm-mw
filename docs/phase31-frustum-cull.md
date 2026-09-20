@@ -2,11 +2,11 @@
 
 OpenMW pin: **openmw-0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-Align with OSG view-frustum culling (`osg::CullStack` / `VIEW_FRUSTUM_CULLING` on the scene camera in `apps/openmw/mwrender/renderingmanager.cpp`). Do **not** port OSG `CullVisitor`, cluster culling, or `smallFeatureCulling`. Path B: test existing mesh AABBs against the libGDX camera frustum. No other-LLM prompts: AABB vs frustum is read from the pin and from `MeshGpu.expandWorldAabb`.
+Align with OSG view-frustum culling (`osg::CullStack` / `VIEW_FRUSTUM_CULLING` on the scene camera in `apps/openmw/mwrender/renderingmanager.cpp`). Do **not** port OSG `CullVisitor`, cluster culling, or `smallFeatureCulling`. Test existing mesh AABBs against the libGDX camera frustum. No other-LLM prompts: AABB vs frustum is read from the pin and from `MeshGpu.expandWorldAabb`.
 
 ## Goal
 
-Same Path B viewer. Phase 30 Dump / fps overlay stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load. Grid stays **5×5-minus-corners**.
+Same viewer. Phase 30 Dump / fps overlay stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load. Grid stays **5×5-minus-corners**.
 
 **Town stops submitting draws for meshes outside the camera.** Harbor in front of you still looks full. Land and shacks behind you are not drawn. Water RTTs use the same rule with the camera for that pass.
 

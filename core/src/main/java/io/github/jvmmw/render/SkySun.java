@@ -31,7 +31,10 @@ public final class SkySun {
 
     public void load() throws Exception {
         String vfs = TexturePaths.correctTexturePath(TEXTURE, TestData::vfsExists);
-        texture = DdsTexture.load(TestData.openPath(vfs));
+        texture = GpuCache.texture(vfs);
+        if (texture == null) {
+            throw new IllegalStateException("sun texture " + vfs);
+        }
         mesh = uploadQuad();
         mesh.skyShader = true;
         mesh.skyPass = PASS;
@@ -101,10 +104,7 @@ public final class SkySun {
             mesh.dispose();
             mesh = null;
         }
-        if (texture != null) {
-            texture.dispose();
-            texture = null;
-        }
+        texture = null;
         root = null;
         body = null;
     }

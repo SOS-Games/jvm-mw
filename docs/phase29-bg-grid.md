@@ -6,7 +6,7 @@ Align with `apps/openmw/mwworld/scene.cpp` (`preloadCells` / `preloadExteriorGri
 
 ## Goal
 
-Same Path B viewer. Phase 28 walk-recenter stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 28 walk-recenter stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Crossing an exterior cell keeps you walking.** The old grid stays on screen; look and WASD stay live. The new 5×5-minus-corners is built off the hitch and swapped in when ready. HUD **Town** / **Cell** / door teleports still use the blocking loader. Moons stay out.
 

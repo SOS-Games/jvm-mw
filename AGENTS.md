@@ -4,7 +4,7 @@ Instructions for AI coding agents working in **jvm-mw**.
 
 ## Project
 
-Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`). Path B: libGDX window/input/Scene2D only — never `ModelBatch`. Package `io.github.jvmmw`.
+Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`). libGDX window/input/Scene2D only — never `ModelBatch`. Package `io.github.jvmmw`.
 
 - OpenMW source is local: `D:\coding\morrowind\openmw` at pin `f4bec41444214a7903bebd178389ca22ca13f646`. **Read that tree.** Do not fetch OpenMW from GitHub.
 - You **may read** `D:\morrowind_mods` (modlist, meshes, `.kf`). **Do not** edit, move, or write anything there.
@@ -59,7 +59,7 @@ In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard 
 - `NiSkinData` transforms use packed order (rotation, translation, scale), not `NiAVObject` (translation, rotation, scale). Wrong order flattens skinned parts onto the ground.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
-- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners blended land + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`). Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. Top-right fps overlay (F4) shows frame ms, draws, culled, and the fattest section. Meshes outside the camera frustum are not submitted. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
+- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners blended land + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`). Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. Top-right fps overlay (F4) shows frame ms, draws, culled, tex, nif, and the fattest section. Meshes outside the camera frustum are not submitted. DDS and static NIF GPU templates intern by VFS path. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
 - **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as a 5×5-minus-corners around that exterior grid, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.

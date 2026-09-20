@@ -6,7 +6,7 @@ Align with `apps/openmw/mwclass/door.cpp` (`activate` teleport branch), `apps/op
 
 ## Goal
 
-Same Path B viewer. Phase 11 swing stays. **Cell** / **Cave** / **Nix** stay Census / Addamasartus / Punsabanit.
+Same viewer. Phase 11 swing stays. **Cell** / **Cave** / **Nix** stay Census / Addamasartus / Punsabanit.
 
 **E on a load door whose `DNAM` is another interior unloads this cell and loads that one.** Arrival is that door’s `DODT` (not the dest cell’s world-inbound spawn). Empty-`DNAM` doors are exteriors and stay a no-op (no terrain).
 

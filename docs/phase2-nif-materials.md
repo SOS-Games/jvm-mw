@@ -6,13 +6,13 @@ Align with `components/nifosg/nifloader.cpp` (`collectDrawableProperties`, `appl
 
 ## Goal
 
-Same Path B viewer. Static NIFs should pick up **inherited** NetImmerse properties and Morrowind texture layers so a glow weapon and a vertex-colored mesh match OpenMW / NifSkope, not just “a textured mesh.”
+Same viewer. Static NIFs should pick up **inherited** NetImmerse properties and Morrowind texture layers so a glow weapon and a vertex-colored mesh match OpenMW / NifSkope, not just “a textured mesh.”
 
 Phase 1 still passes (chair, shack, tree).
 
 ## Why flatten
 
-Path B has no OSG `StateSet` inheritance. OpenMW puts some properties on the node graph (textures, z-buffer, stencil, wireframe) and **re-collects** others onto each drawable:
+There is no OSG `StateSet` inheritance. OpenMW puts some properties on the node graph (textures, z-buffer, stencil, wireframe) and **re-collects** others onto each drawable:
 
 - Walk **parent chain first**, then the `NiAVObject` itself.
 - Collect: `NiMaterialProperty`, `NiVertexColorProperty`, `NiSpecularProperty`, `NiAlphaProperty`.

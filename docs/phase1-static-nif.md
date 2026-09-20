@@ -4,7 +4,7 @@ OpenMW pin: **openmw-0.51.0**.
 
 ## Goal
 
-Prove Path B: libGDX owns the window; **not** `ModelBatch`. One Morrowind chair, parent/child `SceneNode`s, Scene2D controls on top, no GL errors.
+libGDX owns the window; **not** `ModelBatch`. One Morrowind chair, parent/child `SceneNode`s, Scene2D controls on top, no GL errors.
 
 ## In scope
 

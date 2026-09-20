@@ -6,7 +6,7 @@ Align with `apps/openmw/mwrender/skyutil.cpp` (`CelestialBody` / `Sun` / `create
 
 ## Goal
 
-Same Path B viewer. Phase 25 clouds stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
+Same viewer. Phase 25 clouds stay. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged. Town still the default load.
 
 **Exteriors get OpenMW’s day sun disc** (`textures/tx_sun_05.dds` on a camera-relative quad). Looking up from the docks shows a sun in the Clear-day sky, with clouds able to pass over it. Sunglare, sunflash, occlusion queries, moons, stars, and a clock stay out.
 
@@ -64,7 +64,7 @@ None. Pin excerpts above are enough.
 
 | OpenMW | Java | Status |
 | --- | --- | --- |
-| `CelestialBody` / `Sun` | Path B sun quad, camera-relative | rewrite |
+| `CelestialBody` / `Sun` | sun quad, camera-relative | rewrite |
 | `createTexturedQuad` | 1×1 quad × 450 at distance 1000 | rewrite |
 | `sky.frag` `paintSun` | sky pass 4, tex × disc alpha | rewrite |
 | `RenderingManager::setSunDirection` | freeze midday TES3 `(0,-75,400)` | rewrite |

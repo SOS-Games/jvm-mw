@@ -49,6 +49,7 @@ import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
 import io.github.jvmmw.render.DoorSwing;
 import io.github.jvmmw.render.ForwardRenderer;
+import io.github.jvmmw.render.GpuCache;
 import io.github.jvmmw.render.NifSceneBuilder;
 import io.github.jvmmw.render.SceneNode;
 import io.github.jvmmw.render.WaterMesh;
@@ -880,7 +881,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 31", skin);
+        Window win = new Window("JVM-MW Phase 32", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -1208,6 +1209,8 @@ public final class JvmMwApp extends ApplicationAdapter {
             profiler.lights = 0;
         }
         profiler.landTiles = loadedCell != null && !loadedCell.interior ? loadedCell.tiles.size() : 0;
+        profiler.texGpu = GpuCache.texGpu();
+        profiler.nifGpu = GpuCache.nifGpu();
     }
 
     private static int countMeshes(SceneNode node) {

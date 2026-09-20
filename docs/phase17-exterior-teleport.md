@@ -6,7 +6,7 @@ Align with `apps/openmw/mwclass/door.cpp` (`Door::activate` teleport), `apps/ope
 
 ## Goal
 
-Same Path B viewer. Phase 16 grey land stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
+Same viewer. Phase 16 grey land stays. HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** unchanged.
 
 **E on a teleport door with empty `DNAM` unloads this cell and loads the exterior grid from that door’s `DODT` xy.** Arrival is that `DODT` (same `placeEye` as interior load doors). Named-`DNAM` interiors keep Phase 12. Doors still do not swing.
 

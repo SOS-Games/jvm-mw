@@ -6,7 +6,7 @@ Align with `apps/openmw/mwclass/door.cpp` (`useAnim`, `insertObjectRendering`, `
 
 ## Goal
 
-Same Path B viewer. Phase 10 creatures stay. **Cell** / **Cave** / **Nix** stay Census / Addamasartus / Punsabanit.
+Same viewer. Phase 10 creatures stay. **Cell** / **Cave** / **Nix** stay Census / Addamasartus / Punsabanit.
 
 **Non-teleport doors already in those interiors swing open and shut.** Hide doors in Addamasartus (`door_cavern_doors00`) and Punsabanit (`door_cavern_doors10`) are the visual test. Census interior doors (`in_c_door_arched`, `chargen door hall`) also swing. Census / cave **exit** doors (`ex_nord_door_01`, `ex_cave_door_01`) have `DODT` and must **not** swing and must **not** load an exterior.
 
@@ -24,7 +24,7 @@ HUD cells unchanged. Hint line: **E** activates the door under the camera crossh
 
 - Keep placing `DOOR` with `makeOsgQuat` (full XYZ, not actor yaw-only). The instance local is rewritten every swing frame from `pos` + live `rot` + scale.
 - Closed Z is the **cell-ref** `rot[2]` (`minRot`). Open Z is `minRot + 90°` (`maxRot`). Live Z is `RefData` position `rot[2]` (start equal to the cell-ref).
-- Activate: camera-center ray, max distance GMST `iMaxActivateDist` (**192**). OpenMW uses an OSG mesh ray; Path B rewrite may hit **DOOR instance AABBs only** (not STAT walls, not NPCs). Closest hit wins. If nothing, no-op.
+- Activate: camera-center ray, max distance GMST `iMaxActivateDist` (**192**). OpenMW uses an OSG mesh ray; rewrite may hit **DOOR instance AABBs only** (not STAT walls, not NPCs). Closest hit wins. If nothing, no-op.
 - Hit a teleport door (`CellRef.teleport` / `DODT`): no-op (log). Do not call `setDoorState` (OpenMW throws `"load doors can't be moved"`).
 - Hit a non-teleport door: same toggle as `World::activateDoor(ptr)`:
   - `Idle` and live Z equals cell-ref Z → `Opening`
