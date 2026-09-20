@@ -65,6 +65,7 @@ public final class MeshGpu {
     public int depthFunc = GL20.GL_LEQUAL;
     public boolean cull = true;
     public boolean waterShader;
+    public boolean skyShader;
 
     public int textureId;
 
@@ -124,6 +125,26 @@ public final class MeshGpu {
         Gdx.gl30.glBindVertexArray(0);
         Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
         Gdx.gl.glBindBuffer(GL20.GL_ELEMENT_ARRAY_BUFFER, 0);
+    }
+
+    /**
+     * OpenMW {@code ModVertexAlphaVisitor} Atmosphere: cylinder verts alternate
+     * {@code (i % 2) ? 0 : 1} so the bottom row fades at the horizon.
+     */
+    public void applyAtmosphereVertexAlpha() {
+        int n = vertexBytes / (STRIDE_FLOATS * 4);
+        for (int i = 0; i < n; i++) {
+            int o = i * STRIDE_FLOATS;
+            scratch.put(o + 8, 0f);
+            scratch.put(o + 9, 0f);
+            scratch.put(o + 10, 0f);
+            scratch.put(o + 11, (i % 2) != 0 ? 0f : 1f);
+        }
+        scratch.position(0);
+        scratch.limit(n * STRIDE_FLOATS);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, vbo);
+        Gdx.gl.glBufferSubData(GL20.GL_ARRAY_BUFFER, 0, vertexBytes, scratch);
+        Gdx.gl.glBindBuffer(GL20.GL_ARRAY_BUFFER, 0);
     }
 
     public void updateVertices(float[] interleaved) {

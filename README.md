@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 23 (current)
+## Phase 24 (current)
 
-Exteriors draw OpenMW shader water with a reflection and refraction RTT, plus underwater fog below −1. See [docs/phase23-refraction-underwater.md](docs/phase23-refraction-underwater.md). Phase 22 reflection-only: [docs/phase22-shader-water.md](docs/phase22-shader-water.md).
+Exteriors draw a camera-relative Clear-day atmosphere dome. Water still uses reflection + refraction and underwater fog. See [docs/phase24-sky-atmosphere.md](docs/phase24-sky-atmosphere.md). Phase 23 water: [docs/phase23-refraction-underwater.md](docs/phase23-refraction-underwater.md).
 
 ```bat
 gradlew.bat lwjgl3:run

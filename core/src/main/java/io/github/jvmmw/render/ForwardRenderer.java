@@ -76,6 +76,15 @@ public final class ForwardRenderer {
     private final int uWaterFogStart;
     private final int uWaterFogScale;
     private final int uWaterFogColor;
+    private final int skyProgram;
+    private final int uSkyMvp;
+    private final int uSkyModel;
+    private final int uSkyView;
+    private final int uSkyFar;
+    private final int uSkyEmission;
+    private SkyAtmosphere sky;
+    private final Matrix4 skyView = new Matrix4();
+    private final Matrix4 skyCombined = new Matrix4();
     private final Matrix4 origCombined = new Matrix4();
     private final Matrix4 origView = new Matrix4();
     private final Matrix4 reflectMat = new Matrix4();
@@ -168,6 +177,22 @@ public final class ForwardRenderer {
         reflectMat.idt();
         reflectMat.val[5] = -1f;
         reflectMat.val[13] = 2f * WaterMesh.HEIGHT;
+        skyProgram = compile(SKY_VERT, SKY_FRAG);
+        uSkyMvp = Gdx.gl.glGetUniformLocation(skyProgram, "u_mvp");
+        uSkyModel = Gdx.gl.glGetUniformLocation(skyProgram, "u_model");
+        uSkyView = Gdx.gl.glGetUniformLocation(skyProgram, "u_view");
+        uSkyFar = Gdx.gl.glGetUniformLocation(skyProgram, "u_cameraFar");
+        uSkyEmission = Gdx.gl.glGetUniformLocation(skyProgram, "u_emission");
+        try {
+            sky = new SkyAtmosphere();
+            sky.load();
+        } catch (Exception e) {
+            Gdx.app.error("ForwardRenderer", "sky atmosphere", e);
+            if (sky != null) {
+                sky.dispose();
+                sky = null;
+            }
+        }
     }
 
     public void render(PerspectiveCamera cam, SceneNode root) {
@@ -188,6 +213,9 @@ public final class ForwardRenderer {
         Gdx.gl.glDepthMask(true);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
         Gdx.gl.glCullFace(GL20.GL_BACK);
+        if (water) {
+            drawSky(cam, false);
+        }
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
         Gdx.gl.glUniform4f(uClipPlane, 0f, 0f, 0f, 1f);
@@ -267,14 +295,16 @@ public final class ForwardRenderer {
         }
         Gdx.gl.glDepthMask(true);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
-        Gdx.gl.glEnable(GL_CLIP_DISTANCE0);
         origCombined.set(cam.combined);
         origView.set(cam.view);
         cam.combined.mul(reflectMat);
         cam.view.mul(reflectMat);
+        Gdx.gl.glDisable(GL_CLIP_DISTANCE0);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
         Gdx.gl.glCullFace(GL20.GL_BACK);
+        drawSky(cam, true);
+        Gdx.gl.glEnable(GL_CLIP_DISTANCE0);
         Gdx.gl.glUseProgram(program);
         upload(uView, cam.view);
         Gdx.gl.glUniform4f(uClipPlane, 0f, 1f, 0f, -WaterMesh.HEIGHT);
@@ -325,7 +355,7 @@ public final class ForwardRenderer {
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 MeshGpu mesh = inst.mesh;
-                if (mesh.waterShader) {
+                if (mesh.waterShader || mesh.skyShader) {
                     continue;
                 }
                 int meshPass = mesh.terrainPass ? 1 : mesh.alphaBlend ? 2 : 0;
@@ -482,6 +512,57 @@ public final class ForwardRenderer {
         return false;
     }
 
+    private void drawSky(PerspectiveCamera cam, boolean reflection) {
+        if (sky == null || sky.root == null) {
+            return;
+        }
+        skyView.set(cam.view);
+        skyView.val[12] = 0f;
+        skyView.val[13] = 0f;
+        skyView.val[14] = 0f;
+        skyCombined.set(cam.projection).mul(skyView);
+        Gdx.gl.glUseProgram(skyProgram);
+        upload(uSkyView, skyView);
+        Gdx.gl.glUniform1f(uSkyFar, cam.far);
+        Gdx.gl.glUniform3f(uSkyEmission, SkyAtmosphere.CLEAR_DAY[0], SkyAtmosphere.CLEAR_DAY[1],
+            SkyAtmosphere.CLEAR_DAY[2]);
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        Gdx.gl.glDepthFunc(GL20.GL_LEQUAL);
+        Gdx.gl.glDepthMask(false);
+        Gdx.gl.glDisable(GL20.GL_CULL_FACE);
+        drawSkyNode(sky.root, reflection);
+        Gdx.gl.glDisable(GL20.GL_BLEND);
+        Gdx.gl.glDepthMask(true);
+        Gdx.gl.glEnable(GL20.GL_CULL_FACE);
+        Gdx.gl.glFrontFace(GL20.GL_CCW);
+    }
+
+    private void drawSkyNode(SceneNode node, boolean reflection) {
+        if (!node.skipMeshes) {
+            for (MeshInstance inst : node.meshes) {
+                MeshGpu mesh = inst.mesh;
+                if (!mesh.skyShader) {
+                    continue;
+                }
+                mvp.set(skyCombined).mul(node.world);
+                upload(uSkyMvp, mvp);
+                upload(uSkyModel, node.world);
+                boolean cw = inst.frontClockwise;
+                if (reflection) {
+                    cw = !cw;
+                }
+                Gdx.gl.glFrontFace(cw ? GL20.GL_CW : GL20.GL_CCW);
+                Gdx.gl30.glBindVertexArray(mesh.vao);
+                Gdx.gl.glDrawElements(GL20.GL_TRIANGLES, mesh.indexCount, GL20.GL_UNSIGNED_SHORT, 0);
+            }
+        }
+        for (SceneNode child : node.children) {
+            drawSkyNode(child, reflection);
+        }
+    }
+
     private void bindClosestLights(SceneNode node, MeshGpu mesh, List<CellLight> lights) {
         if (mesh.localMin[0] > mesh.localMax[0]) {
             node.world.getTranslation(meshCenter);
@@ -551,8 +632,13 @@ public final class ForwardRenderer {
     }
 
     public void dispose() {
+        if (sky != null) {
+            sky.dispose();
+            sky = null;
+        }
         Gdx.gl.glDeleteProgram(program);
         Gdx.gl.glDeleteProgram(waterProgram);
+        Gdx.gl.glDeleteProgram(skyProgram);
         if (waterNm != null) {
             waterNm.dispose();
         }
@@ -966,6 +1052,38 @@ public final class ForwardRenderer {
                 rgb = mix(rgb, u_fogColor, fogValue);
             }
             frag = vec4(rgb, 1.0);
+            gl_FragDepth = clamp(
+                log2(max(1e-6, 1.0 + abs(v_viewZ))) / log2(max(u_cameraFar, 1.0) + 1.0),
+                0.0, 1.0);
+        }
+        """;
+
+    private static final String SKY_VERT = """
+        #version 330
+        layout(location = 0) in vec3 a_pos;
+        layout(location = 3) in vec4 a_color;
+        uniform mat4 u_mvp;
+        uniform mat4 u_model;
+        uniform mat4 u_view;
+        out float v_viewZ;
+        out float v_alpha;
+        void main() {
+            v_alpha = a_color.a;
+            vec4 world = u_model * vec4(a_pos, 1.0);
+            v_viewZ = (u_view * world).z;
+            gl_Position = u_mvp * vec4(a_pos, 1.0);
+        }
+        """;
+
+    private static final String SKY_FRAG = """
+        #version 330
+        in float v_viewZ;
+        in float v_alpha;
+        uniform vec3 u_emission;
+        uniform float u_cameraFar;
+        out vec4 frag;
+        void main() {
+            frag = vec4(u_emission, v_alpha);
             gl_FragDepth = clamp(
                 log2(max(1e-6, 1.0 + abs(v_viewZ))) / log2(max(u_cameraFar, 1.0) + 1.0),
                 0.0, 1.0);

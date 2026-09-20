@@ -95,6 +95,10 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `files/shaders/compatibility/water.frag` | `@waterRefraction` path | `ForwardRenderer` water mix refraction | rewrite |
 | `apps/openmw/mwrender/water.cpp` | `Water::isUnderwater` | camera TES3 z `<` −1 | rewrite |
 | `apps/openmw/mwrender/fogmanager.cpp` | underwater fog | exterior fog while submerged | rewrite |
+| `apps/openmw/mwrender/sky.cpp` | `SkyManager::create` atmosphere | `render.SkyAtmosphere` camera-relative nif | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `CameraRelativeTransform` | zero view translation when drawing sky | rewrite |
+| `files/shaders/compatibility/sky.frag` | `paintAtmosphere` | `ForwardRenderer` sky emission × vertex alpha | rewrite |
+| `apps/openmw/mwrender/skyutil.cpp` | `ModVertexAlphaVisitor` Atmosphere | `MeshGpu.applyAtmosphereVertexAlpha` | rewrite |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |
