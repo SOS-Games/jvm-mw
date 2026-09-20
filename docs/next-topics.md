@@ -32,7 +32,7 @@ These match what the viewer already is (walk Town, look, Dump) and were explicit
 | Topic | Why |
 | --- | --- |
 | **Merge land draws** | Many blend layers per tile. Fewer terrain submits. |
-| **Occlusion / small-feature cull** | Frustum only. Docks behind a hill still draw. |
+| **Occlusion** | Frustum + small-feature only. Docks behind a hill still draw. |
 | **Skinned bound updates** | NPC AABB is rest-pose. Idle motion can pop in/out of cull. |
 
 ## Later / not a small phase

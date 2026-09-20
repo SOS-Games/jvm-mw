@@ -20,6 +20,12 @@ import java.util.List;
 
 public final class ForwardRenderer {
     public static final int MAX_LIGHTS = 8;
+    /** OpenMW {@code [Camera] small feature culling pixel size}. */
+    private static final float CAMERA_FEATURE_PIXELS = 2f;
+    private static final float VIEW_DISTANCE_SQ
+        = CellLighting.VIEW_DISTANCE * CellLighting.VIEW_DISTANCE;
+    /** Longest AABB axis that still draws past 7168 (trees, shacks). */
+    private static final float LANDMARK_EXTENT = 128f;
     private static final int GL_CLIP_DISTANCE0 = 0x3000;
     private static final int GL_TEXTURE_COMPARE_MODE = 0x884C;
 
@@ -566,14 +572,20 @@ public final class ForwardRenderer {
         }
         cullBox.inf();
         mesh.expandWorldAabb(node.world, cullBox);
-        boolean tiny = waterRtt && !mesh.terrainPass && rttFeatureCulled(cam);
+        boolean tiny;
+        if (waterRtt) {
+            tiny = !mesh.terrainPass && featureCulled(cam, WaterMesh.RTT_SIZE, WaterMesh.RTT_FEATURE_PIXELS);
+        } else {
+            tiny = featureCulled(cam, Gdx.graphics.getHeight(), CAMERA_FEATURE_PIXELS);
+        }
+        boolean tooFar = !mesh.terrainPass && !landmarkMesh() && beyondViewDistance(cam);
         if (reflection) {
             reflectCullBoxOverWater();
         }
         if (!cam.frustum.boundsInFrustum(cullBox)) {
             return true;
         }
-        return tiny;
+        return tiny || tooFar;
     }
 
     /** Mirror the world AABB over the water plane so it can be tested against the player frustum. */
@@ -587,8 +599,11 @@ public final class ForwardRenderer {
         cullBox.set(aabbMin, aabbMax);
     }
 
-    /** OpenMW water camera {@code small feature culling pixel size = 20} on the 512 RTT. */
-    private boolean rttFeatureCulled(PerspectiveCamera cam) {
+    /** OpenMW {@code small feature culling}: AABB sphere vs viewport height in pixels. */
+    private boolean featureCulled(PerspectiveCamera cam, float viewportPx, float pixelSize) {
+        if (viewportPx < 1f) {
+            return false;
+        }
         cullBox.getCenter(meshCenter);
         float dx = cullBox.max.x - cullBox.min.x;
         float dy = cullBox.max.y - cullBox.min.y;
@@ -599,9 +614,43 @@ public final class ForwardRenderer {
         if (dist <= radius) {
             return false;
         }
-        float pixels = radius * WaterMesh.RTT_SIZE
+        float pixels = radius * viewportPx
             / (dist * 2f * (float) Math.tan(Math.toRadians(cam.fieldOfView) * 0.5f));
-        return pixels < WaterMesh.RTT_FEATURE_PIXELS;
+        return pixels < pixelSize;
+    }
+
+    private boolean landmarkMesh() {
+        float dx = cullBox.max.x - cullBox.min.x;
+        float dy = cullBox.max.y - cullBox.min.y;
+        float dz = cullBox.max.z - cullBox.min.z;
+        return Math.max(dx, Math.max(dy, dz)) >= LANDMARK_EXTENT;
+    }
+
+    /** Small clutter past OpenMW viewing distance. Landmarks still draw. */
+    private boolean beyondViewDistance(PerspectiveCamera cam) {
+        float d2 = 0f;
+        if (cam.position.x < cullBox.min.x) {
+            float d = cullBox.min.x - cam.position.x;
+            d2 += d * d;
+        } else if (cam.position.x > cullBox.max.x) {
+            float d = cam.position.x - cullBox.max.x;
+            d2 += d * d;
+        }
+        if (cam.position.y < cullBox.min.y) {
+            float d = cullBox.min.y - cam.position.y;
+            d2 += d * d;
+        } else if (cam.position.y > cullBox.max.y) {
+            float d = cam.position.y - cullBox.max.y;
+            d2 += d * d;
+        }
+        if (cam.position.z < cullBox.min.z) {
+            float d = cullBox.min.z - cam.position.z;
+            d2 += d * d;
+        } else if (cam.position.z > cullBox.max.z) {
+            float d = cam.position.z - cullBox.max.z;
+            d2 += d * d;
+        }
+        return d2 > VIEW_DISTANCE_SQ;
     }
 
     private void drawWater(PerspectiveCamera cam, SceneNode root, CellLighting lighting, boolean underwater) {

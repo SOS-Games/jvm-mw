@@ -127,6 +127,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwworld/cellpreloader.cpp` | `CellPreloader` work queue | worker `loadExterior` + GL step | rewrite |
 | `Resource::Profiler` / osg F3 stats | `debug.FrameProfiler` CPU sections + F3 keys | rewrite |
 | OSG `VIEW_FRUSTUM_CULLING` | `ForwardRenderer` mesh AABB vs `cam.frustum` | rewrite |
+| `[Camera] small feature culling pixel size = 2` | main-view AABB pixel test vs framebuffer height | rewrite |
+| `[Camera] viewing distance = 7168` | skip small non-terrain AABB beyond 7168; longest axis ≥ 128 stays | rewrite |
 | `Resource::ImageManager::getImage` | `GpuCache` intern DDS by corrected VFS path | rewrite |
 | `Terrain::TextureManager::getTexture` | `LandMesh` uses `GpuCache` | rewrite |
 | `Resource::SceneManager::getTemplate` | `GpuCache` static NIF `MeshGpu` template intern | rewrite |
