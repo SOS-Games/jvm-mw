@@ -15,7 +15,7 @@ public final class Lwjgl3Launcher {
             return;
         }
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-        config.setTitle("JVM-MW — Phase 36 walk");
+        config.setTitle("JVM-MW");
         config.useVsync(true);
         config.setWindowedMode(1280, 720);
         config.setBackBufferConfig(8, 8, 8, 8, 24, 0, 0);

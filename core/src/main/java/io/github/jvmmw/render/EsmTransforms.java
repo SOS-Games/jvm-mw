@@ -9,8 +9,11 @@ import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Quaternion;
 
 /**
- * Turns a cell-ref’s ZYX euler rotation into a matrix for placing a static
- * mesh in the scene.
+ * Places a cell-ref: move to its ESM position, then yaw / pitch / roll,
+ * then scale. Yaw first (around −Z), then −Y, then −X. libGDX quaternion
+ * multiply is the reverse of OSG’s, so the product is QX*QY*QZ here.
+ * Copying OSG’s QZ*QY*QX token-for-token yaws after a 180° X, which
+ * turns Zainsipilu halls around so they face backwards.
  */
 public final class EsmTransforms {
     private static final Quaternion QX = new Quaternion();
@@ -25,7 +28,9 @@ public final class EsmTransforms {
         QX.setFromAxisRad(-1f, 0f, 0f, rot[0]);
         QY.setFromAxisRad(0f, -1f, 0f, rot[1]);
         QZ.setFromAxisRad(0f, 0f, -1f, rot[2]);
-        TMP.set(QZ).mul(QY).mul(QX);
+        // OpenMW: osg::Quat(z,-Z) * osg::Quat(y,-Y) * osg::Quat(x,-X). OSG's *
+        // applies left-to-right. libGDX mul is Hamilton (rightmost first).
+        TMP.set(QX).mul(QY).mul(QZ);
         out.idt();
         out.translate(pos[0], pos[1], pos[2]);
         Matrix4 rotM = new Matrix4().set(TMP);

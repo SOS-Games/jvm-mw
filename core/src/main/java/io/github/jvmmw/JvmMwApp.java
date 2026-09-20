@@ -823,7 +823,7 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     private void snapWalk() {
         if (cellBuilder != null) {
-            cellBuilder.collision.snapSpawn(eye);
+            cellBuilder.collision.snapSpawn(eye, loadedCell != null && loadedCell.interior);
         }
     }
 
@@ -900,7 +900,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 36", skin);
+        Window win = new Window("JVM-MW", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -918,6 +918,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
         win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
         win.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y));
+        win.add(meshButton("Zain", CELL_PREFIX + TestData.ZAINSIPILU)).row();
         dumpButton = new TextButton("Dump", skin);
         dumpButton.addListener(new ClickListener() {
             @Override

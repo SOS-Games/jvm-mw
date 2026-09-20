@@ -69,7 +69,8 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="exterior -2 -9"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
-            cell       One interior: fog range, inbound spawn, doors, NPCs, CREA, ref counts (full ESM parse).
+            cell       One interior: fog, spawn, doors, NPCs. Kit STAT lines include world AABB.
+                       Then seam meet/gap/islands: whether cave hull triangles actually touch.
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
@@ -249,20 +250,21 @@ public final class DebugCli {
                     + " modl=" + obj.model
                     + (ref.teleport ? " dest=" + ref.destCell + " dodt=" + xyz(ref.destPos) : " swing"));
             }
-            String model = obj.model.toLowerCase(Locale.ROOT);
-            if (model.contains("moldcave") || model.contains("cavern_door")) {
+            if (KitSeams.isKitModel(obj.model)) {
                 kit++;
                 if (kit <= 40) {
                     System.out.println("kit " + obj.rec + " " + ref.refId
                         + " tes=" + xyz(ref.pos)
                         + " rot=" + xyz(ref.rot)
                         + " scl=" + ref.scale
-                        + " " + obj.model);
+                        + " " + obj.model
+                        + " " + KitSeams.kitLine(ref, obj.model));
                 }
             }
         }
         System.out.println("doors=" + doors + " kit=" + kit + " npcs=" + npcs + " crea=" + crea
             + " cont=" + cont + " take=" + take + " book=" + books);
+        KitSeams.dump(cell);
     }
 
     private static void npc(String id) throws Exception {

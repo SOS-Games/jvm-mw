@@ -13,6 +13,10 @@ import java.util.List;
  * Player walk: a capsule on land and against object triangles. No Bullet.
  * WASD slides on walls, steps onto docks, and sticks to the floor. Ceilings
  * and dock undersides stop the camera from embedding. NPCs are ignored.
+ * Wide floors (cave hulls, wooden platforms) hit the triangle face, not
+ * only its edges — otherwise you fall through the middle. Interior spawn
+ * traces down from the door arrival, not from above the hull — a cave
+ * roof is a walkable hit if you start outside.
  */
 public final class CollisionWorld {
     public static final float EYE_HEIGHT = 96f;
@@ -94,12 +98,20 @@ public final class CollisionWorld {
         }
     }
 
-    public void snapSpawn(Vector3 eye) {
+    public void snapSpawn(Vector3 eye, boolean interior) {
         vy = 0f;
-        float feet = eye.y - EYE_HEIGHT;
-        Hit down = traceDown(eye.x, feet + 256f, eye.z, 512f);
-        if (down.ok && down.walkable) {
-            feet = down.y + GROUND_OFFSET;
+        float origin = eye.y - EYE_HEIGHT;
+        float feet = origin;
+        if (interior) {
+            Hit down = traceDown(eye.x, origin + 8f, eye.z, STEP_DOWN + 96f);
+            if (down.ok && down.walkable && down.y <= origin + 8f) {
+                feet = down.y + GROUND_OFFSET;
+            }
+        } else {
+            Hit down = traceDown(eye.x, origin + 256f, eye.z, 512f);
+            if (down.ok && down.walkable) {
+                feet = down.y + GROUND_OFFSET;
+            }
         }
         Hit ceil = traceUp(eye.x, feet + HEIGHT, eye.z, 8f);
         if (ceil.ok && feet + HEIGHT > ceil.y - MARGIN) {
@@ -400,8 +412,9 @@ public final class CollisionWorld {
         boolean walk = n.y > MAX_SLOPE_COS;
         float contactY = closest.y;
         if (mode == 1) {
-            if (walk && (!best.ok || !best.walkable || contactY > best.y)) {
-                store(depth, walk, contactY);
+            boolean floor = Math.abs(n.y) > MAX_SLOPE_COS;
+            if (floor && (!best.ok || !best.walkable || contactY > best.y)) {
+                store(depth, true, contactY);
             }
             return;
         }
@@ -442,7 +455,71 @@ public final class CollisionWorld {
         edgeSeg(a, b);
         edgeSeg(b, c);
         edgeSeg(c, a);
+        // Endpoints and edges miss a long capsule that goes through the middle of a
+        // wide floor (Zainsipilu platforms / cave hulls). Hit the face itself.
+        faceSeg();
         return capBest;
+    }
+
+    /** Closest points when the capsule axis crosses or sits over the triangle interior. */
+    private void faceSeg() {
+        tmpA.set(b).sub(a);
+        tmpB.set(c).sub(a);
+        n.set(tmpA).crs(tmpB);
+        float n2 = n.len2();
+        if (n2 < 1e-12f) {
+            return;
+        }
+        float invLen = (float) (1.0 / Math.sqrt(n2));
+        tmpC.set(capB).sub(capA);
+        float denom = n.dot(tmpC);
+        if (Math.abs(denom) > 1e-6f) {
+            float t = n.dot(tmpD.set(a).sub(capA)) / denom;
+            if (t >= 0f && t <= 1f) {
+                q.set(capA).mulAdd(tmpC, t);
+                if (pointInTri(q)) {
+                    capBest = 0f;
+                    closest.set(q);
+                    p.set(q);
+                    return;
+                }
+            }
+        }
+        projectCapToFace(capA, invLen);
+        projectCapToFace(capB, invLen);
+    }
+
+    private void projectCapToFace(Vector3 cap, float invLen) {
+        float signed = n.dot(tmpD.set(cap).sub(a)) * invLen;
+        float planeDist = Math.abs(signed);
+        if (planeDist >= capBest) {
+            return;
+        }
+        q.set(cap).mulAdd(n, -signed * invLen);
+        if (pointInTri(q)) {
+            capBest = planeDist;
+            closest.set(q);
+            p.set(cap);
+        }
+    }
+
+    private boolean pointInTri(Vector3 pt) {
+        tmpA.set(b).sub(a);
+        tmpB.set(c).sub(a);
+        tmpC.set(pt).sub(a);
+        float dot00 = tmpA.dot(tmpA);
+        float dot01 = tmpA.dot(tmpB);
+        float dot02 = tmpA.dot(tmpC);
+        float dot11 = tmpB.dot(tmpB);
+        float dot12 = tmpB.dot(tmpC);
+        float det = dot00 * dot11 - dot01 * dot01;
+        if (Math.abs(det) < 1e-12f) {
+            return false;
+        }
+        float inv = 1f / det;
+        float u = (dot11 * dot02 - dot01 * dot12) * inv;
+        float v = (dot00 * dot12 - dot01 * dot02) * inv;
+        return u >= -1e-4f && v >= -1e-4f && u + v <= 1f + 1e-4f;
     }
 
     private void edgeSeg(Vector3 e0, Vector3 e1) {

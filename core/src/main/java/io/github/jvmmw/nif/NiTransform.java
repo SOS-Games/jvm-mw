@@ -11,7 +11,8 @@ import com.badlogic.gdx.math.Vector3;
 /**
  * NIF rotation, translation, and scale. Copied straight into a libGDX
  * matrix — do not transpose it again. Cave doorways have a local +90° X;
- * transposing that opens wall seams.
+ * transposing that opens wall seams. Addamasartus and Zainsipilu both
+ * fail if this 3x3 is swapped.
  */
 public final class NiTransform {
     public final float[] rotation = {
