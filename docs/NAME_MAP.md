@@ -78,6 +78,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/loadpgrd.hpp` | `ESM::Pathgrid` / `REC_PGRD` | `esm.EsmPathgrid` | same |
 | `Store<ESM::Pathgrid>::load` key | bind by interior name vs grid XY | rewrite |
 | `components/sceneutil/pathgridutil.cpp` | `createPathgridGeometry` | `render.PathgridDebug` spheres + lines, F5 | rewrite |
+| `apps/openmw/mwmechanics/pathgrid.hpp` | `PathgridGraph` | `esm.PathgridGraph` | rewrite |
+| `components/misc/pathgridutils.hpp` | `Misc::getClosestPoint` | `PathgridGraph.closest` | rewrite |
+| `apps/openmw/mwmechanics/aiwander.cpp` | `AiWander::fillAllowedPositions` | `PathgridGraph.allowed` | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` | viewer **E** + `DoorSwing` pick | rewrite |
 | `apps/openmw/mwworld/actiondoor.cpp` | `ActionDoor` | `DoorSwing.activateDoor` | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `activateDoor` / `rotateDoor` / `processDoors` | `render.DoorSwing` | rewrite |

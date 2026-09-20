@@ -11,6 +11,7 @@ Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca
 - **Do not** port OpenMW tools.
 - **Do not** commit Bethesda assets (`testdata/`, ESM/BSA).
 - **Do not** commit mid-implementation.
+- **Do not** revert `debug.DebugVars` defaults the user has changed.
 - Once the user says a phase is **working**, **commit and push that phase before writing the next spec.** Do not start the next spec while the previous working phase is uncommitted. After a working phase, `proceed` means commit first, then spec the next slice.
 - Other-LLM claims: when OpenMW behavior is uncertain, put them in the phase spec using the syntax below. Point at that file; **do not paste the prompts into chat.** Skip them when confidence is already high. If only one corner is shaky, one claim. Do not invent three when zero or one would do. Any claims in the spec must **hold** before Java. One claim per chat. The fenced prompt is copied as-is to the other LLM — put the whole excerpt in it so that model does not open files or search.
 
@@ -75,8 +76,8 @@ gradlew.bat :core:debugCli --args="pgrd -2 -9"
 | `cell` | Fog, inbound spawn, door DODT/DNAM, `pgrd=N e=M`. Kit lines include `gl=` world AABB. Then `seam meet` / `seam gap` / `seam island` — whether cave hulls actually touch (not just ESM placement) |
 | `interiors` | Pick a cell large enough to see fog (`fogStart = 7168 * (1 - density)`) |
 | `spawn` | Confirm the exterior-door arrival point |
-| `npc` | Race/head/hair/skeleton/equipped parts, `wander=` |
-| `crea` | Model, x-path, flags, scale, `wander=` |
+| `npc` | Race/head/hair/skeleton/equipped parts, `wander=` / `allowed=` |
+| `crea` | Model, x-path, flags, scale, `wander=` / `allowed=` |
 | `levc` | Creature leveled list: chance-none, flags, `level id` rows |
 | `kf` | Idle groups / bone tracks from a `.kf` |
 | `exterior` | 5×5 minus corners around a grid: 21 `grid=` lines with `pgrd=`, then center spawn/doors / `water=-1`. `crea=` hardcoded, `levc=` / `levcNone=` a dry roll at level 1 |
@@ -95,7 +96,7 @@ In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard 
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
 - Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners land with linear 17×17 mix + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`), **Zain** = Zainsipilu. WASD walks on land/docks; ceilings and dock undersides stop the camera. Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. Top-right fps overlay (F4) shows frame ms, draws, culled, tex, nif, and the fattest section. **F5** toggles pathgrid spheres and edges (on at load). Meshes outside the camera frustum are not submitted. Meshes smaller than 2 pixels are skipped on the main view. Objects farther than 7168 are skipped unless they are large (trees, shacks). Land and water stay. DDS and static NIF GPU templates intern by VFS path. Water RTTs skip NPC/creature reflections and meshes smaller than 20 pixels on the 512 map. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
 - **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as a 5×5-minus-corners around that exterior grid, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
-- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins. First `AI_W` distance > 0 slides them around spawn (80 units/s); while they move the same kf plays `walkforward`, then a short blend back to `idle`. Distance 0 stays. Walk clips translate `Bip01` / `root bone` in XY — zero those so the loop does not yank them back. Test knobs live in `debug.DebugVars`: `wanderSpeed` (default 2), `wanderTurn` (90°/s; OpenMW is 900), `wanderRadius` (0.3 of AI_W), `wanderRadiusMax` (256), `wanderFrequency` (3).
+- NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins. First `AI_W` distance > 0 walks them around spawn along that cell’s pathgrid when it has enough nodes (the F5 spheres); otherwise a straight line. Distance 0 stays. Walk clips translate `Bip01` / `root bone` in XY — zero those so the loop does not yank them back. Test knobs live in `debug.DebugVars`: `wanderSpeed`, `wanderTurn`, `wanderRadius` (random dest TES cap; 0 is ESM AI_W), `nodeWanderRadius` (pathgrid dest TES cap; 0 is ESM AI_W), `wanderFrequency`.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`. Wilderness spawn markers are `LEVC`: roll at player level 1 (`AllLevels` is bit 0, not the item-list bit). Empty rolls are chance-none or entries above level 1. Walk-grid rebuilds keep the last pick for each marker. LEVC uses the picked `CREA` wander.
 
 ## Class comments

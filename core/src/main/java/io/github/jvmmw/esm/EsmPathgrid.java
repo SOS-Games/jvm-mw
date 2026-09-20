@@ -12,7 +12,7 @@ import java.util.List;
  * A cell’s NPC walk graph from the ESM: points and the edges between them.
  * Wander still goes in a straight line; this is the dump so we can follow
  * the graph later. Points are cell-local TES (exteriors 0–8192 in that
- * cell). The overlay adds the cell origin outdoors.
+ * cell). Wander adds the cell origin and follows the edges.
  */
 public final class EsmPathgrid {
     public static final EsmPathgrid NONE = new EsmPathgrid();

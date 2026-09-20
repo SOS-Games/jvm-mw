@@ -83,8 +83,8 @@ public final class DebugCli {
                        Header includes pgrd=N e=M.
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
-            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander distance.
-            crea       One CREA: model, corrected x-path, flags, scale, wander distance.
+            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander= and allowed= pathgrid dests.
+            crea       One CREA: model, corrected x-path, flags, scale, wander= and allowed=.
             levc       One creature leveled list: flags, chance-none, level/id rows.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
@@ -335,7 +335,7 @@ public final class DebugCli {
         if (crea == null) {
             throw new IllegalStateException("No CREA matching " + id);
         }
-        System.out.print(NpcMannequin.describeCreature(crea));
+        System.out.print(NpcMannequin.describeCreature(crea, cell));
     }
 
     private static void levc(String id) throws Exception {

@@ -14,6 +14,8 @@ import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmPartRef;
 import io.github.jvmmw.esm.EsmRace;
+import io.github.jvmmw.esm.LandRecord;
+import io.github.jvmmw.esm.PathgridGraph;
 import io.github.jvmmw.nif.KfFile;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.nif.NiKeyframeController;
@@ -39,11 +41,13 @@ import java.util.Random;
  * An NPC as a dressed skeleton (head, hair, clothes on base_anim), not the
  * mesh listed on the NPC record. Faces the yaw of the placement, scaled by
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
- * A wander radius greater than 0 slides them around spawn; while they move
- * the same .kf plays walkforward, then idle again when they stop. They turn
- * toward the next point instead of snapping yaw. Walk clips shove Bip01 (or
- * root bone) forward — we zero that XY so the loop does not yank them back
- * each stride. Creatures use the same tick with their own mesh.
+ * A wander radius greater than 0 walks them around spawn. If that cell has
+ * a usable pathgrid they follow its edges (the F5 spheres); otherwise they
+ * still slide a straight line. While they move the same .kf plays
+ * walkforward, then idle again when they stop. They turn toward the next
+ * point instead of snapping yaw. Walk clips shove Bip01 (or root bone)
+ * forward — we zero that XY so the loop does not yank them back each
+ * stride. Creatures use the same tick with their own mesh.
  */
 public final class NpcMannequin {
     public static final int PRT_COUNT = 27;
@@ -125,7 +129,9 @@ public final class NpcMannequin {
     };
 
     private static final String XBASE = "meshes/xbase_anim.nif";
-    private static final float WANDER_SPEED = 80f;
+    /** Walk TES units/s when the .kf has no Bip01 travel. */
+    private static final float WALK_CLIP_FALLBACK = 154.064f;
+    private static final float WALK_ANIM_MAX = 10f;
     private static final float WANDER_ARRIVE = 8f;
     private static final float ANIM_BLEND = 0.2f;
     private static final float TURN_EPS = (float) Math.toRadians(0.5f);
@@ -137,6 +143,7 @@ public final class NpcMannequin {
     private final Map<String, PartNif> parts = new HashMap<>();
     private final Map<String, KfFile> kfs = new HashMap<>();
     private final List<NpcActor> actors = new ArrayList<>();
+    private final Map<Long, PathgridGraph> graphs = new HashMap<>();
     private final Random wanderRng = new Random();
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
@@ -159,6 +166,7 @@ public final class NpcMannequin {
         parts.clear();
         kfs.clear();
         actors.clear();
+        graphs.clear();
     }
 
     public SceneNode build(EsmNpc npc, CellRef ref, EsmFile.LoadedCell cell) throws Exception {
@@ -248,11 +256,11 @@ public final class NpcMannequin {
         float sy = s * weight;
         float sz = s * height;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], sx, sy, sz);
-        beginWander(actor, ref.pos, ref.rot[2], sx, sy, sz, npc.wanderDistance);
+        beginWander(actor, ref.pos, ref.rot[2], sx, sy, sz, npc.wanderDistance, cell, false);
         return placed;
     }
 
-    public SceneNode buildCreature(EsmCreature crea, CellRef ref) throws Exception {
+    public SceneNode buildCreature(EsmCreature crea, CellRef ref, EsmFile.LoadedCell cell) throws Exception {
         String mesh = TexturePaths.normalizeMeshPath(crea.model);
         String animationMesh = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
         boolean animated = true;
@@ -283,7 +291,7 @@ public final class NpcMannequin {
         actors.add(actor);
         float s = ref.scale * crea.scale;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s, s, s);
-        beginWander(actor, ref.pos, ref.rot[2], s, s, s, crea.wanderDistance);
+        beginWander(actor, ref.pos, ref.rot[2], s, s, s, crea.wanderDistance, cell, crea.pureWater());
         return placed;
     }
 
@@ -295,7 +303,7 @@ public final class NpcMannequin {
             if (actor.idle == null) {
                 continue;
             }
-            float animDt = actor.moving ? dt * scale : dt;
+            float animDt = walkAnimDt(actor, dt);
             actor.idle.time += animDt;
             float span = actor.idle.loopStop - actor.idle.loopStart;
             if (span > 0f && actor.idle.time >= actor.idle.loopStop) {
@@ -306,7 +314,8 @@ public final class NpcMannequin {
         }
     }
 
-    private void beginWander(NpcActor actor, float[] spawn, float yaw, float sx, float sy, float sz, int distance) {
+    private void beginWander(NpcActor actor, float[] spawn, float yaw, float sx, float sy, float sz, int distance,
+        EsmFile.LoadedCell cell, boolean water) {
         actor.tesPos[0] = spawn[0];
         actor.tesPos[1] = spawn[1];
         actor.tesPos[2] = spawn[2];
@@ -319,7 +328,24 @@ public final class NpcMannequin {
         actor.sz = sz;
         actor.wanderDistance = distance;
         actor.walking = false;
+        actor.waypoints.clear();
+        actor.graph = distance > 0 && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
+    }
+
+    private PathgridGraph graphFor(EsmFile.LoadedCell cell, float[] spawn) {
+        if (cell == null) {
+            return PathgridGraph.NONE;
+        }
+        long key;
+        if (cell.interior) {
+            key = 1L;
+        } else {
+            int gx = LandRecord.cellGrid(spawn[0]);
+            int gy = LandRecord.cellGrid(spawn[1]);
+            key = ((long) gx << 32) ^ (gy & 0xffffffffL);
+        }
+        return graphs.computeIfAbsent(key, k -> PathgridGraph.of(cell, spawn));
     }
 
     private void wander(NpcActor actor, float dt, float scale, CollisionWorld collision) {
@@ -327,30 +353,79 @@ public final class NpcMannequin {
             return;
         }
         actor.moving = false;
+        actor.moved = 0f;
+        float nodeCap = nodeRange(actor.wanderDistance);
+        float roamCap = wanderRange(actor.wanderDistance);
+        if (nodeCap <= WANDER_ARRIVE && roamCap <= WANDER_ARRIVE) {
+            actor.walking = false;
+            actor.waypoints.clear();
+            stickLand(actor, collision);
+            EsmTransforms.setActorLocal(actor.placed.local, actor.tesPos, actor.yaw, actor.sx, actor.sy, actor.sz);
+            return;
+        }
         if (actor.walking) {
-            float dx = actor.destX - actor.tesPos[0];
-            float dy = actor.destY - actor.tesPos[1];
-            float dist = (float) Math.sqrt(dx * dx + dy * dy);
-            if (dist <= WANDER_ARRIVE) {
-                actor.tesPos[0] = actor.destX;
-                actor.tesPos[1] = actor.destY;
-                actor.walking = false;
-                actor.idleLeft = pause(2f, 3f);
-            } else {
-                float want = (float) Math.atan2(dx, dy);
-                float diff = turnToward(actor, want, dt);
-                if (Math.abs(diff) <= WALK_ALIGN) {
-                    float step = Math.min(WANDER_SPEED * scale * dt, dist);
-                    float nx = actor.tesPos[0] + (float) Math.sin(actor.yaw) * step;
-                    float ny = actor.tesPos[1] + (float) Math.cos(actor.yaw) * step;
-                    float ndx = actor.destX - nx;
-                    float ndy = actor.destY - ny;
-                    if (ndx * ndx + ndy * ndy < dist * dist) {
-                        actor.tesPos[0] = nx;
-                        actor.tesPos[1] = ny;
-                        actor.moving = true;
-                    }
+            float range = actor.destRange;
+            float range2 = range * range;
+            float remaining = walkClip(actor) * scale * dt;
+            boolean turned = false;
+            int hops = 0;
+            while (actor.walking && remaining > 0.001f && hops++ < 16) {
+                float ddx = actor.destX - actor.spawnX;
+                float ddy = actor.destY - actor.spawnY;
+                if (ddx * ddx + ddy * ddy > range2) {
+                    actor.waypoints.clear();
+                    actor.walking = false;
+                    actor.idleLeft = pause(2f, 3f);
+                    break;
                 }
+                float dx = actor.destX - actor.tesPos[0];
+                float dy = actor.destY - actor.tesPos[1];
+                float dist = (float) Math.sqrt(dx * dx + dy * dy);
+                if (dist <= WANDER_ARRIVE) {
+                    actor.tesPos[0] = actor.destX;
+                    actor.tesPos[1] = actor.destY;
+                    if (!actor.waypoints.isEmpty()) {
+                        float[] next = actor.waypoints.remove(0);
+                        float ndx = next[0] - actor.spawnX;
+                        float ndy = next[1] - actor.spawnY;
+                        if (ndx * ndx + ndy * ndy > range2) {
+                            actor.waypoints.clear();
+                            actor.walking = false;
+                            actor.idleLeft = pause(2f, 3f);
+                            break;
+                        }
+                        actor.destX = next[0];
+                        actor.destY = next[1];
+                        continue;
+                    }
+                    actor.walking = false;
+                    actor.idleLeft = pause(2f, 3f);
+                    break;
+                }
+                float want = (float) Math.atan2(dx, dy);
+                float diff;
+                if (!turned) {
+                    diff = turnToward(actor, want, dt);
+                    turned = true;
+                } else {
+                    diff = wrapPi(want - actor.yaw);
+                }
+                if (Math.abs(diff) > WALK_ALIGN) {
+                    break;
+                }
+                float step = Math.min(remaining, dist);
+                float nx = actor.tesPos[0] + (float) Math.sin(actor.yaw) * step;
+                float ny = actor.tesPos[1] + (float) Math.cos(actor.yaw) * step;
+                float ndx = actor.destX - nx;
+                float ndy = actor.destY - ny;
+                if (ndx * ndx + ndy * ndy >= dist * dist) {
+                    break;
+                }
+                actor.tesPos[0] = nx;
+                actor.tesPos[1] = ny;
+                remaining -= step;
+                actor.moved += step;
+                actor.moving = true;
             }
         } else {
             actor.idleLeft -= dt;
@@ -363,23 +438,105 @@ public final class NpcMannequin {
     }
 
     private void pickWanderDest(NpcActor actor) {
+        if (pickPathgridDest(actor)) {
+            return;
+        }
+        pickStraightDest(actor);
+    }
+
+    private boolean pickPathgridDest(NpcActor actor) {
+        float range = nodeRange(actor.wanderDistance);
+        if (range <= WANDER_ARRIVE || !actor.graph.usable()) {
+            return false;
+        }
+        List<float[]> left = actor.graph.allowed(
+            actor.spawnX, actor.spawnY, actor.spawnZ, range);
+        if (left.size() <= 2) {
+            return false;
+        }
+        float range2 = range * range;
+        float arrive2 = WANDER_ARRIVE * WANDER_ARRIVE;
+        while (!left.isEmpty()) {
+            int pick = wanderRng.nextInt(left.size());
+            float[] dest = left.remove(pick);
+            float sdx = dest[0] - actor.spawnX;
+            float sdy = dest[1] - actor.spawnY;
+            if (sdx * sdx + sdy * sdy > range2) {
+                continue;
+            }
+            float cdx = dest[0] - actor.tesPos[0];
+            float cdy = dest[1] - actor.tesPos[1];
+            float c2 = cdx * cdx + cdy * cdy;
+            if (c2 <= arrive2 || c2 > range2) {
+                continue;
+            }
+            List<float[]> path = actor.graph.pathTo(
+                actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], dest[0], dest[1], dest[2],
+                actor.spawnX, actor.spawnY, actor.spawnZ, range);
+            if (path.isEmpty() || !pathFits(actor, path, range)) {
+                continue;
+            }
+            actor.destX = path.get(0)[0];
+            actor.destY = path.get(0)[1];
+            actor.waypoints.clear();
+            for (int i = 1; i < path.size(); i++) {
+                actor.waypoints.add(path.get(i));
+            }
+            actor.walking = true;
+            actor.destRange = range;
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean pathFits(NpcActor actor, List<float[]> path, float range) {
+        float range2 = range * range;
+        float px = actor.tesPos[0];
+        float py = actor.tesPos[1];
+        float len = 0f;
+        for (float[] p : path) {
+            float sdx = p[0] - actor.spawnX;
+            float sdy = p[1] - actor.spawnY;
+            if (sdx * sdx + sdy * sdy > range2) {
+                return false;
+            }
+            float dx = p[0] - px;
+            float dy = p[1] - py;
+            len += (float) Math.sqrt(dx * dx + dy * dy);
+            if (len > range) {
+                return false;
+            }
+            px = p[0];
+            py = p[1];
+        }
+        return true;
+    }
+
+    private void pickStraightDest(NpcActor actor) {
         float range = wanderRange(actor.wanderDistance);
-        if (range <= 0f) {
+        if (range <= WANDER_ARRIVE) {
             actor.walking = false;
             return;
         }
-        float radius = (0.2f + wanderRng.nextFloat() * 0.8f) * range;
-        float theta = wanderRng.nextFloat() * ((float) Math.PI * 2f);
-        actor.destX = actor.spawnX + radius * (float) Math.cos(theta);
-        actor.destY = actor.spawnY + radius * (float) Math.sin(theta);
-        float dx = actor.destX - actor.tesPos[0];
-        float dy = actor.destY - actor.tesPos[1];
-        if (dx * dx + dy * dy < 1f) {
-            actor.idleLeft = pause(2f, 3f);
-            actor.walking = false;
+        float arrive2 = WANDER_ARRIVE * WANDER_ARRIVE;
+        actor.waypoints.clear();
+        for (int n = 0; n < 8; n++) {
+            float radius = (0.2f + wanderRng.nextFloat() * 0.8f) * range;
+            float theta = wanderRng.nextFloat() * ((float) Math.PI * 2f);
+            float destX = actor.spawnX + radius * (float) Math.cos(theta);
+            float destY = actor.spawnY + radius * (float) Math.sin(theta);
+            float dx = destX - actor.tesPos[0];
+            float dy = destY - actor.tesPos[1];
+            if (dx * dx + dy * dy <= arrive2) {
+                continue;
+            }
+            actor.destX = destX;
+            actor.destY = destY;
+            actor.destRange = range;
+            actor.walking = true;
             return;
         }
-        actor.walking = true;
+        actor.walking = false;
     }
 
     /** Remaining signed error after this frame's turn. */
@@ -445,11 +602,19 @@ public final class NpcMannequin {
     }
 
     private static float wanderRange(int esmDistance) {
-        float range = esmDistance * Math.max(0f, DebugVars.wanderRadius);
-        if (DebugVars.wanderRadiusMax > 0f) {
-            range = Math.min(range, DebugVars.wanderRadiusMax);
+        return capRange(esmDistance, DebugVars.wanderRadius);
+    }
+
+    private static float nodeRange(int esmDistance) {
+        return capRange(esmDistance, DebugVars.nodeWanderRadius);
+    }
+
+    private static float capRange(int esmDistance, float cap) {
+        float range = esmDistance;
+        if (cap > 0f) {
+            range = Math.min(range, cap);
         }
-        return range;
+        return Math.max(0f, range);
     }
 
     private float pause(float min, float extra) {
@@ -494,6 +659,7 @@ public final class NpcMannequin {
             .append(" head=").append(npc.head)
             .append(" hair=").append(npc.hair)
             .append(" wander=").append(npc.wanderDistance)
+            .append(" allowed=").append(countAllowed(cell, npc.id, npc.wanderDistance, false))
             .append('\n');
         sb.append("skeleton=").append(skeletonPath(npc, cell)).append('\n');
         EsmObject[] equipped = autoEquip(npc, cell);
@@ -518,7 +684,21 @@ public final class NpcMannequin {
         return sb.toString();
     }
 
-    public static String describeCreature(EsmCreature crea) {
+    private static int countAllowed(EsmFile.LoadedCell cell, String id, int distance, boolean water) {
+        if (cell == null || distance <= 0 || water) {
+            return 0;
+        }
+        for (CellRef ref : cell.refs) {
+            if (ref.deleted || !id.equalsIgnoreCase(ref.refId)) {
+                continue;
+            }
+            PathgridGraph graph = PathgridGraph.of(cell, ref.pos);
+            return graph.allowed(ref.pos[0], ref.pos[1], ref.pos[2], nodeRange(distance)).size();
+        }
+        return 0;
+    }
+
+    public static String describeCreature(EsmCreature crea, EsmFile.LoadedCell cell) {
         String mesh = TexturePaths.normalizeMeshPath(crea.model);
         String corrected = TexturePaths.correctActorModelPath(mesh, TestData::vfsExists);
         boolean animated = !(corrected.equals(mesh) && mesh.endsWith(".nif"));
@@ -538,6 +718,7 @@ public final class NpcMannequin {
             .append(" walks=").append(crea.walks())
             .append(" scale=").append(crea.scale)
             .append(" wander=").append(crea.wanderDistance)
+            .append(" allowed=").append(countAllowed(cell, crea.id, crea.wanderDistance, crea.pureWater()))
             .append('\n');
         sb.append("kf=").append(TexturePaths.nifToKf(corrected)).append('\n');
         return sb.toString();
@@ -777,7 +958,47 @@ public final class NpcMannequin {
         }
         actor.kf = chosen;
         actor.idle = loop;
+        actor.walkClipSpeed = "walkforward".equals(group) ? measureWalkClip(actor) : 0f;
         return true;
+    }
+
+    private float measureWalkClip(NpcActor actor) {
+        if (actor.idle == null) {
+            return 0f;
+        }
+        float span = actor.idle.loopStop - actor.idle.loopStart;
+        if (span <= 0.001f) {
+            return 0f;
+        }
+        for (BoneBinding bind : actor.bindings) {
+            if (bind.node != actor.accumRoot || bind.data.translations.empty()) {
+                continue;
+            }
+            bind.data.translations.interpVec3(actor.idle.loopStart, tmp);
+            float x0 = tmp.x;
+            float y0 = tmp.y;
+            bind.data.translations.interpVec3(actor.idle.loopStop, tmp);
+            float dx = tmp.x - x0;
+            float dy = tmp.y - y0;
+            float vel = (float) Math.sqrt(dx * dx + dy * dy) / span;
+            return vel > 1f ? vel : 0f;
+        }
+        return 0f;
+    }
+
+    private static float walkClip(NpcActor actor) {
+        return actor.walkClipSpeed > 1f ? actor.walkClipSpeed : WALK_CLIP_FALLBACK;
+    }
+
+    private static float walkAnimDt(NpcActor actor, float dt) {
+        if (!actor.moving || dt < 1e-6f) {
+            return dt;
+        }
+        float rate = actor.moved / (walkClip(actor) * dt);
+        if (rate > WALK_ANIM_MAX) {
+            rate = WALK_ANIM_MAX;
+        }
+        return dt * Math.max(0f, rate);
     }
 
     private void pose(NpcActor actor, float dt) {
@@ -968,6 +1189,7 @@ public final class NpcMannequin {
         float spawnZ;
         float destX;
         float destY;
+        float destRange;
         float yaw;
         float sx = 1f;
         float sy = 1f;
@@ -975,9 +1197,13 @@ public final class NpcMannequin {
         int wanderDistance;
         float idleLeft;
         boolean walking;
+        PathgridGraph graph = PathgridGraph.NONE;
+        final List<float[]> waypoints = new ArrayList<>();
         boolean playingWalk;
         boolean moving;
         boolean noWalk;
+        float moved;
+        float walkClipSpeed;
         float blendLeft;
 
         NpcActor(SceneNode placed, SceneNode skeleton, Map<String, SceneNode> boneNodes) {

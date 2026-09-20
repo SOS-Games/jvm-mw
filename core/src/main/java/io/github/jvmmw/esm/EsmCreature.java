@@ -43,4 +43,9 @@ public final class EsmCreature {
     public boolean walks() {
         return (flags & WALKS) != 0;
     }
+
+    /** OpenMW isPureWaterCreature: swims, and not biped / fly / walk. */
+    public boolean pureWater() {
+        return swims() && !bipedal() && !flies() && !walks();
+    }
 }

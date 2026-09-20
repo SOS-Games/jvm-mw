@@ -8,7 +8,7 @@ Align with `components/esm3/loadpgrd.*`, `apps/openmw/mwmechanics/pathgrid.*` (`
 
 ## What Town has now
 
-Wander is the **no-pathgrid fallback**: a random TES XY near spawn, then a straight line ([phase 38](phase38-cheap-wander.md)). Walk cycles play while they move ([phase 39](phase39-walk-cycle.md)). They clip shacks, docks, and each other. Pathgrids parse, dump, and draw ([phase 40](phase40-pathgrid-parse.md)); F5 toggles spheres and edges.
+Wander uses the cell pathgrid when the reachable cluster has three or more nodes ([phase 41](phase41-pathgrid-wander.md)); otherwise a random TES XY near spawn ([phase 38](phase38-cheap-wander.md)). Walk cycles play while they move ([phase 39](phase39-walk-cycle.md)). They clip shacks, docks, and each other. Pathgrids parse, dump, and draw ([phase 40](phase40-pathgrid-parse.md)); F5 toggles spheres and edges.
 
 Vanilla wander is not that fallback. Bethesda authored a **pathgrid** per cell: nodes and edges NPCs are allowed to walk. OpenMW follows those nodes when the cell has at least two points; only then does it use `wanderNearStart`.
 
@@ -56,15 +56,14 @@ Glued to (1).
 
 ### 3. Wander along the grid
 
-- [ ] If the cell has ≥ 2 points and the actor is not a pure water creature: build allowed nodes (distance from **spawn**, same component as closest node).
-- [ ] Pick a random allowed node. A* along edges. Walk the polyline with the existing wander step / turn / `walkforward`. Land-stick Z outdoors.
-- [ ] Distance 0 still stays. `< 2` points, or no node in range: keep today’s `getRandomPointAround` straight line.
-- [ ] One node in range: OpenMW adds spawn plus mid-edge points — include that in the phase spec, do not invent a third rule.
-- [ ] Walk-grid swap: new mannequins rebuild allowed lists from the new cell’s `PGRD` (spawn is still ESM placement).
+- [x] If the cell has ≥ 2 points and the actor is not a pure water creature: build allowed nodes (distance from **spawn**, hops stay inside `nodeWanderRadius`).
+- [x] Pick a random allowed node. A* along edges. Walk the polyline with the existing wander step / turn / `walkforward`. Land-stick Z outdoors.
+- [x] Distance 0 still stays. Two or fewer reachable nodes, or no useful cluster: keep today’s random dests (`wanderRadius`).
+- [x] Walk-grid swap: new mannequins rebuild allowed lists from the new cell’s `PGRD` (spawn is still ESM placement).
 
 **Town test:** Fargoth and the Census-yard NPCs stay in their component (office/ship vs town vs enclosed yard). Beach crabs may still straight-line if their cell grid is thin. They should not cut through the Census office from the street.
 
-This is the unfinished wander path. It is still a small phase if (1) has shipped.
+Spec: [phase41-pathgrid-wander.md](phase41-pathgrid-wander.md). **Working.**
 
 ### 4. Occupied nodes and hidden dest
 

@@ -13,28 +13,29 @@ import java.util.Properties;
  * jvmmw.debug.NAME in gitignored local.properties, -Djvmmw.debug.NAME, or
  * env JVMMW_DEBUG_NAME (dots to underscores).
  *
- * Dump / F4 list these. Vanilla wander is speed 1, turn 900, radius 1, max 0 (no cap),
- * frequency 1.
+ * Dump / F4 list these. Vanilla wander is speed 1, turn 900, radius 0 and
+ * node radius 0 (ESM AI_W), frequency 1.
  */
 public final class DebugVars {
     /**
-     * Wander move and walk-cycle speed. Vanilla is 80 TES units/s at 1.
+     * Wander move speed. 1 is the walk clip's own stride (feet match the
+     * ground). 3 is a fast walk, not a 3× moonwalk.
      */
-    public static final float wanderSpeed = f("wanderSpeed", 2f);
+    public static final float wanderSpeed = f("wanderSpeed", 3f);
 
     /**
      * Pivot degrees per second. OpenMW is 900. Does not follow wanderSpeed.
      */
     public static final float wanderTurn = f("wanderTurn", 270f);
 
-    /** Times the ESM AI_W radius. 1 is the full recorded distance. */
-    public static final float wanderRadius = f("wanderRadius", 0.3f);
+    /** TES-unit cap from spawn for random (no-grid) dests. 0 uses ESM AI_W. */
+    public static final float wanderRadius = f("wanderRadius", 600f);
 
-    /** Cap on that radius in TES units. 0 means no cap. */
-    public static final float wanderRadiusMax = f("wanderRadiusMax", 256f);
+    /** TES-unit cap from spawn for pathgrid nodes. 0 uses ESM AI_W. */
+    public static final float nodeWanderRadius = f("nodeWanderRadius", 600f);
 
     /** How often they pick a new point. 1 is a 2–5 s pause; 2 is twice as often. */
-    public static final float wanderFrequency = f("wanderFrequency", 3f);
+    public static final float wanderFrequency = f("wanderFrequency", 5f);
 
     private static Properties localProps;
 
@@ -45,14 +46,14 @@ public final class DebugVars {
         sb.append("debug.wanderSpeed=").append(wanderSpeed)
             .append(" wanderTurn=").append(wanderTurn)
             .append(" wanderRadius=").append(wanderRadius)
-            .append(" wanderRadiusMax=").append(wanderRadiusMax)
+            .append(" nodeWanderRadius=").append(nodeWanderRadius)
             .append(" wanderFrequency=").append(wanderFrequency)
             .append('\n');
     }
 
     public static String hudLine() {
-        return String.format(Locale.US, "debug spd=%.2g turn=%.2g r=%.2g max=%.0f freq=%.2g",
-            wanderSpeed, wanderTurn, wanderRadius, wanderRadiusMax, wanderFrequency);
+        return String.format(Locale.US, "debug spd=%.2g turn=%.2g r=%.0f node=%.0f freq=%.2g",
+            wanderSpeed, wanderTurn, wanderRadius, nodeWanderRadius, wanderFrequency);
     }
 
     private static float f(String name, float fallback) {
