@@ -116,13 +116,15 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |
 | `components/esmterrain/storage.cpp` | `getTextureName` | `LandMesh.textureName` | rewrite |
-| `components/misc/constants.hpp` | `CellGridRadius` | `EsmFile.CELL_GRID_RADIUS` (1 → 3×3) | same |
-| `apps/openmw/mwworld/scene.cpp` | `iterateOverCellsAround` | `loadExterior` one pass `|x-cx|<=1` | rewrite |
+| `components/misc/constants.hpp` | `CellGridRadius` | `EsmFile.CELL_GRID_RADIUS` (2, corners cut) | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `iterateOverCellsAround` | `loadExterior` 5×5 minus corners | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `playerMoved` | exterior walk → maybe recenter | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `getNewGridCenter` | `LandRecord.newGridCenter` Chebyshev + 1024 | rewrite |
-| `apps/openmw/mwworld/scene.cpp` | `changeCellGrid` | 3×3 around camera cell, keep eye | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `changeCellGrid` | 5×5-minus-corners around camera cell, keep eye | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `requestChangeCellGrid` | walk load without overlay | rewrite |
+| `apps/openmw/mwworld/cellpreloader.cpp` | `CellPreloader` work queue | worker `loadExterior` + GL step | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
-| `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 3×3 around it | rewrite |
+| `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 5×5-minus-corners | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |
 | `apps/openmw/mwworld/actiontake.cpp` | `ActionTake` | unparent mesh, skip inventory | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `World::deleteObject` | `SceneNode.removeFromParent` | rewrite |

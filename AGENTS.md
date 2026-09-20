@@ -47,7 +47,7 @@ gradlew.bat :core:debugCli --args="exterior -2 -9"
 | `npc` | Race/head/hair/skeleton/equipped parts for one `NPC_` |
 | `crea` | Model, x-path, flags, scale for one `CREA` |
 | `kf` | Idle groups / bone tracks from a `.kf` |
-| `exterior` | 3×3 around a grid: nine `grid=` lines, then center spawn/doors / `water=-1` |
+| `exterior` | 5×5 minus corners around a grid: 21 `grid=` lines, then center spawn/doors / `water=-1` |
 
 In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-snapshot.txt`.
 
@@ -59,8 +59,8 @@ In the viewer, **F3** logs camera TES3 position + fog and writes `build/debug-sn
 - `NiSkinData` transforms use packed order (rotation, translation, scale), not `NiAVObject` (translation, rotation, scale). Wrong order flattens skinned parts onto the ground.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
-- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (3×3 blended land + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`). Walking recenters that 3×3 on the camera cell. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
-- **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as a 3×3 around that exterior grid, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
+- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners blended land + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`). Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
+- **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as a 5×5-minus-corners around that exterior grid, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`.
 

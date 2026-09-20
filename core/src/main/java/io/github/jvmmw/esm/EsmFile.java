@@ -17,8 +17,8 @@ import java.util.Set;
 /** Load placeable NAME+MODL records and CELL refs from Morrowind.esm. */
 public final class EsmFile {
     public static final int CELL_INTERIOR = 0x01;
-    /** TES3 {@code Constants::CellGridRadius}. Active grid side is {@code 2 * r + 1}. */
-    public static final int CELL_GRID_RADIUS = 1;
+    /** Bounding half-size of the active exterior grid (5×5). Corners are cut in {@link #inCellGrid}. */
+    public static final int CELL_GRID_RADIUS = 2;
     public static final String CENSUS_CELL = "Seyda Neen, Census and Excise Office";
     public static final String CENSUS_EXIT = "chargen door exit";
 
@@ -161,8 +161,12 @@ public final class EsmFile {
         center.bodies = file.bodies;
         center.actorIds = file.actorIds;
         center.landTextures = file.landTextures;
+        List<CellRef> ordered = new ArrayList<>();
         for (int x = gridX - radius; x <= gridX + radius; x++) {
             for (int y = gridY - radius; y <= gridY + radius; y++) {
+                if (!inCellGrid(x, y, gridX, gridY, radius)) {
+                    continue;
+                }
                 long key = gridKey(x, y);
                 LandRecord land = lands.get(key);
                 if (land == null) {
@@ -173,23 +177,36 @@ public final class EsmFile {
                 tile.gridX = x;
                 tile.gridY = y;
                 tile.name = part != null ? part.name : "";
-                tile.refs = part != null ? part.refs.size() : 0;
+                tile.refStart = ordered.size();
+                if (part != null) {
+                    ordered.addAll(part.refs);
+                    tile.refs = part.refs.size();
+                }
                 tile.land = land;
                 center.tiles.add(tile);
                 center.lands.add(land);
                 if (x == gridX && y == gridY) {
                     center.land = land;
-                } else if (part != null) {
-                    center.refs.addAll(part.refs);
                 }
             }
         }
+        center.refs.clear();
+        center.refs.addAll(ordered);
         file.applyCensusExitSpawn(center);
         return center;
     }
 
+    /**
+     * Chebyshev disk of {@code radius}, with the four square corners dropped when
+     * {@code radius >= 2} (a 5×5 with corners cut).
+     */
     public static boolean inCellGrid(int x, int y, int cx, int cy, int radius) {
-        return Math.abs(x - cx) <= radius && Math.abs(y - cy) <= radius;
+        int dx = Math.abs(x - cx);
+        int dy = Math.abs(y - cy);
+        if (dx > radius || dy > radius) {
+            return false;
+        }
+        return radius < 2 || dx != radius || dy != radius;
     }
 
     private static long gridKey(int x, int y) {
@@ -810,6 +827,7 @@ public final class EsmFile {
         public int gridX;
         public int gridY;
         public String name = "";
+        public int refStart;
         public int refs;
         public LandRecord land;
     }

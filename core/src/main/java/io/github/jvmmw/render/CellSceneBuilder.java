@@ -53,6 +53,7 @@ public final class CellSceneBuilder {
     private SceneNode buildingRoot;
     private Map<String, Integer> byRec;
     private int refIndex;
+    private int landIndex;
     private boolean finished;
     private final List<PendingLight> pendingLights = new ArrayList<>();
     private final Vector3 tmpPos = new Vector3();
@@ -76,6 +77,7 @@ public final class CellSceneBuilder {
         buildingRoot.name = "cell-root:" + cell.name;
         buildingRoot.local.setToRotation(1, 0, 0, -90);
         refIndex = 0;
+        landIndex = 0;
         finished = false;
         pendingLights.clear();
         doors.clear();
@@ -98,13 +100,6 @@ public final class CellSceneBuilder {
             lighting.sunDiffuse[2] = 0.9f;
         }
         if (!cell.interior) {
-            if (!cell.lands.isEmpty()) {
-                for (LandRecord land : cell.lands) {
-                    landMesh.attach(buildingRoot, land, cell.landTextures, cell.lands);
-                }
-            } else if (cell.land != null) {
-                landMesh.attach(buildingRoot, cell.land, cell.landTextures, List.of(cell.land));
-            }
             waterMesh.attach(buildingRoot, cell.gridX, cell.gridY);
         }
     }
@@ -115,6 +110,17 @@ public final class CellSceneBuilder {
             return true;
         }
         long start = System.nanoTime();
+        if (!cell.interior) {
+            while (landIndex < landCount()) {
+                LandRecord land = cell.lands.isEmpty() ? cell.land : cell.lands.get(landIndex);
+                List<LandRecord> neighbors = cell.lands.isEmpty() ? List.of(land) : cell.lands;
+                landMesh.attach(buildingRoot, land, cell.landTextures, neighbors);
+                landIndex++;
+                if (System.nanoTime() - start >= budgetNanos) {
+                    return false;
+                }
+            }
+        }
         while (refIndex < cell.refs.size()) {
             place(cell.refs.get(refIndex++));
             if (System.nanoTime() - start >= budgetNanos) {
@@ -183,6 +189,60 @@ public final class CellSceneBuilder {
 
     public int refIndex() {
         return refIndex;
+    }
+
+    public int landCount() {
+        if (cell == null || cell.interior) {
+            return 0;
+        }
+        if (!cell.lands.isEmpty()) {
+            return cell.lands.size();
+        }
+        return cell.land == null ? 0 : 1;
+    }
+
+    public int landIndex() {
+        return landIndex;
+    }
+
+    public String gpuPhase() {
+        if (cell == null) {
+            return "";
+        }
+        if (!cell.interior && landIndex < landCount()) {
+            return "land " + landIndex + "/" + landCount();
+        }
+        return "refs " + refIndex + "/" + refCount();
+    }
+
+    public float tileProgress(int gx, int gy) {
+        if (cell == null || cell.interior || cell.tiles.isEmpty()) {
+            return 0f;
+        }
+        EsmFile.GridTile tile = null;
+        int idx = -1;
+        for (int i = 0; i < cell.tiles.size(); i++) {
+            EsmFile.GridTile candidate = cell.tiles.get(i);
+            if (candidate.gridX == gx && candidate.gridY == gy) {
+                tile = candidate;
+                idx = i;
+                break;
+            }
+        }
+        if (tile == null) {
+            return 0f;
+        }
+        if (finished) {
+            return 1f;
+        }
+        if (landIndex <= idx) {
+            return 0f;
+        }
+        if (tile.refs <= 0) {
+            return 1f;
+        }
+        int done = Math.max(0, Math.min(tile.refs, refIndex - tile.refStart));
+        return 0.25f + 0.75f * (done / (float) tile.refs);
     }
 
     private void place(CellRef ref) {

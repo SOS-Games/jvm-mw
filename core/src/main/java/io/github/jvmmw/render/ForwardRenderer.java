@@ -269,7 +269,7 @@ public final class ForwardRenderer {
         Gdx.gl.glDepthMask(true);
         Gdx.gl.glEnable(GL20.GL_CULL_FACE);
         Gdx.gl.glCullFace(GL20.GL_BACK);
-        if (water) {
+        if (water || (lighting != null && lighting.exterior)) {
             drawSky(cam, false);
         }
         Gdx.gl.glUseProgram(program);
@@ -284,10 +284,14 @@ public final class ForwardRenderer {
         Gdx.gl.glUniform1f(uCameraFar, cam.far);
         drawNode(cam, root, 1, lighting, false);
         drawNode(cam, root, 0, lighting, false);
-        drawNode(cam, root, 2, lighting, false);
         if (water) {
             drawWater(cam, root, lighting, underwater);
         }
+        Gdx.gl.glUseProgram(program);
+        upload(uView, cam.view);
+        Gdx.gl.glUniform4f(uClipPlane, 0f, 0f, 0f, 1f);
+        bindLighting(lighting, false, underwater);
+        drawNode(cam, root, 2, lighting, false);
         Gdx.gl.glDisable(GL20.GL_POLYGON_OFFSET_FILL);
         Gdx.gl.glFrontFace(GL20.GL_CCW);
         Gdx.gl.glUseProgram(0);

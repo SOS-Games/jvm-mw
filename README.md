@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 28 (current)
+## Phase 29 (current)
 
-Walking an exterior recenters the 3×3 on the camera cell. Phase 27 clock stays. See [docs/phase28-walk-grid.md](docs/phase28-walk-grid.md). Phase 27 day/night: [docs/phase27-day-night.md](docs/phase27-day-night.md).
+Walking an exterior recenters a 5×5-minus-corners grid in the background: look and WASD stay live, then the new cells swap in. A small per-tile bar grid in the corner shows parse/land/refs so the swap is easy to catch. See [docs/phase29-bg-grid.md](docs/phase29-bg-grid.md). Phase 28 walk-recenter: [docs/phase28-walk-grid.md](docs/phase28-walk-grid.md).
 
 ```bat
 gradlew.bat lwjgl3:run

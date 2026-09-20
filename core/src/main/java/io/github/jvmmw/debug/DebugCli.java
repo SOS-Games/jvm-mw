@@ -71,11 +71,11 @@ public final class DebugCli {
             npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts.
             crea       One CREA: model, corrected x-path, flags, scale.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
-            exterior   3x3 around a grid: nine grid= lines, then center spawn/doors.
+            exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
 
             Viewer: F3 dumps camera TES3 pos + fog to the log and build/debug-snapshot.txt.
             E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
-            Empty-DNAM dest loads a 3x3 around that exterior grid. HUD Town loads exterior (-2, -9).
+            Empty-DNAM dest loads a 5x5-minus-corners around that exterior grid. HUD Town loads exterior (-2, -9).
             """;
     }
 

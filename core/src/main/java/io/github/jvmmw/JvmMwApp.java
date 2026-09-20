@@ -20,6 +20,8 @@ import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
+import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar;
+import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar.ProgressBarStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider.SliderStyle;
@@ -52,6 +54,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
@@ -78,6 +81,10 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Image loaderImage;
     private Texture loaderTexture;
     private String loaderCaption = "Loading…";
+    private Table walkTiles;
+    private Label walkTileCaption;
+    private ProgressBar[][] walkBars;
+    private float walkHudHold;
     private float yaw = START_YAW;
     private float pitch = START_PITCH;
     private float moveScale = 180f;
@@ -102,6 +109,18 @@ public final class JvmMwApp extends ApplicationAdapter {
     private boolean keepEye;
     private int lastWalkGx = Integer.MIN_VALUE;
     private int lastWalkGy;
+    private int walkGx = Integer.MIN_VALUE;
+    private int walkGy;
+    private int walkPendingGx = Integer.MIN_VALUE;
+    private int walkPendingGy;
+    private final AtomicInteger walkGen = new AtomicInteger();
+    private volatile EsmFile.LoadedCell walkReady;
+    private volatile int walkReadyGen;
+    private volatile String walkParseError;
+    private volatile int walkErrorGen;
+    private CellSceneBuilder walkBuilder;
+    private EsmFile.LoadedCell walkIncoming;
+    private boolean walkStepping;
     private final Set<String> takenKeys = new HashSet<>();
     private final float[] doorArrivalPos = new float[3];
     private float doorArrivalYaw;
@@ -199,6 +218,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void requestLoad(String key, boolean keepAuto) {
+        cancelWalkLoad();
         doorArrival = false;
         keepEye = false;
         pendingKey = key;
@@ -260,8 +280,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         int tick = (int) (System.currentTimeMillis() / 400 % 4);
         String dots = ".".repeat(tick);
         if (cellStepping && cellBuilder != null) {
-            setLoaderCaption("Loading " + name + dots + "\n" + cellBuilder.refIndex() + " / "
-                + cellBuilder.refCount());
+            setLoaderCaption("Loading " + name + dots + "\n" + cellBuilder.gpuPhase());
         } else {
             setLoaderCaption("Loading " + name + dots);
         }
@@ -443,21 +462,245 @@ public final class JvmMwApp extends ApplicationAdapter {
         if (next[0] == loadedCell.gridX && next[1] == loadedCell.gridY) {
             return;
         }
+        if (walkBusy() && next[0] == walkGx && next[1] == walkGy) {
+            return;
+        }
+        if (walkBusy()) {
+            walkPendingGx = next[0];
+            walkPendingGy = next[1];
+            return;
+        }
         if (next[0] == lastWalkGx && next[1] == lastWalkGy) {
             return;
         }
-        lastWalkGx = next[0];
-        lastWalkGy = next[1];
+        startWalkLoad(next[0], next[1]);
+    }
+
+    private boolean walkBusy() {
+        return walkGx != Integer.MIN_VALUE || walkStepping
+            || (walkReady != null && walkReadyGen == walkGen.get());
+    }
+
+    private void startWalkLoad(int gx, int gy) {
+        lastWalkGx = gx;
+        lastWalkGy = gy;
+        walkGx = gx;
+        walkGy = gy;
+        walkPendingGx = Integer.MIN_VALUE;
+        int gen = walkGen.incrementAndGet();
+        walkReady = null;
+        walkParseError = null;
         Gdx.app.log("JVM-MW", "walk recenter (" + loadedCell.gridX + "," + loadedCell.gridY
-            + ") -> (" + next[0] + "," + next[1] + ")");
-        requestLoad(EXT_PREFIX + next[0] + "," + next[1], false);
-        keepEye = true;
+            + ") -> (" + gx + "," + gy + ")");
+        Thread worker = new Thread(() -> {
+            try {
+                EsmFile.LoadedCell cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+                if (gen == walkGen.get()) {
+                    walkReadyGen = gen;
+                    walkReady = cell;
+                }
+            } catch (Exception e) {
+                if (gen == walkGen.get()) {
+                    walkErrorGen = gen;
+                    walkParseError = e.getMessage() == null ? e.toString() : e.getMessage();
+                    Gdx.app.error("JVM-MW", "walk parse " + gx + "," + gy, e);
+                }
+            }
+        }, "walk-grid");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void cancelWalkLoad() {
+        walkGen.incrementAndGet();
+        walkReady = null;
+        walkParseError = null;
+        walkIncoming = null;
+        walkGx = Integer.MIN_VALUE;
+        walkPendingGx = Integer.MIN_VALUE;
+        walkStepping = false;
+        if (walkBuilder != null) {
+            walkBuilder.dispose();
+            walkBuilder = null;
+        }
+    }
+
+    private void pumpWalkLoad() {
+        if (walkReady != null && walkReadyGen != walkGen.get()) {
+            walkReady = null;
+        }
+        if (walkParseError != null && walkErrorGen != walkGen.get()) {
+            walkParseError = null;
+        }
+        if (isLoading()) {
+            return;
+        }
+        if (walkParseError != null && walkErrorGen == walkGen.get()) {
+            lastError = walkParseError;
+            walkParseError = null;
+            walkGx = Integer.MIN_VALUE;
+            startPendingWalk();
+            return;
+        }
+        if (walkReady != null && walkReadyGen == walkGen.get() && walkBuilder == null) {
+            EsmFile.LoadedCell cell = walkReady;
+            walkReady = null;
+            try {
+                walkBuilder = new CellSceneBuilder();
+                walkBuilder.takenKeys = takenKeys;
+                walkBuilder.begin(cell);
+                walkIncoming = cell;
+                walkStepping = true;
+                applyExteriorCycle(walkBuilder.lighting);
+            } catch (Exception e) {
+                lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+                Gdx.app.error("JVM-MW", "walk begin", e);
+                if (walkBuilder != null) {
+                    walkBuilder.dispose();
+                    walkBuilder = null;
+                }
+                walkGx = Integer.MIN_VALUE;
+                startPendingWalk();
+                return;
+            }
+        }
+        if (!walkStepping || walkBuilder == null) {
+            return;
+        }
+        try {
+            if (!walkBuilder.step(12_000_000L)) {
+                return;
+            }
+            SceneNode nextRoot = walkBuilder.end();
+            CellSceneBuilder old = cellBuilder;
+            cellBuilder = walkBuilder;
+            root = nextRoot;
+            loadedCell = walkIncoming;
+            walkBuilder = null;
+            walkIncoming = null;
+            walkStepping = false;
+            walkGx = Integer.MIN_VALUE;
+            lastWalkGx = loadedCell.gridX;
+            lastWalkGy = loadedCell.gridY;
+            currentVfs = loadedCell.name + " (" + loadedCell.gridX + "," + loadedCell.gridY + ")";
+            keepWalkCamera();
+            applyExteriorCycle(cellBuilder.lighting);
+            Gdx.app.log("JVM-MW", cellBuilder.log.toString());
+            if (old != null) {
+                old.dispose();
+            }
+            walkHudHold = 0.45f;
+            startPendingWalk();
+        } catch (Exception e) {
+            lastError = e.getMessage() == null ? e.toString() : e.getMessage();
+            Gdx.app.error("JVM-MW", "walk step", e);
+            walkStepping = false;
+            if (walkBuilder != null) {
+                walkBuilder.dispose();
+                walkBuilder = null;
+            }
+            walkIncoming = null;
+            walkGx = Integer.MIN_VALUE;
+            startPendingWalk();
+        }
+    }
+
+    private void startPendingWalk() {
+        if (walkPendingGx == Integer.MIN_VALUE || loadedCell == null || loadedCell.interior) {
+            return;
+        }
+        int gx = walkPendingGx;
+        int gy = walkPendingGy;
+        walkPendingGx = Integer.MIN_VALUE;
+        if (gx == loadedCell.gridX && gy == loadedCell.gridY) {
+            return;
+        }
+        startWalkLoad(gx, gy);
+    }
+
+    private String walkStatus() {
+        if (walkGx == Integer.MIN_VALUE && !walkStepping && walkReady == null) {
+            return "";
+        }
+        int gx = walkGx != Integer.MIN_VALUE ? walkGx : lastWalkGx;
+        int gy = walkGx != Integer.MIN_VALUE ? walkGy : lastWalkGy;
+        String phase = walkBuilder != null ? " " + walkBuilder.gpuPhase()
+            : walkReady != null ? " gpu" : " parse";
+        return " loading grid=(" + gx + "," + gy + ")" + phase;
+    }
+
+    private void updateWalkTiles() {
+        if (walkTiles == null) {
+            return;
+        }
+        boolean live = walkBusy();
+        if (!live && walkHudHold > 0f) {
+            walkHudHold -= Gdx.graphics.getDeltaTime();
+        }
+        boolean show = live || walkHudHold > 0f;
+        walkTiles.setVisible(show);
+        if (!show) {
+            return;
+        }
+        int gx = walkGx != Integer.MIN_VALUE ? walkGx : lastWalkGx;
+        int gy = walkGx != Integer.MIN_VALUE ? walkGy : lastWalkGy;
+        CellSceneBuilder gpu = walkBuilder;
+        boolean parse = live && gpu == null && walkReady == null;
+        String caption;
+        if (!live && walkHudHold > 0f) {
+            caption = "swap (" + lastWalkGx + "," + lastWalkGy + ")";
+        } else if (parse) {
+            caption = "parse (" + gx + "," + gy + ")";
+        } else if (gpu != null) {
+            caption = gpu.gpuPhase() + " (" + gx + "," + gy + ")";
+        } else {
+            caption = "gpu (" + gx + "," + gy + ")";
+        }
+        walkTileCaption.setText(caption);
+        float pulse = 0.18f + 0.16f * (0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 180.0));
+        int radius = EsmFile.CELL_GRID_RADIUS;
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                ProgressBar bar = walkBars[dx + radius][dy + radius];
+                if (bar == null) {
+                    continue;
+                }
+                float value;
+                if (!live && walkHudHold > 0f) {
+                    value = 1f;
+                } else if (parse) {
+                    value = pulse;
+                } else if (gpu != null) {
+                    value = gpu.tileProgress(gx + dx, gy + dy);
+                } else {
+                    value = pulse;
+                }
+                bar.setValue(value);
+                if (value >= 1f) {
+                    bar.setColor(0.45f, 0.95f, 0.55f, 1f);
+                } else if (parse || gpu == null) {
+                    bar.setColor(0.95f, 0.85f, 0.35f, 1f);
+                } else if (gpu.landIndex() < gpu.landCount()) {
+                    bar.setColor(0.95f, 0.7f, 0.35f, 1f);
+                } else {
+                    bar.setColor(0.55f, 0.85f, 1f, 1f);
+                }
+            }
+        }
     }
 
     private void keepWalkCamera() {
         camera.near = 1f;
         camera.far = 40000f;
         moveScale = 220f;
+    }
+
+    private void applyExteriorCycle(CellLighting lighting) {
+        if (lighting == null || !lighting.exterior || renderer == null) {
+            return;
+        }
+        renderer.cycle.evaluate();
+        renderer.cycle.applyLighting(lighting);
     }
 
     private void frameCamera() {
@@ -597,9 +840,18 @@ public final class JvmMwApp extends ApplicationAdapter {
         sls.background = new TextureRegionDrawable(barTex);
         sls.knob = new TextureRegionDrawable(knobTex);
         skin.add("default-horizontal", sls);
+        Pixmap fillPm = new Pixmap(8, 6, Pixmap.Format.RGBA8888);
+        fillPm.setColor(0.55f, 0.85f, 0.7f, 1f);
+        fillPm.fill();
+        Texture fillTex = new Texture(fillPm);
+        fillPm.dispose();
+        ProgressBarStyle pbs = new ProgressBarStyle();
+        pbs.background = new TextureRegionDrawable(barTex);
+        pbs.knobBefore = new TextureRegionDrawable(fillTex);
+        skin.add("default-horizontal", pbs);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 28", skin);
+        Window win = new Window("JVM-MW Phase 29", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
@@ -657,6 +909,32 @@ public final class JvmMwApp extends ApplicationAdapter {
         loader.add(loaderImage);
         loader.setVisible(false);
         stage.addActor(loader);
+
+        walkTileCaption = new Label("", skin);
+        walkBars = new ProgressBar[2 * EsmFile.CELL_GRID_RADIUS + 1][2 * EsmFile.CELL_GRID_RADIUS + 1];
+        Table grid = new Table();
+        int radius = EsmFile.CELL_GRID_RADIUS;
+        for (int dy = radius; dy >= -radius; dy--) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                if (!EsmFile.inCellGrid(dx, dy, 0, 0, radius)) {
+                    grid.add().size(38, 10).pad(1);
+                    continue;
+                }
+                ProgressBar bar = new ProgressBar(0f, 1f, 0.01f, false, skin);
+                bar.setAnimateDuration(0f);
+                walkBars[dx + radius][dy + radius] = bar;
+                grid.add(bar).size(36, 10).pad(1);
+            }
+            grid.row();
+        }
+        walkTiles = new Table();
+        walkTiles.setFillParent(true);
+        walkTiles.bottom().right().pad(12);
+        walkTiles.setTouchable(Touchable.disabled);
+        walkTiles.add(walkTileCaption).right().padBottom(4).row();
+        walkTiles.add(grid);
+        walkTiles.setVisible(false);
+        stage.addActor(walkTiles);
     }
 
     private TextButton meshButton(String label, String vfs) {
@@ -702,6 +980,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     @Override
     public void render() {
         pumpLoad();
+        pumpWalkLoad();
         handleCamera();
         maybeRecenterGrid();
         camera.viewportWidth = Gdx.graphics.getWidth();
@@ -716,6 +995,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         syncHourHud();
         CellLighting mood = (cellBuilder != null && !isLoading()) ? cellBuilder.lighting : null;
         if (mood != null) {
+            applyExteriorCycle(mood);
             mood.updateFlicker(Gdx.graphics.getDeltaTime());
             cellBuilder.update(Gdx.graphics.getDeltaTime());
             Gdx.gl.glClearColor(mood.fogColor[0], mood.fogColor[1], mood.fogColor[2], 1f);
@@ -729,6 +1009,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         lastGlError = Gdx.gl.glGetError();
         ForwardRenderer.resetForScene2d();
         updateLoader();
+        updateWalkTiles();
         if (status != null) {
             String err = lastError.isEmpty() ? "" : " err=" + lastError;
             String shortName = currentVfs.isEmpty() ? "?" : currentVfs.substring(currentVfs.lastIndexOf('/') + 1);
@@ -741,7 +1022,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                     + "+" + cellBuilder.skippedNif;
             }
             status.setText(isLoading() ? loaderCaption.replace('\n', ' ')
-                : shortName + "  glError=" + lastGlError + extra + err);
+                : shortName + "  glError=" + lastGlError + extra + walkStatus() + err);
         }
         stage.act(Gdx.graphics.getDeltaTime());
         stage.draw();
@@ -907,6 +1188,10 @@ public final class JvmMwApp extends ApplicationAdapter {
         }
         if (cellBuilder != null) {
             cellBuilder.dispose();
+        }
+        if (walkBuilder != null) {
+            walkBuilder.dispose();
+            walkBuilder = null;
         }
         if (renderer != null) {
             renderer.dispose();
