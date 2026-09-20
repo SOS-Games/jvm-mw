@@ -80,7 +80,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     private int hudClicks;
     private int framesOnMesh;
     private boolean dumpedFrame;
-    private boolean autoCycling = true;
+    private boolean autoCycling;
     private int autoIndex;
     private String currentVfs = "";
     private float scrollAccum;
@@ -100,7 +100,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         camera.far = 8000f;
         renderer = new ForwardRenderer();
         buildUi();
-        requestLoad(AUTO[0], true);
+        requestLoad(EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y, false);
         InputAdapter look = new InputAdapter() {
             @Override
             public boolean keyDown(int keycode) {
@@ -526,7 +526,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         skin.add("default", ws);
 
         stage = new Stage(new ScreenViewport());
-        Window win = new Window("JVM-MW Phase 20", skin);
+        Window win = new Window("JVM-MW Phase 21", skin);
         win.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);

@@ -41,6 +41,7 @@ public final class CellSceneBuilder {
     public final ContainerOpen containers = new ContainerOpen();
     public final ItemTake items = new ItemTake();
     private final LandMesh landMesh = new LandMesh();
+    private final WaterMesh waterMesh = new WaterMesh();
 
     private final List<NifSceneBuilder> builders = new ArrayList<>();
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
@@ -100,6 +101,7 @@ public final class CellSceneBuilder {
             } else if (cell.land != null) {
                 landMesh.attach(buildingRoot, cell.land, cell.landTextures, List.of(cell.land));
             }
+            waterMesh.attach(buildingRoot, cell.gridX, cell.gridY);
         }
     }
 
@@ -139,6 +141,7 @@ public final class CellSceneBuilder {
 
     public void update(float dt) {
         mannequin.update(dt);
+        waterMesh.update(dt);
         doors.process(dt);
         containers.process(dt);
         if (buildingRoot != null) {
@@ -354,6 +357,7 @@ public final class CellSceneBuilder {
 
     public void dispose() {
         landMesh.dispose();
+        waterMesh.dispose();
         mannequin.dispose();
         for (NifSceneBuilder b : builders) {
             b.dispose();

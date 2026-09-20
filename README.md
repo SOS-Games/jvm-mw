@@ -10,9 +10,9 @@ You must own *The Elder Scrolls III: Morrowind*. Game ESM/BSA/meshes/textures ar
 
 Parser behavior follows OpenMW tag **`openmw-0.51.0`** (`f4bec41444214a7903bebd178389ca22ca13f646`).
 
-## Phase 20 (current)
+## Phase 21 (current)
 
-Exterior land mixes `VTEX` layers with TES3 blendmaps. See [docs/phase20-land-blendmaps.md](docs/phase20-land-blendmaps.md). Phase 19 textures: [docs/phase19-land-textures.md](docs/phase19-land-textures.md).
+Exteriors draw OpenMW simple water at height −1. See [docs/phase21-water.md](docs/phase21-water.md). Phase 20 blendmaps: [docs/phase20-land-blendmaps.md](docs/phase20-land-blendmaps.md).
 
 ```bat
 gradlew.bat lwjgl3:run

@@ -119,7 +119,8 @@ public final class DebugCli {
             + " interior=" + cell.interior
             + " refs=" + cell.refs.size()
             + " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight
-            + " ltex=" + cell.landTextures.size());
+            + " ltex=" + cell.landTextures.size()
+            + " water=-1");
         if (cell.hasSpawn) {
             System.out.println("spawn census-exit tes=" + xyz(cell.spawnPos)
                 + " heading=" + cell.spawnRot[2]);

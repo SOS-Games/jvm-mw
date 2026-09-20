@@ -84,6 +84,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwrender/renderingmanager.cpp` | `addCell` terrain | `LAND` layers + TES3 blendmaps | rewrite |
 | `components/esmterrain/storage.cpp` | `getBlendmaps` TES3 | `LandMesh` 17→34 alpha | rewrite |
 | `components/terrain/material.cpp` | `createPasses` | land layer blend + depth | rewrite |
+| `apps/openmw/mwworld/cell.cpp` | TES3 exterior water | always on, height −1 | same |
+| `components/sceneutil/waterutil.cpp` | `createWaterGeometry` | `render.WaterMesh` on cell root | rewrite |
+| `apps/openmw/mwrender/water.cpp` | `createSimpleWaterStateSet` | blend, no cull, no depth write, water## flip | rewrite |
 | `components/esm3/loadltex.hpp` | `ESM::LandTexture` / `LTEX` | `esm.LandTexture` (`INTV` + `DATA`) | same |
 | `components/esm3/landrecorddata.hpp` | `mTextures` / `VTEX` | `LandRecord.textures` after transpose | rewrite |
 | `components/esm3/loadland.cpp` | `transposeTextureData` | `EsmFile.decodeVtex` | same |
