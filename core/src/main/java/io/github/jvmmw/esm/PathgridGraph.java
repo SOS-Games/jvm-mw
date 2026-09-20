@@ -150,18 +150,33 @@ public final class PathgridGraph {
     }
 
     /**
-     * Nodes the actor may pick as dests: the connected cluster around spawn
-     * where each hop stays inside {@code range}. Fewer than three nodes means
-     * they should wander at random instead.
+     * Nodes the actor may pick as dests: the connected cluster around
+     * {@code cx, cy} where each hop stays inside {@code range}. Fewer than
+     * three nodes means they should wander at random instead.
      */
-    public List<float[]> allowed(float spawnX, float spawnY, float spawnZ, float range) {
-        List<Integer> cluster = reachable(spawnX, spawnY, range);
+    public List<float[]> allowed(float cx, float cy, float cz, float range) {
+        List<Integer> cluster = reachable(cx, cy, range);
         if (cluster.size() <= 2) {
             return List.of();
         }
         List<float[]> out = new ArrayList<>(cluster.size());
         for (int i : cluster) {
             out.add(pos(i));
+        }
+        return out;
+    }
+
+    /** Every node in the same connected piece as the closest node to {@code x, y}. */
+    public List<float[]> componentOf(float x, float y, float z) {
+        List<float[]> out = new ArrayList<>();
+        if (!usable()) {
+            return out;
+        }
+        int seed = closest(x, y, z);
+        for (int i = 0; i < wx.length; i++) {
+            if (component[i] == component[seed]) {
+                out.add(pos(i));
+            }
         }
         return out;
     }
@@ -204,16 +219,16 @@ public final class PathgridGraph {
      * World TES waypoints from {@code from} to {@code dest}. Drops the node
      * they are already next to. Same start and goal walks straight to dest.
      * When {@code range} is positive, A* stays on nodes within that TES
-     * distance of spawn on the ground (XY). Empty means no path.
+     * distance of {@code cx, cy} on the ground (XY). Empty means no path.
      */
     public List<float[]> pathTo(float fromX, float fromY, float fromZ, float destX, float destY, float destZ,
-        float spawnX, float spawnY, float spawnZ, float range) {
+        float cx, float cy, float cz, float range) {
         List<float[]> out = new ArrayList<>();
         if (!usable()) {
             return out;
         }
-        int start = closestInRange(fromX, fromY, spawnX, spawnY, range);
-        int goal = closestInRange(destX, destY, spawnX, spawnY, range);
+        int start = closestInRange(fromX, fromY, cx, cy, range);
+        int goal = closestInRange(destX, destY, cx, cy, range);
         if (start < 0 || goal < 0) {
             return out;
         }
@@ -224,7 +239,7 @@ public final class PathgridGraph {
         if (component[start] != component[goal]) {
             return out;
         }
-        int[] came = astar(start, goal, spawnX, spawnY, spawnZ, range);
+        int[] came = astar(start, goal, cx, cy, cz, range);
         if (came == null) {
             return out;
         }

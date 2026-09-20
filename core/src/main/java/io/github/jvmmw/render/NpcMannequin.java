@@ -133,10 +133,14 @@ public final class NpcMannequin {
     private static final float WALK_CLIP_FALLBACK = 154.064f;
     private static final float WALK_ANIM_MAX = 10f;
     private static final float WANDER_ARRIVE = 8f;
+    /** Another actor this close already owns the dest. */
+    private static final float WANDER_OCCUPY = 96f;
     private static final float ANIM_BLEND = 0.2f;
     private static final float TURN_EPS = (float) Math.toRadians(0.5f);
     /** Walk only when facing dest; 90° plus a slow turn circles forever. */
     private static final float WALK_ALIGN = (float) Math.toRadians(15f);
+    /** Chance a pathgrid dest is anywhere on the connected graph, not nearby. */
+    private static final float GRID_FAR = 0.28f;
 
     private final Path testdata;
     private final List<MeshGpu> ownedGpus = new ArrayList<>();
@@ -370,13 +374,20 @@ public final class NpcMannequin {
             boolean turned = false;
             int hops = 0;
             while (actor.walking && remaining > 0.001f && hops++ < 16) {
-                float ddx = actor.destX - actor.spawnX;
-                float ddy = actor.destY - actor.spawnY;
-                if (ddx * ddx + ddy * ddy > range2) {
-                    actor.waypoints.clear();
-                    actor.walking = false;
-                    actor.idleLeft = pause(2f, 3f);
-                    break;
+                if (!actor.onGrid) {
+                    float ddx = actor.destX - actor.spawnX;
+                    float ddy = actor.destY - actor.spawnY;
+                    if (ddx * ddx + ddy * ddy > range2) {
+                        actor.waypoints.clear();
+                        pickWanderDest(actor);
+                        if (!actor.walking) {
+                            actor.idleLeft = pause(2f, 3f);
+                            break;
+                        }
+                        range = actor.destRange;
+                        range2 = range * range;
+                        continue;
+                    }
                 }
                 float dx = actor.destX - actor.tesPos[0];
                 float dy = actor.destY - actor.tesPos[1];
@@ -386,21 +397,33 @@ public final class NpcMannequin {
                     actor.tesPos[1] = actor.destY;
                     if (!actor.waypoints.isEmpty()) {
                         float[] next = actor.waypoints.remove(0);
-                        float ndx = next[0] - actor.spawnX;
-                        float ndy = next[1] - actor.spawnY;
-                        if (ndx * ndx + ndy * ndy > range2) {
-                            actor.waypoints.clear();
-                            actor.walking = false;
-                            actor.idleLeft = pause(2f, 3f);
-                            break;
+                        if (!actor.onGrid) {
+                            float ndx = next[0] - actor.spawnX;
+                            float ndy = next[1] - actor.spawnY;
+                            if (ndx * ndx + ndy * ndy > range2) {
+                                actor.waypoints.clear();
+                                pickWanderDest(actor);
+                                if (!actor.walking) {
+                                    actor.idleLeft = pause(2f, 3f);
+                                    break;
+                                }
+                                range = actor.destRange;
+                                range2 = range * range;
+                                continue;
+                            }
                         }
                         actor.destX = next[0];
                         actor.destY = next[1];
                         continue;
                     }
-                    actor.walking = false;
-                    actor.idleLeft = pause(2f, 3f);
-                    break;
+                    pickWanderDest(actor);
+                    if (!actor.walking) {
+                        actor.idleLeft = pause(2f, 3f);
+                        break;
+                    }
+                    range = actor.destRange;
+                    range2 = range * range;
+                    continue;
                 }
                 float want = (float) Math.atan2(dx, dy);
                 float diff;
@@ -445,35 +468,84 @@ public final class NpcMannequin {
     }
 
     private boolean pickPathgridDest(NpcActor actor) {
+        if (!actor.graph.usable()) {
+            return false;
+        }
+        if (wanderRng.nextFloat() < GRID_FAR && tryFarGridDest(actor)) {
+            return true;
+        }
         float range = nodeRange(actor.wanderDistance);
-        if (range <= WANDER_ARRIVE || !actor.graph.usable()) {
+        if (range <= WANDER_ARRIVE) {
             return false;
         }
         List<float[]> left = actor.graph.allowed(
-            actor.spawnX, actor.spawnY, actor.spawnZ, range);
+            actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], range);
         if (left.size() <= 2) {
             return false;
         }
-        float range2 = range * range;
         float arrive2 = WANDER_ARRIVE * WANDER_ARRIVE;
-        while (!left.isEmpty()) {
-            int pick = wanderRng.nextInt(left.size());
-            float[] dest = left.remove(pick);
-            float sdx = dest[0] - actor.spawnX;
-            float sdy = dest[1] - actor.spawnY;
-            if (sdx * sdx + sdy * sdy > range2) {
-                continue;
-            }
+        float far2 = range * 0.4f;
+        far2 *= far2;
+        List<float[]> far = new ArrayList<>();
+        List<float[]> near = new ArrayList<>();
+        for (float[] dest : left) {
             float cdx = dest[0] - actor.tesPos[0];
             float cdy = dest[1] - actor.tesPos[1];
             float c2 = cdx * cdx + cdy * cdy;
-            if (c2 <= arrive2 || c2 > range2) {
+            if (c2 <= arrive2 || occupied(actor, dest[0], dest[1])) {
                 continue;
             }
+            if (c2 >= far2) {
+                far.add(dest);
+            } else {
+                near.add(dest);
+            }
+        }
+        return tryPathgridPool(actor, far, range) || tryPathgridPool(actor, near, range);
+    }
+
+    private boolean tryFarGridDest(NpcActor actor) {
+        List<float[]> all = actor.graph.componentOf(actor.tesPos[0], actor.tesPos[1], actor.tesPos[2]);
+        if (all.size() <= 2) {
+            return false;
+        }
+        float arrive2 = WANDER_ARRIVE * WANDER_ARRIVE;
+        float max2 = 0f;
+        for (float[] dest : all) {
+            float dx = dest[0] - actor.tesPos[0];
+            float dy = dest[1] - actor.tesPos[1];
+            float c2 = dx * dx + dy * dy;
+            if (c2 > max2) {
+                max2 = c2;
+            }
+        }
+        float far2 = max2 * 0.55f * 0.55f;
+        List<float[]> far = new ArrayList<>();
+        for (float[] dest : all) {
+            float dx = dest[0] - actor.tesPos[0];
+            float dy = dest[1] - actor.tesPos[1];
+            float c2 = dx * dx + dy * dy;
+            if (c2 <= arrive2 || occupied(actor, dest[0], dest[1])) {
+                continue;
+            }
+            if (c2 >= far2) {
+                far.add(dest);
+            }
+        }
+        return tryPathgridPool(actor, far, Float.POSITIVE_INFINITY);
+    }
+
+    private boolean tryPathgridPool(NpcActor actor, List<float[]> pool, float range) {
+        while (!pool.isEmpty()) {
+            int pick = wanderRng.nextInt(pool.size());
+            float[] dest = pool.remove(pick);
             List<float[]> path = actor.graph.pathTo(
                 actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], dest[0], dest[1], dest[2],
-                actor.spawnX, actor.spawnY, actor.spawnZ, range);
+                actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], range);
             if (path.isEmpty() || !pathFits(actor, path, range)) {
+                continue;
+            }
+            if (occupied(actor, path.get(0)[0], path.get(0)[1])) {
                 continue;
             }
             actor.destX = path.get(0)[0];
@@ -483,6 +555,7 @@ public final class NpcMannequin {
                 actor.waypoints.add(path.get(i));
             }
             actor.walking = true;
+            actor.onGrid = true;
             actor.destRange = range;
             return true;
         }
@@ -491,25 +564,36 @@ public final class NpcMannequin {
 
     private static boolean pathFits(NpcActor actor, List<float[]> path, float range) {
         float range2 = range * range;
-        float px = actor.tesPos[0];
-        float py = actor.tesPos[1];
-        float len = 0f;
         for (float[] p : path) {
-            float sdx = p[0] - actor.spawnX;
-            float sdy = p[1] - actor.spawnY;
+            float sdx = p[0] - actor.tesPos[0];
+            float sdy = p[1] - actor.tesPos[1];
             if (sdx * sdx + sdy * sdy > range2) {
                 return false;
             }
-            float dx = p[0] - px;
-            float dy = p[1] - py;
-            len += (float) Math.sqrt(dx * dx + dy * dy);
-            if (len > range) {
-                return false;
-            }
-            px = p[0];
-            py = p[1];
         }
         return true;
+    }
+
+    private boolean occupied(NpcActor self, float x, float y) {
+        float r2 = WANDER_OCCUPY * WANDER_OCCUPY;
+        for (NpcActor other : actors) {
+            if (other == self || other.wanderDistance <= 0) {
+                continue;
+            }
+            float dx = other.tesPos[0] - x;
+            float dy = other.tesPos[1] - y;
+            if (dx * dx + dy * dy <= r2) {
+                return true;
+            }
+            if (other.walking) {
+                float ex = other.destX - x;
+                float ey = other.destY - y;
+                if (ex * ex + ey * ey <= r2) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void pickStraightDest(NpcActor actor) {
@@ -527,12 +611,13 @@ public final class NpcMannequin {
             float destY = actor.spawnY + radius * (float) Math.sin(theta);
             float dx = destX - actor.tesPos[0];
             float dy = destY - actor.tesPos[1];
-            if (dx * dx + dy * dy <= arrive2) {
+            if (dx * dx + dy * dy <= arrive2 || occupied(actor, destX, destY)) {
                 continue;
             }
             actor.destX = destX;
             actor.destY = destY;
             actor.destRange = range;
+            actor.onGrid = false;
             actor.walking = true;
             return;
         }
@@ -1190,6 +1275,7 @@ public final class NpcMannequin {
         float destX;
         float destY;
         float destRange;
+        boolean onGrid;
         float yaw;
         float sx = 1f;
         float sy = 1f;
