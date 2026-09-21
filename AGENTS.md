@@ -43,7 +43,7 @@ enough pseudocode
 
 Does the claim hold? If it fails, say exactly which sentence is wrong.
 ```
-- Possible next **small** slices live in [docs/next-topics.md](docs/next-topics.md). Spec one only after the user picks it (or says **proceed** naming it). Large holes live in [docs/big-topics.md](docs/big-topics.md). Do not spec those as a small phase. A breakdown of a large hole (todo order, not a phase) may live as a linked doc; split one row into next-topics before writing Java. Distant land: [docs/distant-land.md](docs/distant-land.md). Nav paths: [docs/nav-paths.md](docs/nav-paths.md).
+- Possible next **small** slices live in [docs/next-topics.md](docs/next-topics.md). Spec one only after the user picks it (or says **proceed** naming it). Large holes live in [docs/big-topics.md](docs/big-topics.md). Do not spec those as a small phase. A breakdown of a large hole (todo order, not a phase) may live as a linked doc; split one row into next-topics before writing Java. Distant land: [docs/distant-land.md](docs/distant-land.md). Nav paths: [docs/nav-paths.md](docs/nav-paths.md). Physics: [docs/physics.md](docs/physics.md).
 
 Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`). Extra data folders: `jvmmw.data.extra=...` (`;` separated; or `JVMMW_DATA_EXTRA` / `-Djvmmw.data.extra`). OpenMW `navmesh.db` (umo / navmeshtool) is read from `Documents\My Games\OpenMW\navmesh.db`, or `jvmmw.navmesh` / `JVMMW_NAVMESH`. Do not commit it. How to install and run: [docs/setup.md](docs/setup.md).
 
@@ -87,7 +87,7 @@ gradlew.bat :core:debugCli --args="navpath -2 -9"
 | `navdb` | OpenMW `navmesh.db` Recast tiles vs TES cell edges. Default Town. Writes `build/navdb-*.png` and `*-after.png` after a land rebake of `patch` tiles |
 | `navpath` | Detour polyline from inbound spawn 512 TES east. Interior name or exterior grid |
 
-In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard and writes `build/debug-snapshot.txt`. Wait until overlay `n=60` before treating fps as settled. **F4** toggles the top-right fps overlay. HUD panel `gl=` / `tes=` / `grid=` / `recast=` is the camera cell. **Copy pos** copies that line. **F5** toggles pathgrid spheres and edges. **F6** toggles the Recast walkable carpet for the loaded cells. Dump `navPath=` is the last Detour polyline used by a straight wander dest (`0` until one succeeds). Dump `patch=` is Recast tiles rebaked after sqlite (`0` until that pass finishes). Gradle Ctrl+C does not save a dump.
+In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard and writes `build/debug-snapshot.txt`. Wait until overlay `n=60` before treating fps as settled. **F4** toggles the top-right fps overlay. HUD panel `gl=` / `tes=` / `grid=` / `recast=` is the camera cell. **Copy pos** copies that line. **F5** toggles pathgrid spheres and edges. **F6** toggles the Recast walkable carpet for the loaded cells. Dump `navPath=` is the last Detour polyline used by a straight wander dest (`0` until one succeeds). Dump `patch=` is Recast tiles rebaked after sqlite (`0` until that pass finishes). Dump `bullet=` is the JNI Bullet world (`1` with a cell, `0` on Chair); `bodies=` is collision objects in it (`0` until land). Gradle Ctrl+C does not save a dump.
 
 ## Placement / fog gotchas
 

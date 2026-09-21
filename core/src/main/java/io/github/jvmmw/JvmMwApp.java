@@ -49,6 +49,7 @@ import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.nif.NifFile;
+import io.github.jvmmw.render.BulletWorld;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
 import io.github.jvmmw.render.CollisionWorld;
@@ -159,6 +160,7 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     @Override
     public void create() {
+        BulletWorld.initNatives();
         camera = new PerspectiveCamera(50f, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         camera.near = 1f;
         camera.far = 8000f;
@@ -370,6 +372,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             cellBuilder.dispose();
             cellBuilder = null;
         }
+        BulletWorld.disposeWorld();
         root = null;
     }
 
@@ -1240,6 +1243,8 @@ public final class JvmMwApp extends ApplicationAdapter {
             snapshotBuf.append("onGround=").append(col.onGround)
                 .append(" floorY=").append(Float.isNaN(col.floorY) ? "none" : col.floorY)
                 .append(" ceilY=").append(Float.isNaN(col.ceilY) ? "none" : col.ceilY).append('\n');
+            snapshotBuf.append("bullet=").append(BulletWorld.alive() ? 1 : 0)
+                .append(" bodies=").append(BulletWorld.bodyCount()).append('\n');
             if (loadedCell != null && !loadedCell.interior) {
                 snapshotBuf.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
             }
@@ -1260,6 +1265,8 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(" src=").append(cellBuilder.navSource)
                 .append(" navPath=").append(cellBuilder.navPath)
                 .append(" patch=").append(cellBuilder.navPatch).append('\n');
+        } else {
+            snapshotBuf.append("bullet=0\n");
         }
         snapshotBuf.append("glError=").append(lastGlError).append('\n');
         profiler.appendDump(snapshotBuf);
@@ -1442,6 +1449,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             walkBuilder.dispose();
             walkBuilder = null;
         }
+        BulletWorld.disposeWorld();
         if (renderer != null) {
             renderer.dispose();
         }

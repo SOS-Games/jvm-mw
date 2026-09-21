@@ -122,6 +122,7 @@ public final class CellSceneBuilder {
         pendingCol.clear();
         pathgridDebug.dispose();
         collision.clear();
+        BulletWorld.rebuild();
         lighting.lights.clear();
         lighting.resetTime();
         lighting.exterior = !cell.interior;
