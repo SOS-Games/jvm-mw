@@ -6,6 +6,7 @@
 package io.github.jvmmw.render;
 
 import io.github.jvmmw.debug.DebugVars;
+import io.github.jvmmw.debug.PerfTrace;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmBodyPart;
 import io.github.jvmmw.esm.EsmCreature;
@@ -1213,9 +1214,11 @@ public final class NpcMannequin {
         actor.boneWorld.clear();
         actor.skeleton.updateWorld(id);
         collectWorlds(actor.skeleton, actor.boneWorld);
+        PerfTrace.begin("update.skin");
         for (MeshInstance skin : actor.skins) {
             skin.reskin(actor.boneWorld);
         }
+        PerfTrace.end();
     }
 
     private void xyzQuat(NiKeyframeData data, float time, Quaternion out) {

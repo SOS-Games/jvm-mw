@@ -5,39 +5,44 @@
  */
 package io.github.jvmmw.render;
 
-import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.LandRecord;
 
+import com.badlogic.gdx.math.Vector3;
+
 /**
- * The water plane, sitting at height −1 in the Y-up cell. Two 512 cameras
- * capture what’s under and what’s mirrored; the main pass mixes them so
- * looking down shows the bottom and glancing shows the sky. Tiny meshes
- * skip those extra cameras.
+ * The water plane, sitting at height −1 in the Y-up cell. It follows the
+ * camera and extends past the far clip, so a cell stream does not slide its
+ * edge through the view. When the surface is in view, two 512 cameras capture
+ * what’s under and what’s mirrored. A view full of land skips those cameras.
  */
 public final class WaterMesh {
     public static final float HEIGHT = -1f;
     public static final int RTT_SIZE = 512;
     public static final float RTT_FEATURE_PIXELS = 20f;
     public static final float REPEATS_PER_CELL = 900f / 150f;
+    /** Covers the exterior far clip (40000) in every direction from the camera. */
+    public static final float EXTENT = 80000f;
 
     private MeshGpu gpu;
+    private SceneNode node;
 
     public SceneNode attach(SceneNode cellRoot, int gridX, int gridY) {
-        int cells = 2 * EsmFile.CELL_GRID_RADIUS + 1;
-        float size = LandRecord.CELL_SIZE * cells;
-        float cx = gridX * (float) LandRecord.CELL_SIZE + LandRecord.CELL_SIZE / 2f;
-        float cy = gridY * (float) LandRecord.CELL_SIZE + LandRecord.CELL_SIZE / 2f;
-        int segments = Math.max(3, cells * 2);
-        float repeats = REPEATS_PER_CELL * cells;
-        gpu = upload(cx, cy, size, segments, repeats);
-        SceneNode node = new SceneNode();
+        int segments = 4;
+        float repeats = REPEATS_PER_CELL * (EXTENT / LandRecord.CELL_SIZE);
+        gpu = upload(0f, 0f, EXTENT, segments, repeats);
+        node = new SceneNode();
         node.name = "water";
         node.meshes.add(new MeshInstance(gpu));
         cellRoot.addChild(node);
         return node;
     }
 
-    public void update(float dt) {
+    /** Keep the plane under the camera. Cell root is −90° X, so local Y is −GL Z. */
+    public void follow(Vector3 eye) {
+        if (node == null || eye == null) {
+            return;
+        }
+        node.local.setToTranslation(eye.x, -eye.z, 0f);
     }
 
     public void dispose() {

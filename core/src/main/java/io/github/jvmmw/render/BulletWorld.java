@@ -1,5 +1,6 @@
 package io.github.jvmmw.render;
 
+import io.github.jvmmw.debug.PerfTrace;
 import io.github.jvmmw.esm.LandRecord;
 
 import com.badlogic.gdx.math.Matrix4;
@@ -18,8 +19,14 @@ import com.badlogic.gdx.physics.bullet.collision.btCollisionWorld;
 import com.badlogic.gdx.physics.bullet.collision.btDbvtBroadphase;
 import com.badlogic.gdx.physics.bullet.collision.btDefaultCollisionConfiguration;
 import com.badlogic.gdx.physics.bullet.collision.btManifoldPoint;
+import com.badlogic.gdx.physics.bullet.collision.btIndexedMesh;
+import com.badlogic.gdx.physics.bullet.collision.btTriangleIndexVertexArray;
 import com.badlogic.gdx.physics.bullet.collision.btTriangleMesh;
 
+import com.badlogic.gdx.utils.BufferUtils;
+
+import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -65,9 +72,10 @@ public final class BulletWorld {
     private static int worldBodies;
     private static final List<btCollisionObject> bodies = new ArrayList<>();
     private static final List<btBvhTriangleMeshShape> landShapes = new ArrayList<>();
-    private static final List<btTriangleMesh> landMeshes = new ArrayList<>();
+    private static final List<btTriangleIndexVertexArray> landMeshes = new ArrayList<>();
     private static final List<btBvhTriangleMeshShape> objectShapes = new ArrayList<>();
-    private static final List<btTriangleMesh> objectMeshes = new ArrayList<>();
+    private static final List<btTriangleIndexVertexArray> objectMeshes = new ArrayList<>();
+    private static final List<btIndexedMesh> landIndexed = new ArrayList<>();
     private static final Map<SceneNode, Live> byNode = new IdentityHashMap<>();
     private static final Set<Long> readyCells = new HashSet<>();
     private static boolean interiorReady;
@@ -77,7 +85,6 @@ public final class BulletWorld {
     private static final Vector3 va = new Vector3();
     private static final Vector3 vb = new Vector3();
     private static final Vector3 vc = new Vector3();
-    private static final Vector3 vd = new Vector3();
     private static final Vector3 from = new Vector3();
     private static final Vector3 to = new Vector3();
     private static final Vector3 n = new Vector3();
@@ -129,6 +136,15 @@ public final class BulletWorld {
 
     /** Same moments as a cell graph swap: interior load and walk-grid swap. */
     public static void rebuild() {
+        PerfTrace.begin("bullet.rebuild");
+        try {
+            rebuildBody();
+        } finally {
+            PerfTrace.end();
+        }
+    }
+
+    private static void rebuildBody() {
         if (!natives) {
             return;
         }
@@ -303,6 +319,9 @@ public final class BulletWorld {
         if (staged.land) {
             landShapes.add(staged.shape);
             landMeshes.add(staged.mesh);
+            if (staged.indexed != null) {
+                landIndexed.add(staged.indexed);
+            }
             landBodies++;
         } else {
             objectShapes.add(staged.shape);
@@ -367,23 +386,33 @@ public final class BulletWorld {
         staged.obj.dispose();
         staged.shape.dispose();
         staged.mesh.dispose();
+        if (staged.indexed != null) {
+            staged.indexed.dispose();
+        }
     }
 
     public static final class Staged {
         final btCollisionObject obj;
         final btBvhTriangleMeshShape shape;
-        final btTriangleMesh mesh;
+        final btTriangleIndexVertexArray mesh;
         final int group;
         final boolean land;
         final SceneNode node;
         final boolean follow;
+        final btIndexedMesh indexed;
 
-        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, int group, boolean land) {
-            this(obj, shape, mesh, group, land, null, false);
+        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleIndexVertexArray mesh, int group,
+            boolean land) {
+            this(obj, shape, mesh, group, land, null, false, null);
         }
 
-        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, int group, boolean land,
-            SceneNode node, boolean follow) {
+        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleIndexVertexArray mesh, int group,
+            boolean land, SceneNode node, boolean follow) {
+            this(obj, shape, mesh, group, land, node, follow, null);
+        }
+
+        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleIndexVertexArray mesh, int group,
+            boolean land, SceneNode node, boolean follow, btIndexedMesh indexed) {
             this.obj = obj;
             this.shape = shape;
             this.mesh = mesh;
@@ -391,16 +420,17 @@ public final class BulletWorld {
             this.land = land;
             this.node = node;
             this.follow = follow;
+            this.indexed = indexed;
         }
     }
 
     private static final class Live {
         final btCollisionObject obj;
         final btBvhTriangleMeshShape shape;
-        final btTriangleMesh mesh;
+        final btTriangleIndexVertexArray mesh;
         final boolean follow;
 
-        Live(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, boolean follow) {
+        Live(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleIndexVertexArray mesh, boolean follow) {
             this.obj = obj;
             this.shape = shape;
             this.mesh = mesh;
@@ -721,6 +751,26 @@ public final class BulletWorld {
         return hit.y;
     }
 
+    /**
+     * True when land or a static mesh sits strictly between the two points.
+     * Water uses this so a view full of ground does not redraw the world into the reflection maps.
+     */
+    public static boolean blockedSegment(float x0, float y0, float z0, float x1, float y1, float z1) {
+        if (world == null || bodies.isEmpty() || rayCb == null) {
+            return false;
+        }
+        rayFrom.set(x0, y0, z0);
+        rayTo.set(x1, y1, z1);
+        rayCb.setCollisionObject(null);
+        rayCb.setClosestHitFraction(1f);
+        rayCb.setRayFromWorld(rayFrom);
+        rayCb.setRayToWorld(rayTo);
+        rayCb.setCollisionFilterGroup(ACTOR);
+        rayCb.setCollisionFilterMask(PLAYER_MASK);
+        world.rayTest(rayFrom, rayTo, rayCb);
+        return rayCb.hasHit() && rayCb.getClosestHitFraction() < 0.97f;
+    }
+
     private static void addLandMesh(LandRecord land) {
         Staged staged = cookLandMesh(land);
         if (staged != null) {
@@ -729,33 +779,61 @@ public final class BulletWorld {
     }
 
     private static Staged cookLandMesh(LandRecord land) {
-        btTriangleMesh mesh = new btTriangleMesh();
+        PerfTrace.begin("load.cook");
+        PerfTrace.detail("land " + land.gridX + "," + land.gridY);
+        try {
+            return cookLandMeshBody(land);
+        } finally {
+            PerfTrace.end();
+        }
+    }
+
+    private static Staged cookLandMeshBody(LandRecord land) {
+        int n = LandRecord.SIZE;
+        int vertCount = n * n;
+        int quads = (n - 1) * (n - 1);
+        FloatBuffer verts = BufferUtils.newFloatBuffer(vertCount * 3);
+        ShortBuffer indices = BufferUtils.newShortBuffer(quads * 6);
         float originX = land.gridX * (float) LandRecord.CELL_SIZE;
         float originY = land.gridY * (float) LandRecord.CELL_SIZE;
-        int n = LandRecord.SIZE;
-        for (int y = 0; y < n - 1; y++) {
-            for (int x = 0; x < n - 1; x++) {
-                landVert(va, originX, originY, land, x, y);
-                landVert(vb, originX, originY, land, x + 1, y);
-                landVert(vc, originX, originY, land, x, y + 1);
-                landVert(vd, originX, originY, land, x + 1, y + 1);
-                mesh.addTriangle(va, vb, vc, true);
-                mesh.addTriangle(vb, vd, vc, true);
+        for (int y = 0; y < n; y++) {
+            for (int x = 0; x < n; x++) {
+                float tesX = originX + x * STEP;
+                float tesY = originY + y * STEP;
+                verts.put(tesX);
+                verts.put(land.height(x, y));
+                verts.put(-tesY);
             }
         }
+        verts.flip();
+        for (int y = 0; y < n - 1; y++) {
+            for (int x = 0; x < n - 1; x++) {
+                int i00 = y * n + x;
+                int i10 = i00 + 1;
+                int i01 = i00 + n;
+                int i11 = i01 + 1;
+                indices.put((short) i00);
+                indices.put((short) i10);
+                indices.put((short) i01);
+                indices.put((short) i10);
+                indices.put((short) i11);
+                indices.put((short) i01);
+            }
+        }
+        indices.flip();
+        // One upload. A JNI call per triangle was the ~70ms hitch on each land tile.
+        Object keep = new Object[] { verts, indices };
+        btIndexedMesh indexed = new btIndexedMesh();
+        indexed.set(keep, verts, 12, vertCount, 0, indices, 0, quads * 6);
+        btTriangleIndexVertexArray mesh = new btTriangleIndexVertexArray();
+        mesh.addIndexedMesh(indexed);
         btBvhTriangleMeshShape shape = new btBvhTriangleMeshShape(mesh, true, true);
         btCollisionObject obj = new btCollisionObject();
         obj.setCollisionShape(shape);
         obj.setCollisionFlags(btCollisionObject.CollisionFlags.CF_STATIC_OBJECT);
         tmpMat.idt();
         obj.setWorldTransform(tmpMat);
-        return new Staged(obj, shape, mesh, HEIGHT_MAP, true);
-    }
-
-    private static void landVert(Vector3 out, float originX, float originY, LandRecord land, int x, int y) {
-        float tesX = originX + x * STEP;
-        float tesY = originY + y * STEP;
-        out.set(tesX, land.height(x, y), -tesY);
+        return new Staged(obj, shape, mesh, HEIGHT_MAP, true, null, false, indexed);
     }
 
     private static void addObjectMesh(CollisionMesh.Pending pnd) {
@@ -766,6 +844,18 @@ public final class BulletWorld {
     }
 
     private static Staged cookObjectMesh(CollisionMesh.Pending pnd) {
+        PerfTrace.begin("load.cook");
+        if (pnd.node != null && pnd.node.name != null) {
+            PerfTrace.detail(pnd.node.name);
+        }
+        try {
+            return cookObjectMeshBody(pnd);
+        } finally {
+            PerfTrace.end();
+        }
+    }
+
+    private static Staged cookObjectMeshBody(CollisionMesh.Pending pnd) {
         float[] tris = pnd.mesh.tris;
         if (tris.length < 9) {
             return null;
@@ -831,18 +921,22 @@ public final class BulletWorld {
         for (btBvhTriangleMeshShape shape : landShapes) {
             shape.dispose();
         }
-        for (btTriangleMesh mesh : landMeshes) {
+        for (btTriangleIndexVertexArray mesh : landMeshes) {
             mesh.dispose();
+        }
+        for (btIndexedMesh indexed : landIndexed) {
+            indexed.dispose();
         }
         for (btBvhTriangleMeshShape shape : objectShapes) {
             shape.dispose();
         }
-        for (btTriangleMesh mesh : objectMeshes) {
+        for (btTriangleIndexVertexArray mesh : objectMeshes) {
             mesh.dispose();
         }
         bodies.clear();
         landShapes.clear();
         landMeshes.clear();
+        landIndexed.clear();
         objectShapes.clear();
         objectMeshes.clear();
         byNode.clear();

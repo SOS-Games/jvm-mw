@@ -89,6 +89,18 @@ public final class NavmeshCache {
         return q == null ? null : q.poll();
     }
 
+    /** Drop debug copies waiting to be drawn. The nav data itself stays. */
+    static void discardReady(String world) {
+        ConcurrentLinkedQueue<Tile> q = ready.get(world);
+        if (q != null) {
+            q.clear();
+        }
+    }
+
+    static List<Tile> storedTiles(String world) {
+        return snapshot(world);
+    }
+
     static int tiles(String world) {
         AtomicInteger n = tileCounts.get(world);
         return n == null ? 0 : n.get();

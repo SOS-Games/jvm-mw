@@ -12,6 +12,10 @@ import java.nio.file.Path;
 /**
  * Uploads one Morrowind .dds to the GPU. The cache keeps one copy per
  * path so swapping cells reuses the same texture.
+ *
+ * The mipmap filter is turned on only after every level is uploaded.
+ * Setting it earlier leaves the texture incomplete, and the first time a
+ * new outdoor cell is drawn that ground reads as white.
  */
 public final class DdsTexture {
     public final int textureId;
@@ -53,12 +57,14 @@ public final class DdsTexture {
 
         int id = Gdx.gl.glGenTexture();
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, id);
-        int minFilter = mipMapCount > 1 ? GL20.GL_LINEAR_MIPMAP_LINEAR : GL20.GL_LINEAR;
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, minFilter);
+        // Level 0 only until the loop finishes. A mipmap filter with missing
+        // levels is incomplete, and the first sample of that is white.
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_LINEAR);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, GL20.GL_LINEAR);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_REPEAT);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_REPEAT);
-        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_MAX_LEVEL, Math.max(0, mipMapCount - 1));
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_BASE_LEVEL, 0);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_MAX_LEVEL, 0);
 
         boolean compressed = (pfFlags & 0x4) != 0;
         if (compressed) {
@@ -99,6 +105,10 @@ public final class DdsTexture {
             if (mipMapCount == 1) {
                 Gdx.gl.glGenerateMipmap(GL20.GL_TEXTURE_2D);
             }
+        }
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_MAX_LEVEL, Math.max(0, mipMapCount - 1));
+        if (mipMapCount > 1) {
+            Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_LINEAR_MIPMAP_LINEAR);
         }
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, 0);
         return new DdsTexture(id, width, height);

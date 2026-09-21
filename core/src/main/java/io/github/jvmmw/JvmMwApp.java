@@ -42,6 +42,7 @@ import java.awt.datatransfer.StringSelection;
 
 import io.github.jvmmw.debug.DebugVars;
 import io.github.jvmmw.debug.FrameProfiler;
+import io.github.jvmmw.debug.PerfTrace;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmFile;
 import io.github.jvmmw.esm.EsmObject;
@@ -291,6 +292,15 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void pumpLoad() {
+        PerfTrace.begin("load.pump");
+        try {
+            pumpLoadBody();
+        } finally {
+            PerfTrace.end();
+        }
+    }
+
+    private void pumpLoadBody() {
         if (cellStepping && cellBuilder != null) {
             try {
                 if (cellBuilder.step(12_000_000L)) {
@@ -303,11 +313,13 @@ public final class JvmMwApp extends ApplicationAdapter {
                     keepEye = false;
                     Gdx.app.log("JVM-MW", cellBuilder.log.toString());
                     cellStepping = false;
+                    PerfTrace.finishLoad();
                 }
             } catch (Exception e) {
                 lastError = e.getMessage() == null ? e.toString() : e.getMessage();
                 Gdx.app.error("JVM-MW", "Cell failed", e);
                 cellStepping = false;
+                PerfTrace.finishLoad();
             }
             return;
         }
@@ -369,16 +381,21 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void disposeScene() {
-        if (builder != null) {
-            builder.dispose();
-            builder = null;
+        PerfTrace.begin("load.dispose");
+        try {
+            if (builder != null) {
+                builder.dispose();
+                builder = null;
+            }
+            if (cellBuilder != null) {
+                cellBuilder.dispose();
+                cellBuilder = null;
+            }
+            BulletWorld.disposeWorld();
+            root = null;
+        } finally {
+            PerfTrace.end();
         }
-        if (cellBuilder != null) {
-            cellBuilder.dispose();
-            cellBuilder = null;
-        }
-        BulletWorld.disposeWorld();
-        root = null;
     }
 
     private void loadMesh(String vfsPath, boolean keepAuto) {
@@ -410,6 +427,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void loadCell(String wanted, boolean keepAuto) {
+        PerfTrace.beginLoad(wanted);
         if (!keepAuto) {
             autoCycling = false;
         }
@@ -425,7 +443,12 @@ public final class JvmMwApp extends ApplicationAdapter {
                 String[] names = wanted.equalsIgnoreCase(TestData.CENSUS_CELL)
                     ? new String[] { TestData.CENSUS_CELL, TestData.PRISON_SHIP }
                     : new String[] { wanted };
-                loadedCell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), names);
+                PerfTrace.begin("load.parse");
+                try {
+                    loadedCell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), names);
+                } finally {
+                    PerfTrace.end();
+                }
             }
             cellBuilder = new CellSceneBuilder();
             cellBuilder.takenKeys = takenKeys;
@@ -437,10 +460,12 @@ public final class JvmMwApp extends ApplicationAdapter {
             Gdx.app.error("JVM-MW", "Cell failed: " + wanted, e);
             cellStepping = false;
             doorArrival = false;
+            PerfTrace.finishLoad();
         }
     }
 
     private void loadExterior(String grid, boolean keepAuto) {
+        PerfTrace.beginLoad(grid);
         if (!keepAuto) {
             autoCycling = false;
         }
@@ -455,7 +480,12 @@ public final class JvmMwApp extends ApplicationAdapter {
             if (loadedCell == null || loadedCell.interior
                 || loadedCell.gridX != xy[0] || loadedCell.gridY != xy[1]) {
                 Gdx.app.log("JVM-MW", "Parsing exterior " + TestData.esmPath());
-                next = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), xy[0], xy[1]);
+                PerfTrace.begin("load.parse");
+                try {
+                    next = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), xy[0], xy[1]);
+                } finally {
+                    PerfTrace.end();
+                }
             }
             disposeScene();
             loadedCell = next;
@@ -472,6 +502,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             cellStepping = false;
             doorArrival = false;
             keepEye = false;
+            PerfTrace.finishLoad();
         }
     }
 
@@ -542,6 +573,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void startWalkLoad(int gx, int gy) {
+        PerfTrace.beginLoad("walk " + gx + "," + gy);
         lastWalkGx = gx;
         lastWalkGy = gy;
         walkGx = gx;
@@ -557,8 +589,10 @@ public final class JvmMwApp extends ApplicationAdapter {
             try {
                 long parseStart = System.nanoTime();
                 EsmFile.LoadedCell cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+                long parseNs = System.nanoTime() - parseStart;
+                PerfTrace.add("walk.parse", parseNs);
                 if (gen == walkGen.get()) {
-                    profiler.setWalkParseNs(System.nanoTime() - parseStart);
+                    profiler.setWalkParseNs(parseNs);
                     walkReadyGen = gen;
                     walkReady = cell;
                 }
@@ -602,6 +636,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             lastError = walkParseError;
             walkParseError = null;
             walkGx = Integer.MIN_VALUE;
+            PerfTrace.finishLoad();
             startPendingWalk();
             return;
         }
@@ -626,6 +661,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                     walkBuilder = null;
                 }
                 walkGx = Integer.MIN_VALUE;
+                PerfTrace.finishLoad();
                 startPendingWalk();
                 return;
             }
@@ -666,10 +702,12 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
             profiler.setWalkSwapNs(System.nanoTime() - swapStart);
             walkHudHold = 0.45f;
+            PerfTrace.finishLoad();
             startPendingWalk();
         } catch (Exception e) {
             lastError = e.getMessage() == null ? e.toString() : e.getMessage();
             Gdx.app.error("JVM-MW", "walk step", e);
+            PerfTrace.finishLoad();
             walkStepping = false;
             if (walkBuilder != null) {
                 walkBuilder.dispose();
@@ -1436,7 +1474,9 @@ public final class JvmMwApp extends ApplicationAdapter {
                     dx = 0f;
                     dz = 0f;
                 }
+                PerfTrace.begin("player.move");
                 BulletWorld.move(eye, dx, dy, dz, dt);
+                PerfTrace.end();
             }
         } else {
             eye.add(dx, dy, dz);

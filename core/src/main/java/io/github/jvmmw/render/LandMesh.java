@@ -30,6 +30,11 @@ import java.util.Map;
  * Morrowind stores 17 blend samples. Doubling that to 34 and sampling
  * nearest made the GPU’s linear filter still look blocky, so we keep 17
  * and sample from the center of each texel.
+ *
+ * That image is 17 texels wide, so the upload cannot assume 4-byte rows.
+ * The texture also has to be complete before the first draw. If it is not,
+ * every layer samples white and adds together, and a cell that just
+ * streamed in flashes white for one frame.
  */
 public final class LandMesh {
     public static final String DEFAULT_TEXTURE = "_land_default.dds";
@@ -243,14 +248,23 @@ public final class LandMesh {
     private int uploadBlend(byte[] data) {
         int id = Gdx.gl.glGenTexture();
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, id);
-        ByteBuffer px = BufferUtils.newByteBuffer(data.length);
-        px.put(data).flip();
-        Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL30.GL_R8, BLENDMAP_IMAGE_SIZE, BLENDMAP_IMAGE_SIZE, 0,
-            GL30.GL_RED, GL20.GL_UNSIGNED_BYTE, px);
+        // Filter and max level before the pixels. The default min filter wants
+        // mipmaps; with only this one level the first draw samples white, every
+        // land layer adds, and the new cell flashes.
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MIN_FILTER, GL20.GL_LINEAR);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_MAG_FILTER, GL20.GL_LINEAR);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_S, GL20.GL_CLAMP_TO_EDGE);
         Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL20.GL_TEXTURE_WRAP_T, GL20.GL_CLAMP_TO_EDGE);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_BASE_LEVEL, 0);
+        Gdx.gl.glTexParameteri(GL20.GL_TEXTURE_2D, GL30.GL_TEXTURE_MAX_LEVEL, 0);
+        java.nio.IntBuffer align = BufferUtils.newIntBuffer(1);
+        Gdx.gl.glGetIntegerv(GL20.GL_UNPACK_ALIGNMENT, align);
+        Gdx.gl.glPixelStorei(GL20.GL_UNPACK_ALIGNMENT, 1);
+        ByteBuffer px = BufferUtils.newByteBuffer(data.length);
+        px.put(data).flip();
+        Gdx.gl.glTexImage2D(GL20.GL_TEXTURE_2D, 0, GL30.GL_R8, BLENDMAP_IMAGE_SIZE, BLENDMAP_IMAGE_SIZE, 0,
+            GL30.GL_RED, GL20.GL_UNSIGNED_BYTE, px);
+        Gdx.gl.glPixelStorei(GL20.GL_UNPACK_ALIGNMENT, align.get(0));
         Gdx.gl.glBindTexture(GL20.GL_TEXTURE_2D, 0);
         blendIds.add(id);
         return id;

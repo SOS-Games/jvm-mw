@@ -12,7 +12,8 @@ import java.util.List;
 
 /**
  * F7 overlay of Bullet colliders. Yellow is land (HeightMap). Orange is
- * docks and kit (World). Off at load. Water cameras skip this.
+ * docks and kit (World). Off at load. The meshes are built when F7 is on and dropped when it is off.
+ * Water cameras skip this.
  */
 public final class BulletColliderDebug {
     public static boolean visible = false;

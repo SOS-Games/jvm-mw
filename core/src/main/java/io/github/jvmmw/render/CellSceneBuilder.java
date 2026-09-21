@@ -1,5 +1,6 @@
 package io.github.jvmmw.render;
 
+import io.github.jvmmw.debug.PerfTrace;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
@@ -15,6 +16,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -74,6 +76,8 @@ public final class CellSceneBuilder {
     private final BulletColliderDebug colliderDebug = new BulletColliderDebug();
     private NavmeshDebug navmeshDebug;
     private String navWorld = "";
+    private boolean navDebugShown;
+    private final ArrayDeque<NavmeshCache.Tile> navPending = new ArrayDeque<>();
 
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
     private EsmFile.LoadedCell cell;
@@ -171,9 +175,11 @@ public final class CellSceneBuilder {
         if (gpu == 0) {
             if (!cell.interior) {
                 while (landIndex < landCount()) {
+                    PerfTrace.begin("load.land");
                     LandRecord land = cell.lands.isEmpty() ? cell.land : cell.lands.get(landIndex);
                     List<LandRecord> neighbors = cell.lands.isEmpty() ? List.of(land) : cell.lands;
                     landMesh.attach(buildingRoot, land, cell.landTextures, neighbors);
+                    PerfTrace.end();
                     landIndex++;
                     if (System.nanoTime() - start >= budgetNanos) {
                         return false;
@@ -184,7 +190,11 @@ public final class CellSceneBuilder {
         }
         if (gpu == 1) {
             while (refIndex < cell.refs.size()) {
-                place(cell.refs.get(refIndex++));
+                PerfTrace.begin("load.place");
+                CellRef ref = cell.refs.get(refIndex++);
+                PerfTrace.detail(ref.refId);
+                place(ref);
+                PerfTrace.end();
                 if (System.nanoTime() - start >= budgetNanos) {
                     return false;
                 }
@@ -192,10 +202,12 @@ public final class CellSceneBuilder {
             gpu = 2;
         }
         if (gpu == 2) {
+            PerfTrace.begin("load.prep");
             finishPrep();
             if (!deferBullet) {
                 BulletWorld.rebuild();
             }
+            PerfTrace.end();
             gpu = 3;
             return false;
         }
@@ -228,6 +240,7 @@ public final class CellSceneBuilder {
             return;
         }
         BulletWorld.rebuild();
+        PerfTrace.begin("load.adopt");
         if (!staged.isEmpty()) {
             for (BulletWorld.Staged body : staged) {
                 BulletWorld.adopt(body);
@@ -241,6 +254,7 @@ public final class CellSceneBuilder {
         } else {
             fillCurrentCollision(System.nanoTime(), Long.MAX_VALUE, true, false);
         }
+        PerfTrace.end();
         bulletLive = true;
         colTile = Math.min(1, colOrder.size());
         colObj = 0;
@@ -264,22 +278,35 @@ public final class CellSceneBuilder {
     }
 
     public void update(float dt, Vector3 eye) {
+        syncDebugOverlays();
+        PerfTrace.begin("update.col");
         pumpCollision(4_000_000L);
+        PerfTrace.end();
+        PerfTrace.begin("update.f7");
         ensureColliderDebug();
+        PerfTrace.end();
+        PerfTrace.begin("update.nav");
         pumpNavmesh();
+        PerfTrace.end();
+        PerfTrace.begin("update.npc");
         mannequin.update(dt);
+        PerfTrace.end();
         navPath = NavmeshQuery.lastPath(navWorld);
-        waterMesh.update(dt);
+        waterMesh.follow(eye);
+        PerfTrace.begin("update.doors");
         doors.process(dt);
         containers.process(dt);
+        PerfTrace.end();
         if (buildingRoot != null) {
             Matrix4 id = new Matrix4();
+            PerfTrace.begin("update.xform");
             buildingRoot.updateWorld(id);
             BulletWorld.syncFollowers();
             if (doors.blockOnPlayer(eye)) {
                 buildingRoot.updateWorld(id);
                 BulletWorld.syncFollowers();
             }
+            PerfTrace.end();
         }
     }
 
@@ -292,17 +319,35 @@ public final class CellSceneBuilder {
     }
 
     private void pumpNavmesh() {
-        if (navmeshDebug == null || buildingRoot == null) {
+        if (buildingRoot == null) {
             return;
         }
-        navmeshDebug.attachTo(buildingRoot);
-        long start = System.nanoTime();
-        while (System.nanoTime() - start < 4_000_000L) {
-            NavmeshCache.Tile tile = NavmeshCache.poll(navWorld);
-            if (tile == null) {
-                break;
+        boolean show = NavmeshDebug.visible && finished && navmeshDebug != null;
+        if (show && !navDebugShown) {
+            navmeshDebug.attachTo(buildingRoot);
+            navmeshDebug.clearMeshes();
+            navPending.clear();
+            NavmeshCache.discardReady(navWorld);
+            navPending.addAll(NavmeshCache.storedTiles(navWorld));
+            navDebugShown = true;
+        } else if (!show && navDebugShown && navmeshDebug != null) {
+            navmeshDebug.clearMeshes();
+            navmeshDebug.detachFrom(buildingRoot);
+            navPending.clear();
+            navDebugShown = false;
+        }
+        if (!show) {
+            NavmeshCache.discardReady(navWorld);
+        } else {
+            navmeshDebug.attachTo(buildingRoot);
+            NavmeshCache.Tile tile;
+            while ((tile = NavmeshCache.poll(navWorld)) != null) {
+                navPending.add(tile);
             }
-            navmeshDebug.addTile(tile);
+            long start = System.nanoTime();
+            while (System.nanoTime() - start < 4_000_000L && !navPending.isEmpty()) {
+                navmeshDebug.addTile(navPending.poll());
+            }
         }
         navPolys = NavmeshCache.polys(navWorld);
         navTiles = NavmeshCache.tiles(navWorld);
@@ -318,20 +363,20 @@ public final class CellSceneBuilder {
     }
 
     private void finishPrep() {
-        List<LandRecord> lands = cell.interior || cell.land == null ? List.of()
-            : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
+        PerfTrace.begin("prep.recast");
         recastTris.bake(pendingCol);
+        PerfTrace.end();
         if (!deferBullet) {
-            colliderDebug.attach(buildingRoot, pendingCol, lands);
+            BulletWorld.rebuild();
         }
-        pathgridDebug.attach(buildingRoot, cell);
+        PerfTrace.begin("prep.lights");
         finishLights();
+        PerfTrace.end();
+        PerfTrace.begin("prep.nav");
         startNavmesh();
-        if (navmeshDebug != null) {
-            navmeshDebug.attachTo(buildingRoot);
-        }
+        PerfTrace.end();
         buildColOrder();
         colTile = 0;
         colObj = 0;
@@ -806,6 +851,23 @@ public final class CellSceneBuilder {
     }
 
     private record PendingLight(SceneNode node, EsmObject obj, String refId) {
+    }
+
+    /** F5 and F7 meshes exist only while those overlays are on. */
+    private void syncDebugOverlays() {
+        if (buildingRoot == null || cell == null || !finished) {
+            return;
+        }
+        if (PathgridDebug.visible) {
+            if (!pathgridDebug.attached()) {
+                pathgridDebug.attach(buildingRoot, cell);
+            }
+        } else if (pathgridDebug.attached()) {
+            pathgridDebug.dispose();
+        }
+        if (!BulletColliderDebug.visible && colliderDebug.attached()) {
+            colliderDebug.dispose();
+        }
     }
 
     private void ensureColliderDebug() {

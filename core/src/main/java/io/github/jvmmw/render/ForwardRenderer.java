@@ -12,6 +12,7 @@ import com.badlogic.gdx.math.collision.BoundingBox;
 import com.badlogic.gdx.utils.BufferUtils;
 
 import io.github.jvmmw.debug.FrameProfiler;
+import io.github.jvmmw.debug.PerfTrace;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -23,10 +24,11 @@ import java.util.List;
  * rotates −90° so the GPU sees Y-up. Water at −1 and clip planes live in
  * that Y-up world.
  *
- * If the cell has water, each frame first draws a 512 map of what’s under
- * the surface, then a 512 map of what’s mirrored (no people). Then sky,
- * land, solid meshes, the water plane (sampling those two maps), then
- * leaves and glass. Interiors skip the water cameras and usually skip sky.
+ * If the water surface is in view, the frame first draws a 512 map of what’s under
+ * it, then a 512 map of what’s mirrored (no people). Land in the way skips those
+ * two draws. The water plane itself still draws, and the depth test hides it under land.
+ * Then sky, land, solid meshes, the water plane, leaves, and glass.
+ * Interiors skip the water cameras and usually skip sky.
  *
  * Meshes off-camera, smaller than 2 pixels, or small and farther than 7168
  * are skipped. Sky and the water plane always draw. Never ModelBatch.
@@ -129,6 +131,10 @@ public final class ForwardRenderer {
     private final Matrix4 reflectMat = new Matrix4();
     private final Matrix4 frustumInv = new Matrix4();
     private final BoundingBox cullBox = new BoundingBox();
+    private final BoundingBox waterBox = new BoundingBox();
+    /** Reflection maps stay up for a short while after the last clear view of water. */
+    private boolean waterShown;
+    private int waterHold;
     private final Vector3 aabbMin = new Vector3();
     private final Vector3 aabbMax = new Vector3();
     /** True while filling a water map so tiny-mesh cull uses 20 px on 512, not 2 px on the window. */
@@ -296,10 +302,11 @@ public final class ForwardRenderer {
         if (clouds != null) {
             clouds.setFromHour(cycle.hour);
         }
-        boolean water = hasWater(root);
+        boolean water = collectWater(root);
         // GL Y is up; water plane sits at y = −1.
         boolean underwater = water && cam.position.y < WaterMesh.HEIGHT;
-        if (water) {
+        boolean seeWater = water && waterInView(cam);
+        if (seeWater) {
             waterRtt = true;
             if (profiler != null) {
                 profiler.setRtt(true);
@@ -356,7 +363,9 @@ public final class ForwardRenderer {
         if (profiler != null) {
             profiler.end(FrameProfiler.OPAQUE);
         }
-        // Water after opaque so the depth buffer already holds docks and the seafloor.
+        // The plane always draws. Depth hides it under land, so a flickering
+        // visibility test cannot make the ocean vanish. The test only skips the
+        // two extra scene draws.
         if (water) {
             if (profiler != null) {
                 profiler.begin(FrameProfiler.WATER);
@@ -808,20 +817,116 @@ public final class ForwardRenderer {
         }
     }
 
-    private static boolean hasWater(SceneNode node) {
+    /** True when this cell has a water plane. Fills {@link #waterBox}. */
+    private boolean collectWater(SceneNode node) {
+        waterBox.inf();
+        return expandWater(node, waterBox);
+    }
+
+    private boolean expandWater(SceneNode node, BoundingBox box) {
+        boolean any = false;
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 if (inst.mesh.waterShader) {
-                    return true;
+                    inst.mesh.expandWorldAabb(node.world, box);
+                    any = true;
                 }
             }
         }
         for (SceneNode child : node.children) {
-            if (hasWater(child)) {
-                return true;
+            if (expandWater(child, box)) {
+                any = true;
             }
         }
+        return any;
+    }
+
+    /**
+     * Extra scene draws when a view ray reaches the plane before land or a building.
+     * They stay on briefly after that, so one odd ray does not drop the reflection.
+     * The water surface itself is drawn every frame and hidden by the depth test.
+     */
+    private boolean waterInView(PerspectiveCamera cam) {
+        if (!cam.frustum.boundsInFrustum(waterBox)) {
+            return holdWater(false);
+        }
+        PerfTrace.begin("water.test");
+        try {
+            boolean saw = false;
+            boolean blocked = false;
+            boolean pending = false;
+            float far = cam.far;
+            int hit = classifyWaterRay(cam, cam.direction.x * far, cam.direction.y * far, cam.direction.z * far);
+            if (hit == 1) {
+                saw = true;
+            } else if (hit == 2) {
+                blocked = true;
+            } else if (hit == 3) {
+                pending = true;
+            }
+            Vector3[] farPts = cam.frustum.planePoints;
+            for (int i = 4; i <= 7; i++) {
+                Vector3 p = farPts[i];
+                hit = classifyWaterRay(cam, p.x - cam.position.x, p.y - cam.position.y, p.z - cam.position.z);
+                if (hit == 1) {
+                    saw = true;
+                } else if (hit == 2) {
+                    blocked = true;
+                } else if (hit == 3) {
+                    pending = true;
+                }
+            }
+            if (saw) {
+                waterHold = 45;
+                waterShown = true;
+            } else if (!pending && blocked) {
+                return holdWater(false);
+            }
+            return waterShown;
+        } finally {
+            PerfTrace.end();
+        }
+    }
+
+    /** Keep the reflection maps for a few frames after water leaves the view. */
+    private boolean holdWater(boolean saw) {
+        if (saw) {
+            waterHold = 45;
+            waterShown = true;
+            return true;
+        }
+        if (waterHold > 0) {
+            waterHold--;
+            return waterShown;
+        }
+        waterShown = false;
         return false;
+    }
+
+    /**
+     * 0 = the ray misses the plane. 1 = it reaches water. 2 = land or a building is in front.
+     * 3 = it would hit the plane in a tile that has no collision yet.
+     */
+    private int classifyWaterRay(PerspectiveCamera cam, float dx, float dy, float dz) {
+        if (Math.abs(dy) < 1e-6f) {
+            return 0;
+        }
+        float t = (WaterMesh.HEIGHT - cam.position.y) / dy;
+        if (t <= 0.02f || t > 1f) {
+            return 0;
+        }
+        float x = cam.position.x + dx * t;
+        float z = cam.position.z + dz * t;
+        if (x < waterBox.min.x || x > waterBox.max.x || z < waterBox.min.z || z > waterBox.max.z) {
+            return 0;
+        }
+        if (!BulletWorld.readyAtGl(x, z)) {
+            return 3;
+        }
+        if (BulletWorld.blockedSegment(cam.position.x, cam.position.y, cam.position.z, x, WaterMesh.HEIGHT, z)) {
+            return 2;
+        }
+        return 1;
     }
 
     /**

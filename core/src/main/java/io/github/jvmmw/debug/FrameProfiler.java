@@ -74,6 +74,7 @@ public final class FrameProfiler {
         drawsRtt = 0;
         drawsCulled = 0;
         rtt = false;
+        PerfTrace.beginFrame();
         begin(FRAME);
     }
 
@@ -104,6 +105,10 @@ public final class FrameProfiler {
         frameMs = sum / histCount;
         frameMaxMs = max;
         fps = frameMs > 0.01f ? 1000f / frameMs : 0f;
+        for (int i = 0; i < NAMES.length; i++) {
+            PerfTrace.add(NAMES[i], lastSectionNs[i]);
+        }
+        PerfTrace.sealFrame();
     }
 
     public void begin(int section) {
@@ -178,6 +183,10 @@ public final class FrameProfiler {
         sb.append("tex ").append(texGpu).append("  nif ").append(nifGpu).append('\n');
         sb.append("fat ").append(fattestName()).append(' ')
             .append(String.format(Locale.US, "%.1f", sectionMs(fattestIndex())));
+        String slow = PerfTrace.hudLine();
+        if (!slow.isEmpty()) {
+            sb.append('\n').append(slow);
+        }
         if (hadWalk) {
             sb.append('\n').append(String.format(Locale.US, "walk gpu %.0f  parse %.0f  swap %.0f",
                 walkGpuMs, walkParseMs, walkSwapMs));
@@ -217,6 +226,7 @@ public final class FrameProfiler {
             sb.append(String.format(Locale.US, "walkParseMs=%.0f walkGpuMs=%.0f walkSwapMs=%.0f%n",
                 walkParseMs, walkGpuMs, walkSwapMs));
         }
+        PerfTrace.appendDump(sb);
     }
 
     private int fattestIndex() {

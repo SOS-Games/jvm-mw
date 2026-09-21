@@ -8,7 +8,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Green carpet of Recast walkable polys. Off at load; F6 shows it. Recast tiles waiting
+ * Green carpet of Recast walkable polys. Off at load. Meshes are built while F6 is on
+ * and dropped when it is off. Recast tiles waiting
  * to rebake show as red squares; they turn green when that bake finishes.
  * A patched tile replaces the sqlite chunk at that XY so the carpets do
  * not stack.
@@ -87,16 +88,23 @@ public final class NavmeshDebug {
         return visible;
     }
 
-    public void dispose() {
+    public void clearMeshes() {
         if (group != null) {
-            group.removeFromParent();
-            group = null;
+            group.meshes.clear();
         }
         for (MeshGpu gpu : gpus) {
             gpu.dispose();
         }
         gpus.clear();
         tiled.clear();
+    }
+
+    public void dispose() {
+        clearMeshes();
+        if (group != null) {
+            group.removeFromParent();
+            group = null;
+        }
     }
 
     private MeshGpu buildChunk(List<float[]> tris, int start, int n, boolean generating) {
