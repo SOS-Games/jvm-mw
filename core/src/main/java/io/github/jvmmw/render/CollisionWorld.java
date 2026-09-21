@@ -10,9 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Old capsule tracer, frozen. NPCs still snap TES Z to land bilinear, and
- * Recast still gathers shack triangles from this bake. Player WASD is
- * Bullet now. Do not extend this class.
+ * Old capsule tracer, frozen. Recast still gathers shack triangles from
+ * this bake. Player WASD and NPC feet are Bullet. Do not extend this class.
  */
 public final class CollisionWorld {
     public static final float EYE_HEIGHT = 96f;

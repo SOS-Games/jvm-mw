@@ -28,7 +28,7 @@ OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is 
 | **Navmesh** | Overlay is [phase 42](phase42-navmesh-bake.md). Straight wander dests use Detour ([phase 43](phase43-navmesh-path.md)). Leftover of [nav-paths.md](nav-paths.md) **6**. |
 | **Saves** | No `.ess` / OpenMW save. |
 | **Plugins / Lua / MWScript** | Extra data folders only. No ESP load-order UI, no Lua, no script VM. |
-| **Full physics** | Stay-on-land is a custom tracer. Replace player walk with Bullet in several specs, then drop the tracer; Recast/Detour stay. Work order: [physics.md](physics.md). |
+| **Full physics** | Player WASD and NPC floors are Bullet. Leftover: delete the old tracer; Recast/Detour stay. Work order: [physics.md](physics.md). |
 | **Swimming** | Underwater fog exists. No swim move, drown, or water current. |
 | **Crime / factions / rest** | No bounty, jail, bed rest, or wait. |
 | **Magic / alchemy / enchant** | No spells, effects, or ingredient use. |

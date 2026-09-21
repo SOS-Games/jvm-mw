@@ -48,7 +48,8 @@ import java.util.Random;
  * walkforward, then idle again when they stop. They turn toward the next
  * point instead of snapping yaw. Walk clips shove Bip01 (or root bone)
  * forward — we zero that XY so the loop does not yank them back each
- * stride. Creatures use the same tick with their own mesh.
+ * stride. Creatures use the same tick with their own mesh. Feet sit on
+ * Bullet land, docks, and interior floors. They still walk through shacks.
  */
 public final class NpcMannequin {
     public static final int PRT_COUNT = 27;
@@ -142,6 +143,7 @@ public final class NpcMannequin {
     private static final float WALK_ALIGN = (float) Math.toRadians(15f);
     /** Chance a pathgrid dest is anywhere on the connected graph, not nearby. */
     private static final float GRID_FAR = 0.28f;
+    private static final float STICK_LIFT = 64f;
 
     private final Path testdata;
     private final List<MeshGpu> ownedGpus = new ArrayList<>();
@@ -180,7 +182,7 @@ public final class NpcMannequin {
     }
 
     /** Keep overlapping wanderers on their last TES pose when the 5×5 rebuilds. */
-    void copyWanderFrom(NpcMannequin live, EsmFile.LoadedCell cell, CollisionWorld collision) {
+    void copyWanderFrom(NpcMannequin live, EsmFile.LoadedCell cell) {
         if (live == null || live == this) {
             return;
         }
@@ -211,7 +213,7 @@ public final class NpcMannequin {
             dst.waypoints.clear();
             dst.waypoints.addAll(src.waypoints);
             dst.graph = src.graph == PathgridGraph.NONE ? PathgridGraph.NONE : graphFor(cell, dst.tesPos);
-            stickLand(dst, collision);
+            stickLand(dst);
             EsmTransforms.setActorLocal(dst.placed.local, dst.tesPos, dst.yaw, dst.sx, dst.sy, dst.sz);
             if (dst.walking) {
                 if (playGroup(dst, "walkforward")) {
@@ -351,10 +353,12 @@ public final class NpcMannequin {
         return placed;
     }
 
-    public void update(float dt, CollisionWorld collision) {
+    public void update(float dt) {
         for (NpcActor actor : actors) {
             if (BulletWorld.readyAt(actor.tesPos[0], actor.tesPos[1])) {
-                wander(actor, dt, wanderScale(actor), collision);
+                wander(actor, dt, wanderScale(actor));
+                stickLand(actor);
+                EsmTransforms.setActorLocal(actor.placed.local, actor.tesPos, actor.yaw, actor.sx, actor.sy, actor.sz);
             } else {
                 actor.moving = false;
                 actor.moved = 0f;
@@ -408,7 +412,7 @@ public final class NpcMannequin {
         return graphs.computeIfAbsent(key, k -> PathgridGraph.of(cell, spawn));
     }
 
-    private void wander(NpcActor actor, float dt, float scale, CollisionWorld collision) {
+    private void wander(NpcActor actor, float dt, float scale) {
         if (actor.wanderDistance <= 0) {
             return;
         }
@@ -419,8 +423,6 @@ public final class NpcMannequin {
         if (nodeCap <= WANDER_ARRIVE && roamCap <= WANDER_ARRIVE) {
             actor.walking = false;
             actor.waypoints.clear();
-            stickLand(actor, collision);
-            EsmTransforms.setActorLocal(actor.placed.local, actor.tesPos, actor.yaw, actor.sx, actor.sy, actor.sz);
             return;
         }
         if (actor.walking) {
@@ -512,8 +514,6 @@ public final class NpcMannequin {
                 pickWanderDest(actor);
             }
         }
-        stickLand(actor, collision);
-        EsmTransforms.setActorLocal(actor.placed.local, actor.tesPos, actor.yaw, actor.sx, actor.sy, actor.sz);
     }
 
     private void pickWanderDest(NpcActor actor) {
@@ -736,17 +736,15 @@ public final class NpcMannequin {
         return a;
     }
 
-    private static void stickLand(NpcActor actor, CollisionWorld collision) {
-        if (collision == null) {
-            actor.tesPos[2] = actor.spawnZ;
+    private static void stickLand(NpcActor actor) {
+        if (!BulletWorld.readyAt(actor.tesPos[0], actor.tesPos[1])) {
             return;
         }
-        float land = collision.landHeight(actor.tesPos[0], -actor.tesPos[1]);
-        if (Float.isNaN(land)) {
-            actor.tesPos[2] = actor.spawnZ;
+        float y = BulletWorld.hitY(actor.tesPos[0], actor.tesPos[2] + STICK_LIFT, -actor.tesPos[1]);
+        if (Float.isNaN(y)) {
             return;
         }
-        actor.tesPos[2] = land;
+        actor.tesPos[2] = y;
     }
 
     private void syncWalkAnim(NpcActor actor) {

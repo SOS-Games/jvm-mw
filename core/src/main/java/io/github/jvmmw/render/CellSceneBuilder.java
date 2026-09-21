@@ -260,14 +260,14 @@ public final class CellSceneBuilder {
         if (live == null || live == this) {
             return;
         }
-        mannequin.copyWanderFrom(live.mannequin, cell, collision);
+        mannequin.copyWanderFrom(live.mannequin, cell);
     }
 
     public void update(float dt) {
         pumpCollision(4_000_000L);
         ensureColliderDebug();
         pumpNavmesh();
-        mannequin.update(dt, collision);
+        mannequin.update(dt);
         navPath = NavmeshQuery.lastPath(navWorld);
         waterMesh.update(dt);
         doors.process(dt);

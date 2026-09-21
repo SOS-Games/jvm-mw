@@ -157,6 +157,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `Terrain::TextureManager::getTexture` | `LandMesh` uses `GpuCache` | rewrite |
 | `Resource::SceneManager::getTemplate` | `GpuCache` static NIF `MeshGpu` template intern | rewrite |
 | `MovementSolver::move` / `traceDown` | `BulletWorld` player capsule sweeps | rewrite |
+| `ActorTracer::findGround` | `NpcMannequin.stickLand` via `BulletWorld.hitY` | rewrite |
 | `Stepper` `sStepSizeUp` 34 / `sStepSizeDown` 62 | `BulletWorld` dock/stair step | rewrite |
 | `sMaxSlope` 46 / `sGroundOffset` 1 | `BulletWorld` walkable floor | same |
 | `HeightField` TES3 65×65 | `LandRecord` bilinear + `CollisionWorld` | rewrite |

@@ -14,7 +14,7 @@ While the player is on Bullet, Recast may keep pulling shack tris from `Collisio
 
 ## What Town has now
 
-WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPCs still snap TES Z to land bilinear on the frozen tracer. Doors and chest lids do not update collision after they move. Chair HUD still flies.
+WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPC feet snap TES Z from a Bullet down hit ([phase 49](phase49-npc-bullet-stick.md)). They still walk through shacks. Doors and chest lids do not update collision after they move. Chair HUD still flies.
 
 That tracer is ours. OpenMW does the same *movement* on **Bullet** collision tests, not a hand-rolled triangle loop.
 
@@ -33,7 +33,7 @@ libGDX already ships this library as **`gdx-bullet`** (JNI natives next to the L
 
 ## Frozen custom tracer
 
-`CollisionWorld` stays for NPCs (land stick) and Recast object tris until (2). Do **not** fix, extend, or re-tune it. No new features on that path. Bugs in NPC stick or the old tracer are accepted until the delete-and-port slice.
+`CollisionWorld` stays for Recast object tris until **2.2**. Do **not** fix, extend, or re-tune it. No new features on that path.
 
 Player WASD, spawn snap, Dump `onGround` / `floorY` / `ceilY`, and ceilings go through Bullet.
 
@@ -59,7 +59,7 @@ NPCs keep today’s `CollisionWorld` land stick through every 1.x. Recast gather
 
 ### 1. Player walk on Bullet (several specs)
 
-**1.1–1.3** kept WASD on the old tracer so Town docks did not go fly-through. Two worlds exist on purpose until (2).
+**1.1–1.3** kept WASD on the old tracer so Town docks did not go fly-through. Two worlds exist on purpose until **2.2**.
 
 #### 1.1 Wire `gdx-bullet`
 
@@ -99,18 +99,31 @@ Spec: [phase48-bullet-walk.md](phase48-bullet-walk.md). **Working.**
 
 **Town test:** Census `DODT`. Dirt, docks, dock undersides, hills, Census rafters, Addamasartus roof. Same pass/fail as Phase 36. `glError=0`. F5 / F6 / F7 / `src=db` / `patch=` / Detour wander unchanged. NPCs may still clip shacks and float on bilinear land.
 
-When **1.4** is **working**, do not patch `CollisionWorld`; next is (2) delete-and-port.
+When **2.1** is **working**, do not patch `CollisionWorld`; next is **2.2**.
 
-### 2. Delete the custom tracer, port NPCs to Bullet
+### 2. Delete the custom tracer, port NPCs to Bullet (several specs)
 
-- [ ] NPC / creature floor stick and any remaining `CollisionWorld.move` callers use the Bullet world (same kinematic capsule idea as the player, actor-sized).
+**(1)** shipped. Two worlds still exist on purpose until **2.2**.
+
+#### 2.1 NPC floor from Bullet
+
+Spec: [phase49-npc-bullet-stick.md](phase49-npc-bullet-stick.md). **Working.**
+
+- [x] NPC / creature `stickLand` uses a Bullet World|HeightMap down hit (`hitY`), not `CollisionWorld.landHeight`.
+- [x] XY wander stays pathgrid / Detour / straight line. Actors are not Bullet bodies. They may still walk through shacks.
+- [x] Recast gather still may use `appendObjectTris`. Do not delete `CollisionWorld`.
+
+**Town test:** player feel unchanged from **1.4**. Fargoth on dirt; a dock walker on boards; Census / Cave idle actors on kit floors, not spawn Z. Recast `src=db` and patch still work. Chair still flies.
+
+#### 2.2 Delete `CollisionWorld`
+
 - [ ] Recast `gatherTesRecast` object tris come from `CollisionMesh` placements (or the Bullet mesh verts — same triangles). No Recast config or patch logic changes.
-- [ ] Delete `CollisionWorld` (triangle loop, `fits`, interned-float traces). No leftover dual path.
+- [ ] Delete `CollisionWorld` (triangle loop, `fits`, interned-float traces, `landHeight`, unused `move`). Constants live on `BulletWorld`. No leftover dual path.
 - [ ] Still no actor-actor unless that is explicitly in the spec.
 
-**Town test:** player feel unchanged from **1.4**. Outdoor wanderers still follow pathgrid / Detour; they sit on land / floors without the old class. Recast `src=db` and patch still work. Chair still flies.
+**Town test:** player and NPC floors unchanged from **2.1**. Recast `src=db` and patch still work. Chair still flies.
 
-Until this row ships, do not invest in the old tracer.
+Until **2.2** ships, do not invest in the old tracer. Actor vs shack collision is **4**, not this row.
 
 ### 3. Live object poses
 
@@ -161,4 +174,4 @@ Clipping a swung door is expected until this row. Update **Bullet** only. Do not
 | `btCollisionWorld` convex sweep / ray | gdx-bullet world | rewrite |
 | `MovementSolver::move` | player move on that world | rewrite |
 | `BulletNifLoader` | `CollisionMesh` + `BulletWorld` World bodies | rewrite |
-| `CollisionWorld` triangle tracer | **delete** after (2); NPCs only until then | — |
+| `CollisionWorld` triangle tracer | **delete** after **2.2**; Recast gather until then | — |

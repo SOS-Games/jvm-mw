@@ -28,7 +28,8 @@ import java.util.Set;
  * JNI Bullet collision world for the loaded cell. Land is one mesh per TES
  * tile; docks, trees, and kit are world-space triangles at load pose, same
  * as F7. WASD sweeps a capsule (not a rigid body) against World and
- * HeightMap. NPCs still stick with the old tracer. Chair HUD has no world.
+ * HeightMap. NPC feet snap with a down hit on the same world. Chair HUD has
+ * no world.
  */
 public final class BulletWorld {
     static final int WORLD = 1;
