@@ -172,6 +172,7 @@ public final class CellSceneBuilder {
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
         collision.bake(lands, pendingCol);
+        BulletWorld.addLand(lands);
         pathgridDebug.attach(buildingRoot, cell);
         finishLights();
         startNavmesh();

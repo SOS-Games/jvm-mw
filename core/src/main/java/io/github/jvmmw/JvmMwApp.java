@@ -1244,7 +1244,10 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(" floorY=").append(Float.isNaN(col.floorY) ? "none" : col.floorY)
                 .append(" ceilY=").append(Float.isNaN(col.ceilY) ? "none" : col.ceilY).append('\n');
             snapshotBuf.append("bullet=").append(BulletWorld.alive() ? 1 : 0)
-                .append(" bodies=").append(BulletWorld.bodyCount()).append('\n');
+                .append(" bodies=").append(BulletWorld.bodyCount())
+                .append(" btFloorY=");
+            float btFloor = BulletWorld.floorY(eye.x, eye.y, eye.z);
+            snapshotBuf.append(Float.isNaN(btFloor) ? "none" : btFloor).append('\n');
             if (loadedCell != null && !loadedCell.interior) {
                 snapshotBuf.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
             }

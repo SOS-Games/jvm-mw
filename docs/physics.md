@@ -73,10 +73,12 @@ Spec: [phase45-bullet-wire.md](phase45-bullet-wire.md). **Working.**
 
 #### 1.2 Land in Bullet
 
-- [ ] TES land as a heightfield (or equivalent triangles) in that world.
-- [ ] Dump can show a Bullet land height next to today’s `floorY` (optional). Player still uses `CollisionWorld`.
+Spec: [phase46-bullet-land.md](phase46-bullet-land.md). **Working.**
 
-**Town test:** walk unchanged. Land bodies exist for the loaded 5×5 (or interior: none). Nav unchanged.
+- [x] TES land as a heightfield (or equivalent triangles) in that world.
+- [x] Dump `bodies=` land tiles and `btFloorY=` from a HeightMap ray. Player still uses `CollisionWorld`.
+
+**Town test:** walk unchanged. `bodies=21` on Town, `0` interior. Dirt `btFloorY` ≈ `floorY`. Nav unchanged.
 
 #### 1.3 Object meshes in Bullet
 
@@ -150,9 +152,9 @@ Clipping a swung door is expected until this row. Update **Bullet** only. Do not
 
 | OpenMW | Java | Status |
 | --- | --- | --- |
-| `btCollisionWorld` + dispatcher / dbvt | `BulletWorld` (empty) | rewrite |
+| `btCollisionWorld` + dispatcher / dbvt | `BulletWorld` | rewrite |
+| `HeightField` / `btHeightfieldTerrainShape` | `BulletWorld` land tris (Y-up GL) | rewrite |
 | `btCollisionWorld` convex sweep / ray | gdx-bullet world | rewrite |
 | `MovementSolver::move` | player move on that world | rewrite |
-| `HeightField` | land in Bullet | rewrite |
 | `BulletNifLoader` | keep `CollisionMesh`; feed Bullet | rewrite |
 | `CollisionWorld` triangle tracer | **delete** after (2); NPCs only until then | — |
