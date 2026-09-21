@@ -49,7 +49,7 @@ Spec: [phase40-pathgrid-parse.md](phase40-pathgrid-parse.md). **Working.** Overl
 
 ### 2. Debug draw (optional, but Town-useful)
 
-- [x] Overlay pathgrid nodes and edges in the loaded cells (spheres / lines). **F5** toggles. On at load.
+- [x] Overlay pathgrid nodes and edges in the loaded cells (spheres / lines). **F5** toggles. Off at load.
 - [x] Exterior points are cell-local plus `grid * 8192`; interior points are cell-local; both parent under the cell-root −90° X.
 
 Glued to (1).
@@ -84,6 +84,7 @@ Travel, Follow, Escort, Activate packages stay [AI packages](big-topics.md). Thi
 - [x] **Bake + draw (first split):** Recast from land + collision, or OpenMW `navmesh.db` for the **loaded 5×5**. Overlay walkable polys. **F6**. Actors still pathgrid-wander. Spec: [phase42-navmesh-bake.md](phase42-navmesh-bake.md). **Working.**
 - [ ] Tile cache as the 5×5 moves / writing our own `navmeshdb`.
 - [x] **`buildPathByNavMesh` (this split):** Detour polyline for wander dests that today go straight. Pathgrid wander stays when the graph is usable. Spec: [phase43-navmesh-path.md](phase43-navmesh-path.md). **Working.**
+- [x] **Patch cracked Recast tiles:** after sqlite, rebake only Recast tiles that fail coverage (not every TES cell-edge tile). Keep patches when the 5×5 moves. Spec: [phase44-navmesh-patch.md](phase44-navmesh-patch.md). **Working.**
 - [ ] Detour-first wander (OpenMW `buildPath` order), water swim surface, off-mesh pathgrid links, per-actor agent sizes.
 
 Pathfinding stays last. Recast/Detour as libraries is allowed; do not vendor a second physics engine. `ModelBatch` is not a nav concern.

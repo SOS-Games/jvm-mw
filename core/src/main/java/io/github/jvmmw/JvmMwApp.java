@@ -22,6 +22,8 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar;
 import com.badlogic.gdx.scenes.scene2d.ui.ProgressBar.ProgressBarStyle;
+import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
+import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane.ScrollPaneStyle;
 import com.badlogic.gdx.scenes.scene2d.ui.Skin;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Slider.SliderStyle;
@@ -55,6 +57,7 @@ import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.GpuCache;
 import io.github.jvmmw.render.NifSceneBuilder;
 import io.github.jvmmw.render.PathgridDebug;
+import io.github.jvmmw.render.NavmeshDb;
 import io.github.jvmmw.render.NavmeshDebug;
 import io.github.jvmmw.render.SceneNode;
 import io.github.jvmmw.render.WaterMesh;
@@ -90,12 +93,16 @@ public final class JvmMwApp extends ApplicationAdapter {
     private ForwardRenderer renderer;
     private Stage stage;
     private Skin skin;
+    private Window hudWin;
+    private ScrollPane hudScroll;
     private Label status;
     private Label hourLabel;
     private Slider hourSlider;
     private TextButton playClock;
     private TextButton dumpButton;
+    private TextButton copyPosButton;
     private float dumpCopiedLeft;
+    private float posCopiedLeft;
     private boolean settingHour;
     private Table loader;
     private Image loaderImage;
@@ -107,6 +114,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     private float walkHudHold;
     private Label perfLabel;
     private Table perfHud;
+    private Label posLabel;
     private final FrameProfiler profiler = new FrameProfiler();
     private boolean perfHudOn = true;
     private float yaw = START_YAW;
@@ -916,27 +924,21 @@ public final class JvmMwApp extends ApplicationAdapter {
         pbs.background = new TextureRegionDrawable(barTex);
         pbs.knobBefore = new TextureRegionDrawable(fillTex);
         skin.add("default-horizontal", pbs);
+        ScrollPaneStyle sps = new ScrollPaneStyle();
+        sps.vScroll = panel.tint(new Color(0.2f, 0.22f, 0.28f, 0.9f));
+        sps.vScrollKnob = panel.tint(new Color(0.45f, 0.55f, 0.65f, 1f));
+        skin.add("default", sps);
 
         stage = new Stage(new ScreenViewport());
         Window win = new Window("JVM-MW", skin);
-        win.defaults().pad(6);
+        Table body = new Table();
+        body.defaults().pad(6);
         status = new Label("Loading…", skin);
         status.setWrap(true);
-        win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh.", skin))
-            .width(420).colspan(3).row();
-        win.add(meshButton("Chair", TestData.CHAIR));
-        win.add(meshButton("Shack", TestData.SHACK));
-        win.add(meshButton("Tree", TestData.TREE)).row();
-        win.add(meshButton("Glass", TestData.GLASS_DAGGER));
-        win.add(meshButton("Banner", TestData.BANNER));
-        win.add(meshButton("Dwrv", TestData.DWRV)).row();
-        win.add(meshButton("Cell", CELL_PREFIX + TestData.CENSUS_CELL));
-        win.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
-        win.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
-        win.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
-        win.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y));
-        win.add(meshButton("Zain", CELL_PREFIX + TestData.ZAINSIPILU)).row();
+        body.add(status).width(420).colspan(3).row();
+        posLabel = new Label("gl=(0,0,0) tes=(0,0,0) grid=(0,0) recast=(0,0)", skin);
+        posLabel.setWrap(true);
+        body.add(posLabel).width(420).colspan(3).left().row();
         dumpButton = new TextButton("Dump", skin);
         dumpButton.addListener(new ClickListener() {
             @Override
@@ -944,9 +946,31 @@ public final class JvmMwApp extends ApplicationAdapter {
                 debugSnapshot();
             }
         });
-        win.add(dumpButton).row();
+        copyPosButton = new TextButton("Copy pos", skin);
+        copyPosButton.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                copyPosition();
+            }
+        });
+        body.add(dumpButton);
+        body.add(copyPosButton).row();
+        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh.", skin))
+            .width(420).colspan(3).row();
+        body.add(meshButton("Chair", TestData.CHAIR));
+        body.add(meshButton("Shack", TestData.SHACK));
+        body.add(meshButton("Tree", TestData.TREE)).row();
+        body.add(meshButton("Glass", TestData.GLASS_DAGGER));
+        body.add(meshButton("Banner", TestData.BANNER));
+        body.add(meshButton("Dwrv", TestData.DWRV)).row();
+        body.add(meshButton("Cell", CELL_PREFIX + TestData.CENSUS_CELL));
+        body.add(meshButton("Cave", CELL_PREFIX + TestData.ADDAMASARTUS));
+        body.add(meshButton("Nix", CELL_PREFIX + TestData.PUNSABANIT)).row();
+        body.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
+        body.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y));
+        body.add(meshButton("Zain", CELL_PREFIX + TestData.ZAINSIPILU)).row();
         hourLabel = new Label(hourText(), skin);
-        win.add(hourLabel).width(80);
+        body.add(hourLabel).width(80);
         hourSlider = new Slider(0f, 24f, 0.05f, false, skin);
         hourSlider.setValue(renderer.cycle.hour);
         hourSlider.addListener(new ChangeListener() {
@@ -963,7 +987,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 hourLabel.setText(hourText());
             }
         });
-        win.add(hourSlider).width(250).padRight(6);
+        body.add(hourSlider).width(250).padRight(6);
         playClock = new TextButton("Play", skin);
         playClock.addListener(new ClickListener() {
             @Override
@@ -972,9 +996,13 @@ public final class JvmMwApp extends ApplicationAdapter {
                 playClock.setText(renderer.cycle.playing ? "Pause" : "Play");
             }
         });
-        win.add(playClock).row();
-        win.pack();
-        win.setPosition(12, Gdx.graphics.getHeight() - win.getHeight() - 12);
+        body.add(playClock).row();
+        hudScroll = new ScrollPane(body, skin);
+        hudScroll.setFadeScrollBars(false);
+        hudScroll.setScrollingDisabled(true, false);
+        hudWin = win;
+        win.add(hudScroll);
+        layoutHud();
         stage.addActor(win);
 
         loaderImage = new Image();
@@ -1030,6 +1058,21 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
         });
         return b;
+    }
+
+    private void layoutHud() {
+        if (hudWin == null || hudScroll == null) {
+            return;
+        }
+        float maxH = Math.max(160f, Gdx.graphics.getHeight() - 24f);
+        hudScroll.getColor().a = 1f;
+        hudWin.pack();
+        if (hudWin.getHeight() > maxH) {
+            hudScroll.setSize(hudScroll.getPrefWidth(), maxH - 40f);
+            hudWin.setSize(hudWin.getPrefWidth(), maxH);
+            hudWin.validate();
+        }
+        hudWin.setPosition(12, Gdx.graphics.getHeight() - hudWin.getHeight() - 12);
     }
 
     private void stepHour(float delta) {
@@ -1107,10 +1150,19 @@ public final class JvmMwApp extends ApplicationAdapter {
                 dumpButton.setText("Dump");
             }
         }
+        if (posCopiedLeft > 0f) {
+            posCopiedLeft -= Gdx.graphics.getDeltaTime();
+            if (posCopiedLeft <= 0f && copyPosButton != null) {
+                copyPosButton.setText("Copy pos");
+            }
+        }
         if (perfLabel != null && perfHudOn) {
             String hud = profiler.hudText();
             String debug = DebugVars.hudLine();
             perfLabel.setText(debug.isEmpty() ? hud : hud + "\n" + debug);
+        }
+        if (posLabel != null) {
+            posLabel.setText(posLine());
         }
         if (status != null) {
             String err = lastError.isEmpty() ? "" : " err=" + lastError;
@@ -1179,8 +1231,11 @@ public final class JvmMwApp extends ApplicationAdapter {
             float tesX = eye.x;
             float tesY = -eye.z;
             float tesZ = eye.y - EYE_HEIGHT;
+            snapshotBuf.append(posLine()).append('\n');
             snapshotBuf.append("tes=(").append(tesX).append(',').append(tesY).append(',').append(tesZ)
-                .append(") eyeHeight=").append(EYE_HEIGHT).append('\n');
+                .append(") eyeHeight=").append(EYE_HEIGHT)
+                .append(" recast=(").append(NavmeshDb.recastTile(tesX)).append(',')
+                .append(NavmeshDb.recastTile(tesY)).append(")\n");
             CollisionWorld col = cellBuilder.collision;
             snapshotBuf.append("onGround=").append(col.onGround)
                 .append(" floorY=").append(Float.isNaN(col.floorY) ? "none" : col.floorY)
@@ -1203,12 +1258,34 @@ public final class JvmMwApp extends ApplicationAdapter {
             snapshotBuf.append("nav=").append(cellBuilder.navPolys)
                 .append(" tiles=").append(cellBuilder.navTiles)
                 .append(" src=").append(cellBuilder.navSource)
-                .append(" navPath=").append(cellBuilder.navPath).append('\n');
+                .append(" navPath=").append(cellBuilder.navPath)
+                .append(" patch=").append(cellBuilder.navPatch).append('\n');
         }
         snapshotBuf.append("glError=").append(lastGlError).append('\n');
         profiler.appendDump(snapshotBuf);
         DebugVars.appendDump(snapshotBuf);
         return snapshotBuf.toString();
+    }
+
+    private String posLine() {
+        float tesX = eye.x;
+        float tesY = -eye.z;
+        float tesZ = eye.y - EYE_HEIGHT;
+        int gx = LandRecord.cellGrid(tesX);
+        int gy = LandRecord.cellGrid(tesY);
+        return String.format(java.util.Locale.US,
+            "gl=(%.0f,%.0f,%.0f) tes=(%.0f,%.0f,%.0f) grid=(%d,%d) recast=(%d,%d)",
+            eye.x, eye.y, eye.z, tesX, tesY, tesZ, gx, gy,
+            NavmeshDb.recastTile(tesX), NavmeshDb.recastTile(tesY));
+    }
+
+    private void copyPosition() {
+        String text = posLine();
+        copySnapshot(text);
+        if (copyPosButton != null) {
+            copyPosButton.setText("Copied");
+            posCopiedLeft = 1.5f;
+        }
     }
 
     private void writeSnapshotFile(String text) {
@@ -1343,6 +1420,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         camera.viewportHeight = height;
         camera.update();
         stage.getViewport().update(width, height, true);
+        layoutHud();
     }
 
     @Override

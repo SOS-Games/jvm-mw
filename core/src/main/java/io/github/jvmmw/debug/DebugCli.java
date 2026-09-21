@@ -35,8 +35,9 @@ import java.util.Random;
  * nif — a door or wall that looks offset. cell / spawn — fog and where you
  * arrive. exterior — the 21-cell walk grid. npc / crea / levc / kf — how a
  * person, creature, or wilderness spawn list is put together. pgrd — that
- * cell’s walk-graph nodes. navdb — OpenMW navmesh.db tiles vs cell edges.
- * navpath — Detour corners from spawn to a point east of it.
+ * cell’s walk-graph nodes. navdb — OpenMW navmesh.db tiles vs cell edges
+ * and which Recast tiles would patch. navpath — Detour corners from spawn
+ * to a point east of it.
  */
 public final class DebugCli {
     private DebugCli() {
@@ -101,7 +102,8 @@ public final class DebugCli {
             pgrd       One cell's pathgrid nodes and edges. Interior name or exterior grid.
             navdb      OpenMW navmesh.db Recast tiles vs TES cell edges. Default Town (-2,-9) 5x5.
                        Writes build/navdb-*.png (green tris, yellow cell grid, red missing tiles,
-                       magenta uncovered edge samples). verdict= says if the db already has the cracks.
+                       magenta uncovered edge samples). Then rebakes those Recast tiles from land
+                       and writes build/navdb-*-after.png (cyan=rebaked, magenta=still uncovered).
             navpath    Detour polyline from inbound spawn 512 TES east. Interior name or exterior grid.
                        Prints db= tiles= path= and wp= TES corners. path=0 if the db is missing.
 

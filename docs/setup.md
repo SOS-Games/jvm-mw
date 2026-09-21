@@ -92,8 +92,8 @@ Env is `JVMMW_DEBUG_wanderSpeed` (dots to underscores). `-Djvmmw.debug.wanderSpe
 - **E** door / chest / take
 - **F3** Dump (`build/debug-snapshot.txt` + clipboard)
 - **F4** fps overlay
-- **F5** pathgrid
-- **F6** Recast carpet
+- **F5** pathgrid (off at load)
+- **F6** Recast carpet (off at load)
 
 Wait until overlay `n=60` before treating fps as settled. Gradle Ctrl+C does not save a dump.
 

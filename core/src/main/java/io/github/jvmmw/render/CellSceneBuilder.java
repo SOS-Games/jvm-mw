@@ -34,8 +34,10 @@ import java.util.TreeMap;
  * the new ring starts at spawn. F5 shows the cell’s pathgrid as spheres and lines. F6 shows the
  * Recast walkable carpet for the loaded cells (OpenMW navmesh.db when present).
  * Sqlite and Recast run on a worker. Already-fetched tiles stay when the
- * walk grid moves; only the new ring is loaded. Random wander dests follow
- * that carpet when Detour has a path; pathgrid NPCs stay on F5.
+ * walk grid moves; only the new ring is loaded. After sqlite is in, a
+ * second thread rebakes Recast tiles that fail coverage at TES cell edges
+ * (the thinner/fatter cracks). Those patches stay too. Random wander dests
+ * follow that carpet when Detour has a path; pathgrid NPCs stay on F5.
  *
  * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
  * north) stay out.
@@ -57,6 +59,7 @@ public final class CellSceneBuilder {
     public int navTiles;
     public String navSource = "none";
     public int navPath;
+    public int navPatch;
     public String cellName = "";
     public final CellLighting lighting = new CellLighting();
     public final DoorSwing doors = new DoorSwing();
@@ -221,6 +224,7 @@ public final class CellSceneBuilder {
         navPolys = NavmeshCache.polys(navWorld);
         navTiles = NavmeshCache.tiles(navWorld);
         navSource = "load";
+        navPatch = NavmeshCache.patches(navWorld);
     }
 
     private void pumpNavmesh() {
@@ -240,6 +244,7 @@ public final class CellSceneBuilder {
         navTiles = NavmeshCache.tiles(navWorld);
         navSource = NavmeshCache.source(navWorld);
         navPath = NavmeshQuery.lastPath(navWorld);
+        navPatch = NavmeshCache.patches(navWorld);
     }
 
     private void cancelNavmesh() {

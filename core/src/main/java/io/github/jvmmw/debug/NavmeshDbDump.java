@@ -1,11 +1,23 @@
 package io.github.jvmmw.debug;
 
 import io.github.jvmmw.esm.EsmFile;
+import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.render.NavmeshBaker;
 import io.github.jvmmw.render.NavmeshCache;
 import io.github.jvmmw.render.NavmeshDb;
+import io.github.jvmmw.render.NavmeshGaps;
 import io.github.jvmmw.resource.TestData;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -18,7 +30,9 @@ import java.util.Locale;
 /**
  * Headless read of OpenMW navmesh.db. Prints Recast tile holes and
  * whether decoded walkable tris cover TES cell edges, then writes a
- * top-down PNG. Use this to tell a db gap from a viewer overlay bug.
+ * top-down PNG. Then rebakes the failing Recast tiles from land (same
+ * baker as the viewer, no shack collision) and writes a second PNG so
+ * leftover magenta lines are the gaps generation did not fill.
  */
 public final class NavmeshDbDump {
     private static final int CELL = LandRecord.CELL_SIZE;
@@ -26,6 +40,9 @@ public final class NavmeshDbDump {
     private static final float EDGE_STEP = 64f;
     private static final float NEAR = 256f;
     private static final int GREEN = 0x2f_c0_58;
+    private static final int CYAN = 0x28_c8_e0;
+    private static final int PATCH_BOX = 0x1c_48_58;
+    private static final int BAKE_FAIL = 0xe0_88_20;
     private static final int BG = 0x18_1c_14;
     private static final int CELL_LINE = 0xe8_d0_40;
     private static final int MISS = 0xc0_28_28;
@@ -103,7 +120,9 @@ public final class NavmeshDbDump {
         for (String line : edges.lines) {
             System.out.println(line);
         }
-        Path png = writePng(q, gx0, gy0, gx1, gy1, missing, edges);
+        List<int[]> patch = NavmeshGaps.failingExterior(gx0, gy0, gx1, gy1, q.tiles);
+        printPatch(patch);
+        Path png = writePng(gx0, gy0, gx1, gy1, q.tiles, List.of(), missing, patch, List.of(), edges, "");
         System.out.println("png=" + png.toAbsolutePath());
         String verdict;
         if (q.decoded == 0) {
@@ -123,6 +142,7 @@ public final class NavmeshDbDump {
             + " seamSamples=" + edges.seam);
         System.out.println("db-covers-edges means the sqlite tris reach cell borders; lines in the viewer are ours.");
         System.out.println("db-mesh-gap / db-tile-gap means OpenMW's navmesh.db already has those cracks.");
+        bakeAfter(gx, gy, gx0, gy0, gx1, gy1, q, patch, edges);
     }
 
     private static void dumpInterior(String name) throws Exception {
@@ -152,6 +172,7 @@ public final class NavmeshDbDump {
         }
         System.out.println("tris=" + tris + " tesX=" + (int) minX + ".." + (int) maxX
             + " tesY=" + (int) minY + ".." + (int) maxY);
+        printPatch(NavmeshGaps.failingInterior(q.tiles));
         Path png = writeInteriorPng(q, minX, minY, maxX, maxY, world);
         System.out.println("png=" + png.toAbsolutePath());
         System.out.println("verdict=interior");
@@ -176,6 +197,123 @@ public final class NavmeshDbDump {
             polys += tile.polys;
         }
         System.out.println("polys=" + polys + " tris=" + tris + " scale=" + NavmeshBaker.SCALE);
+    }
+
+    private static void printPatch(List<int[]> tiles) {
+        System.out.println("patch=" + tiles.size());
+        int listed = Math.min(tiles.size(), 40);
+        for (int i = 0; i < listed; i++) {
+            int[] t = tiles.get(i);
+            System.out.println("patch tx=" + t[0] + " ty=" + t[1]);
+        }
+        if (tiles.size() > listed) {
+            System.out.println("patch listed=" + listed + " of " + tiles.size());
+        }
+    }
+
+    private static void bakeAfter(int gx, int gy, int gx0, int gy0, int gx1, int gy1, NavmeshDb.Query q,
+        List<int[]> patch, EdgeStats before) throws Exception {
+        if (patch.isEmpty()) {
+            System.out.println("after skip=no-patch");
+            return;
+        }
+        EsmFile.LoadedCell cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+        System.out.println("after lands=" + cell.lands.size() + " tiles=" + cell.tiles.size()
+            + " land=" + (cell.land == null ? "none" : cell.land.gridX + "," + cell.land.gridY));
+        if (!cell.lands.isEmpty()) {
+            LandRecord l0 = cell.lands.get(0);
+            System.out.println("after land0=" + l0.gridX + "," + l0.gridY);
+        }
+        float tileTes = NavmeshDb.tileSizeTes();
+        int probeTx = patch.get(0)[0];
+        int probeTy = patch.get(0)[1];
+        printGeomProbe(cell, probeTx, probeTy, tileTes, "first");
+        printGeomProbe(cell, NavmeshDb.recastTile((gx + 0.5f) * CELL), NavmeshDb.recastTile((gy + 0.5f) * CELL),
+            tileTes, "center");
+        Map<Long, NavmeshCache.Tile> byKey = new LinkedHashMap<>();
+        for (NavmeshCache.Tile tile : q.tiles) {
+            byKey.put(NavmeshCache.key(tile.x, tile.y), tile);
+        }
+        List<NavmeshCache.Tile> baked = new ArrayList<>();
+        List<int[]> fail = new ArrayList<>();
+        int ok = 0;
+        int emptyGeom = 0;
+        int emptyMesh = 0;
+        for (int i = 0; i < patch.size(); i++) {
+            int tx = patch.get(i)[0];
+            int ty = patch.get(i)[1];
+            float[] geom = NavmeshBaker.gatherTesRecast(null, cell, tx, ty);
+            if (geom.length < 9) {
+                emptyGeom++;
+                fail.add(patch.get(i));
+            } else {
+                NavmeshCache.Tile tile = NavmeshBaker.bakeRecastTile(geom, tx, ty);
+                if (tile != null) {
+                    byKey.put(NavmeshCache.key(tx, ty), tile);
+                    baked.add(tile);
+                    ok++;
+                } else {
+                    emptyMesh++;
+                    fail.add(patch.get(i));
+                }
+            }
+            if ((i + 1) % 25 == 0 || i + 1 == patch.size()) {
+                System.out.println("bake " + (i + 1) + "/" + patch.size() + " ok=" + ok + " fail=" + fail.size()
+                    + " emptyGeom=" + emptyGeom + " emptyMesh=" + emptyMesh);
+            }
+        }
+        java.util.Set<Long> bakedKeys = new java.util.HashSet<>();
+        for (NavmeshCache.Tile tile : baked) {
+            bakedKeys.add(NavmeshCache.key(tile.x, tile.y));
+        }
+        List<NavmeshCache.Tile> rest = new ArrayList<>();
+        for (NavmeshCache.Tile tile : byKey.values()) {
+            if (!bakedKeys.contains(NavmeshCache.key(tile.x, tile.y))) {
+                rest.add(tile);
+            }
+        }
+        List<NavmeshCache.Tile> all = new ArrayList<>(byKey.values());
+        EdgeStats after = sampleEdges(gx0, gy0, gx1, gy1, all);
+        System.out.println("after bakeOk=" + ok + " bakeFail=" + fail.size()
+            + " emptyGeom=" + emptyGeom + " emptyMesh=" + emptyMesh
+            + " seam " + before.seam + "->" + after.seam
+            + " covered " + before.covered + "->" + after.covered);
+        for (String line : after.lines) {
+            System.out.println("after " + line);
+        }
+        List<int[]> remain = NavmeshGaps.failingExterior(gx0, gy0, gx1, gy1, all);
+        System.out.println("after patchRemain=" + remain.size());
+        Path png = writePng(gx0, gy0, gx1, gy1, rest, baked, List.of(), List.of(), fail, after, "-after");
+        System.out.println("pngAfter=" + png.toAbsolutePath());
+        System.out.println("after PNG: cyan=rebaked, green=sqlite kept, orange=bake empty, magenta=still uncovered.");
+    }
+
+    private static void printGeomProbe(EsmFile.LoadedCell cell, int tx, int ty, float tileTes, String label) {
+        float minX = tx * tileTes;
+        float maxX = (tx + 1) * tileTes;
+        float minY = ty * tileTes;
+        float maxY = (ty + 1) * tileTes;
+        int hits = 0;
+        StringBuilder hit = new StringBuilder();
+        for (LandRecord land : cell.lands) {
+            float ox = land.gridX * (float) CELL;
+            float oy = land.gridY * (float) CELL;
+            float x1 = ox + CELL;
+            float y1 = oy + CELL;
+            if (ox <= maxX && x1 >= minX && oy <= maxY && y1 >= minY) {
+                hits++;
+                if (hit.length() < 80) {
+                    hit.append(" (").append(land.gridX).append(',').append(land.gridY).append(')');
+                }
+            }
+        }
+        float[] geom = NavmeshBaker.gatherTesRecast(null, cell, tx, ty);
+        NavmeshCache.Tile baked = geom.length < 9 ? null : NavmeshBaker.bakeRecastTile(geom, tx, ty);
+        System.out.println("after geom " + label + " tx=" + tx + " ty=" + ty
+            + " tes=(" + (int) minX + ".." + (int) maxX + "," + (int) minY + ".." + (int) maxY + ")"
+            + " landHits=" + hits + hit + " floats=" + geom.length
+            + " bake=" + (baked == null ? "null " + NavmeshBaker.lastBakeWhy
+                : "polys=" + baked.polys + " tris=" + baked.tris.size()));
     }
 
     private static List<int[]> missingTiles(NavmeshDb.Query q) {
@@ -338,8 +476,10 @@ public final class NavmeshDbDump {
         return u >= -slack && v >= -slack && u + v <= 1f + slack;
     }
 
-    private static Path writePng(NavmeshDb.Query q, int gx0, int gy0, int gx1, int gy1, List<int[]> missing,
-        EdgeStats edges) throws Exception {
+    private static Path writePng(int gx0, int gy0, int gx1, int gy1, List<NavmeshCache.Tile> green,
+        List<NavmeshCache.Tile> cyan, List<int[]> missBoxes, List<int[]> patchBoxes, List<int[]> failBoxes,
+        EdgeStats edges, String suffix)
+        throws Exception {
         float tesMinX = gx0 * (float) CELL;
         float tesMaxX = (gx1 + 1) * (float) CELL;
         float tesMinY = gy0 * (float) CELL;
@@ -353,13 +493,26 @@ public final class NavmeshDbDump {
             }
         }
         float tileTes = NavmeshDb.tileSizeTes();
-        for (int[] m : missing) {
+        for (int[] m : missBoxes) {
             fillRect(img, tesMinX, tesMinY, w, h, m[0] * tileTes, m[1] * tileTes,
                 (m[0] + 1) * tileTes, (m[1] + 1) * tileTes, MISS);
         }
-        for (NavmeshCache.Tile tile : q.tiles) {
+        for (int[] m : patchBoxes) {
+            fillRect(img, tesMinX, tesMinY, w, h, m[0] * tileTes, m[1] * tileTes,
+                (m[0] + 1) * tileTes, (m[1] + 1) * tileTes, PATCH_BOX);
+        }
+        for (int[] m : failBoxes) {
+            fillRect(img, tesMinX, tesMinY, w, h, m[0] * tileTes, m[1] * tileTes,
+                (m[0] + 1) * tileTes, (m[1] + 1) * tileTes, BAKE_FAIL);
+        }
+        for (NavmeshCache.Tile tile : green) {
             for (float[] t : tile.tris) {
-                fillTri(img, tesMinX, tesMinY, w, h, t);
+                fillTri(img, tesMinX, tesMinY, w, h, t, GREEN);
+            }
+        }
+        for (NavmeshCache.Tile tile : cyan) {
+            for (float[] t : tile.tris) {
+                fillTri(img, tesMinX, tesMinY, w, h, t, CYAN);
             }
         }
         for (int gx = gx0; gx <= gx1 + 1; gx++) {
@@ -377,7 +530,7 @@ public final class NavmeshDbDump {
         }
         Path dir = Path.of("build");
         Files.createDirectories(dir);
-        Path out = dir.resolve("navdb-" + gx0 + "_" + gy0 + "-" + gx1 + "_" + gy1 + ".png");
+        Path out = dir.resolve("navdb-" + gx0 + "_" + gy0 + "-" + gx1 + "_" + gy1 + suffix + ".png");
         ImageIO.write(img, "png", out.toFile());
         return out;
     }
@@ -401,7 +554,7 @@ public final class NavmeshDbDump {
         }
         for (NavmeshCache.Tile tile : q.tiles) {
             for (float[] t : tile.tris) {
-                fillTri(img, minX, minY, w, h, t);
+                fillTri(img, minX, minY, w, h, t, GREEN);
             }
         }
         Path dir = Path.of("build");
@@ -412,7 +565,7 @@ public final class NavmeshDbDump {
         return out;
     }
 
-    private static void fillTri(BufferedImage img, float tesMinX, float tesMinY, int w, int h, float[] t) {
+    private static void fillTri(BufferedImage img, float tesMinX, float tesMinY, int w, int h, float[] t, int rgb) {
         float ax = t[0];
         float ay = t[1];
         float bx = t[3];
@@ -428,7 +581,7 @@ public final class NavmeshDbDump {
             for (int px = x0; px <= x1; px++) {
                 float tesX = tesMinX + (px + 0.5f) * PIX;
                 if (inTri(tesX, tesY, ax, ay, bx, by, cx, cy, 0f)) {
-                    img.setRGB(px, h - 1 - py, GREEN);
+                    img.setRGB(px, h - 1 - py, rgb);
                 }
             }
         }

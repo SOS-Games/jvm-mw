@@ -64,6 +64,28 @@ public final class NavmeshQuery {
         }
     }
 
+    static void replaceTile(String world, NavmeshCache.Tile tile) {
+        if (world == null || world.isEmpty() || tile == null || tile.mesh == null || tile.mesh.npolys <= 0) {
+            return;
+        }
+        MeshData data = meshData(tile);
+        if (data == null) {
+            return;
+        }
+        long key = NavmeshCache.key(tile.x, tile.y);
+        World w = worlds.computeIfAbsent(world, NavmeshQuery::newWorld);
+        synchronized (w) {
+            if (w.tiles.isEmpty()) {
+                w.tesSpace = tile.tesSpace;
+            }
+            try {
+                w.mesh.updateTile(data, 0);
+                w.tiles.add(key);
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
     static int lastPath(String world) {
         World w = worlds.get(world);
         if (w == null) {

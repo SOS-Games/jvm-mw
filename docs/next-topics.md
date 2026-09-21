@@ -4,10 +4,6 @@ Pick one, then say **proceed** to spec that slice. This is the **small** queue.
 
 Big holes (occlusion, combat, shadows, full UI, …) live in [big-topics.md](big-topics.md). Do not spec those here.
 
-## Nav
-
-Leftover of [nav-paths.md](nav-paths.md) **6** (Detour-first wander, tile-count cap, water) is not a small next slice until you pick it.
-
 ## Strong next slices
 
 These match what the viewer already is (walk Town, look, Dump) and were explicitly left out of recent phases.

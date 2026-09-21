@@ -56,6 +56,11 @@ public final class NavmeshDb {
         return TILE_NAV / SCALE;
     }
 
+    /** Recast tile index for a TES X or Y (OpenMW origin 0). */
+    public static int recastTile(float tes) {
+        return tileIndex(tes * SCALE);
+    }
+
     public static synchronized Query queryExterior(int gx0, int gy0, int gx1, int gy1) throws Exception {
         Query q = new Query();
         q.world = "sys::default";

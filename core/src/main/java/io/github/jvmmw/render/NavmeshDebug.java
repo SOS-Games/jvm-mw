@@ -8,19 +8,21 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Green carpet of Recast walkable polys. F6 hides it. Tiles stay on this
- * overlay when the walk grid swaps — only new Recast tiles are uploaded.
- * Verts are TES xyz parented under the cell root so the same −90° X as
- * land applies. Water cameras skip this. Wander still uses the pathgrid.
+ * Green carpet of Recast walkable polys. Off at load; F6 shows it. Recast tiles waiting
+ * to rebake show as red squares; they turn green when that bake finishes.
+ * A patched tile replaces the sqlite chunk at that XY so the carpets do
+ * not stack.
  */
 public final class NavmeshDebug {
-    public static boolean visible = true;
+    public static boolean visible = false;
 
     private static final float[] RGB = {0.25f, 0.85f, 0.35f};
+    private static final float[] RGB_GEN = {0.95f, 0.12f, 0.1f};
     public static final int MAX_VERTS = 65000;
     private static final Map<String, NavmeshDebug> WORLDS = new HashMap<>();
 
     private final List<MeshGpu> gpus = new ArrayList<>();
+    private final Map<Long, List<MeshGpu>> tiled = new HashMap<>();
     private SceneNode group;
 
     static NavmeshDebug of(String world) {
@@ -53,19 +55,31 @@ public final class NavmeshDebug {
         if (group == null || tile == null || tile.tris.isEmpty()) {
             return;
         }
+        long key = NavmeshCache.key(tile.x, tile.y);
+        drop(key);
+        List<MeshGpu> made = new ArrayList<>();
         int start = 0;
         while (start < tile.tris.size()) {
             int n = Math.min(tile.tris.size() - start, MAX_VERTS / 3);
-            addChunk(tile.tris, start, n);
+            MeshGpu gpu = buildChunk(tile.tris, start, n, tile.generating);
+            group.meshes.add(new MeshInstance(gpu));
+            made.add(gpu);
             start += n;
         }
+        tiled.put(key, made);
     }
 
-    void addChunk(List<float[]> tris, int start, int n) {
-        if (group == null || tris == null || n <= 0) {
+    private void drop(long key) {
+        List<MeshGpu> old = tiled.remove(key);
+        if (old == null || old.isEmpty() || group == null) {
             return;
         }
-        group.meshes.add(new MeshInstance(buildChunk(tris, start, n)));
+        java.util.Set<MeshGpu> gone = new java.util.HashSet<>(old);
+        group.meshes.removeIf(inst -> gone.contains(inst.mesh));
+        for (MeshGpu gpu : old) {
+            gpus.remove(gpu);
+            gpu.dispose();
+        }
     }
 
     public static boolean toggleVisible() {
@@ -82,9 +96,12 @@ public final class NavmeshDebug {
             gpu.dispose();
         }
         gpus.clear();
+        tiled.clear();
     }
 
-    private MeshGpu buildChunk(List<float[]> tris, int start, int n) {
+    private MeshGpu buildChunk(List<float[]> tris, int start, int n, boolean generating) {
+        float[] rgb = generating ? RGB_GEN : RGB;
+        float alpha = generating ? 0.7f : 0.45f;
         float[] interleaved = new float[n * 3 * MeshGpu.STRIDE_FLOATS];
         short[] indices = new short[n * 3];
         int base = 0;
@@ -111,7 +128,7 @@ public final class NavmeshDebug {
             }
             for (int k = 0; k < 3; k++) {
                 int o = k * 3;
-                putVert(interleaved, base, tri[o], tri[o + 1], tri[o + 2], nx, ny, nz);
+                putVert(interleaved, base, tri[o], tri[o + 1], tri[o + 2], nx, ny, nz, rgb, alpha);
                 indices[t * 3 + k] = (short) base;
                 base++;
             }
@@ -120,7 +137,7 @@ public final class NavmeshDebug {
         mesh.cull = false;
         mesh.alphaBlend = true;
         mesh.depthWrite = false;
-        mesh.matAlpha = 0.45f;
+        mesh.matAlpha = generating ? 0.7f : 0.45f;
         return mesh;
     }
 
@@ -141,7 +158,7 @@ public final class NavmeshDebug {
     }
 
     private static void putVert(float[] interleaved, int vi, float x, float y, float z,
-        float nx, float ny, float nz) {
+        float nx, float ny, float nz, float[] rgb, float alpha) {
         int o = vi * MeshGpu.STRIDE_FLOATS;
         interleaved[o] = x;
         interleaved[o + 1] = y;
@@ -151,9 +168,9 @@ public final class NavmeshDebug {
         interleaved[o + 5] = nz;
         interleaved[o + 6] = 0f;
         interleaved[o + 7] = 0f;
-        interleaved[o + 8] = RGB[0];
-        interleaved[o + 9] = RGB[1];
-        interleaved[o + 10] = RGB[2];
-        interleaved[o + 11] = 0.45f;
+        interleaved[o + 8] = rgb[0];
+        interleaved[o + 9] = rgb[1];
+        interleaved[o + 10] = rgb[2];
+        interleaved[o + 11] = alpha;
     }
 }

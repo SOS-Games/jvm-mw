@@ -17,13 +17,13 @@ import java.util.List;
 
 /**
  * Debug overlay of a cell’s walk graph: a blue sphere per node and cyan
- * lines for edges. F5 hides it. Exterior points in the ESM are local to
+ * lines for edges. Off at load; F5 shows it. Exterior points in the ESM are local to
  * that cell (0–8192); we add the cell origin so they sit on Town, then
  * parent under the cell root so the same −90° X as land and kit applies.
  * Water cameras skip this. Wander still walks a straight line.
  */
 public final class PathgridDebug {
-    public static boolean visible = true;
+    public static boolean visible = false;
 
     private static final float RADIUS = 28f;
     private static final int SLICES = 8;
