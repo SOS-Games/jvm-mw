@@ -9,7 +9,7 @@ Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca
 - OpenMW source is local: `D:\coding\morrowind\openmw` at pin `f4bec41444214a7903bebd178389ca22ca13f646`. **Read that tree.** Do not fetch OpenMW from GitHub.
 - You **may read** `D:\morrowind_mods` (modlist, meshes, `.kf`). **Do not** edit, move, or write anything there.
 - **Do not** port OpenMW tools.
-- **Do not** commit Bethesda assets (`testdata/`, ESM/BSA).
+- **Do not** commit Bethesda assets (`testdata/`, ESM/BSA) or OpenMW `navmesh.db`.
 - **Do not** commit mid-implementation.
 - **Do not** revert `debug.DebugVars` defaults the user has changed.
 - Once the user says a phase is **working**, **commit and push that phase before writing the next spec.** Do not start the next spec while the previous working phase is uncommitted. After a working phase, `proceed` means commit first, then spec the next slice.
@@ -45,7 +45,7 @@ Does the claim hold? If it fails, say exactly which sentence is wrong.
 ```
 - Possible next **small** slices live in [docs/next-topics.md](docs/next-topics.md). Spec one only after the user picks it (or says **proceed** naming it). Large holes live in [docs/big-topics.md](docs/big-topics.md). Do not spec those as a small phase. A breakdown of a large hole (todo order, not a phase) may live as a linked doc; split one row into next-topics before writing Java. Distant land: [docs/distant-land.md](docs/distant-land.md). Nav paths: [docs/nav-paths.md](docs/nav-paths.md).
 
-Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`). Extra data folders: `jvmmw.data.extra=...` (`;` separated; or `JVMMW_DATA_EXTRA` / `-Djvmmw.data.extra`).
+Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`). Extra data folders: `jvmmw.data.extra=...` (`;` separated; or `JVMMW_DATA_EXTRA` / `-Djvmmw.data.extra`). OpenMW `navmesh.db` (umo / navmeshtool) is read from `Documents\My Games\OpenMW\navmesh.db`, or `jvmmw.navmesh` / `JVMMW_NAVMESH`. Do not commit it.
 
 ```bat
 gradlew.bat compileJava
@@ -68,6 +68,7 @@ gradlew.bat :core:debugCli --args="levc ex_bittercoast_lev+0"
 gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
 gradlew.bat :core:debugCli --args="exterior -2 -9"
 gradlew.bat :core:debugCli --args="pgrd -2 -9"
+gradlew.bat :core:debugCli --args="navdb -2 -9"
 ```
 
 | Command | Use when |
@@ -82,8 +83,9 @@ gradlew.bat :core:debugCli --args="pgrd -2 -9"
 | `kf` | Idle groups / bone tracks from a `.kf` |
 | `exterior` | 5×5 minus corners around a grid: 21 `grid=` lines with `pgrd=`, then center spawn/doors / `water=-1`. `crea=` hardcoded, `levc=` / `levcNone=` a dry roll at level 1 |
 | `pgrd` | One cell’s pathgrid nodes and edges. Interior name or exterior grid |
+| `navdb` | OpenMW `navmesh.db` Recast tiles vs TES cell edges. Default Town. Writes `build/navdb-*.png` |
 
-In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard and writes `build/debug-snapshot.txt`. Wait until overlay `n=60` before treating fps as settled. **F4** toggles the top-right fps overlay. **F5** toggles pathgrid spheres and edges. Gradle Ctrl+C does not save a dump.
+In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard and writes `build/debug-snapshot.txt`. Wait until overlay `n=60` before treating fps as settled. **F4** toggles the top-right fps overlay. **F5** toggles pathgrid spheres and edges. **F6** toggles the Recast walkable carpet for the loaded cells. Gradle Ctrl+C does not save a dump.
 
 ## Placement / fog gotchas
 
@@ -94,7 +96,7 @@ In the viewer, **F3** or HUD **Dump** copies the live snapshot to the clipboard 
 - `NiSkinData` transforms use packed order (rotation, translation, scale), not `NiAVObject` (translation, rotation, scale). Wrong order flattens skinned parts onto the ground.
 - Interior spawn is the **inbound door DODT** (where the player arrives), not the cell AABB center.
 - Census office is too small for fog at density 0.75 (`fogStart` ≈ 1792). Use a long interior (Addamasartus density 1.0, **Cave** button).
-- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners land with linear 17×17 mix + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`), **Zain** = Zainsipilu. WASD walks on land/docks; ceilings and dock undersides stop the camera. Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. Top-right fps overlay (F4) shows frame ms, draws, culled, tex, nif, and the fattest section. **F5** toggles pathgrid spheres and edges (on at load). Meshes outside the camera frustum are not submitted. Meshes smaller than 2 pixels are skipped on the main view. Objects farther than 7168 are skipped unless they are large (trees, shacks). Land and water stay. DDS and static NIF GPU templates intern by VFS path. Water RTTs skip NPC/creature reflections and meshes smaller than 20 pixels on the 512 map. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
+- Walk-in HUD: **Cell** = Census office, **Cave** = Addamasartus, **Nix** = Punsabanit, **Guild** = Wolverine Hall Mage's Guild (door into the hall), **Town** = Seyda Neen exterior `(-2, -9)` (5×5-minus-corners land with linear 17×17 mix + shader water at −1 with refraction and underwater fog + Clear-day atmosphere, clouds, and midday sun; Census door `DODT`), **Zain** = Zainsipilu. WASD walks on land/docks; ceilings and dock undersides stop the camera. Walking recenters that grid on the camera cell in the background (no freeze). A small 5×5-minus-corners bar grid (bottom-right) fills per tile while a walk load is in flight, then reads `swap` for a beat. Top-right fps overlay (F4) shows frame ms, draws, culled, tex, nif, and the fattest section. **F5** toggles pathgrid spheres and edges (on at load). **F6** toggles Recast walkable polys for the loaded cells (on at load; from OpenMW `navmesh.db` when present; sqlite/Recast run in the background). Meshes outside the camera frustum are not submitted. Meshes smaller than 2 pixels are skipped on the main view. Objects farther than 7168 are skipped unless they are large (trees, shacks). Land and water stay. DDS and static NIF GPU templates intern by VFS path. Water RTTs skip NPC/creature reflections and meshes smaller than 20 pixels on the 512 map. HUD **slider / [ ] / Play** scrubs the Clear hour (stars at night).
 - **E** opens/closes a non-teleport door, loads a named interior dest, loads an empty-`DNAM` dest as a 5×5-minus-corners around that exterior grid, plays a chest `containeropen` / `containerclose` if those kf groups exist, or takes a world item (mesh unparents; no inventory). Books log only (`ActionRead` GUI skipped). Fixture lights without Carry stay.
 - NPCs are mannequins on `base_anim` / `_female` / `kna` (yaw-only, race scale). Not `NPC_.MODL`. ESM placement is a parent of `Bip01`; idle `.kf` overwrites bone locals then re-skins. First `AI_W` distance > 0 walks them around spawn along that cell’s pathgrid when it has enough nodes (the F5 spheres); otherwise a straight line. Distance 0 stays. Walk clips translate `Bip01` / `root bone` in XY — zero those so the loop does not yank them back. Test knobs live in `debug.DebugVars`: `wanderSpeed`, `wanderTurn`, `wanderRadius` (random dest TES cap from spawn; 0 is ESM AI_W), `nodeWanderRadius` (pathgrid hop cap from where they stand; 0 is ESM AI_W), `wanderFrequency`.
 - Creatures use `CREA.MODL` (x-prefix if the kf exists), not body parts. Skip drawables named `tri bip`. Scale is ref `XSCL` times `CREA.XSCL`. Wilderness spawn markers are `LEVC`: roll at player level 1 (`AllLevels` is bit 0, not the item-list bit). Empty rolls are chance-none or entries above level 1. Walk-grid rebuilds keep the last pick for each marker. LEVC uses the picked `CREA` wander.

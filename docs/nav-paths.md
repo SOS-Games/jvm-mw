@@ -20,7 +20,7 @@ Vanilla wander is not that fallback. Bethesda authored a **pathgrid** per cell: 
 
 `AiWander::fillAllowedPositions`: closest node to spawn, keep nodes with distance² ≤ wander² that `isPointConnected`. Need **two** points or wander along the grid is off. One node in range adds spawn plus points partway along that node’s edges. Pure water creatures ignore the grid (it rarely has water). Then A* to a random allowed node and walk the polyline (`PathFinder`).
 
-**Detour navmesh** is OpenMW’s extra layer: Recast bake from collision, then `buildPathByNavMesh` when there is no useful grid path (or for travel that leaves the grid). Vanilla Morrowind never had this. It is a different project from finishing wander.
+**Detour navmesh** is OpenMW’s extra layer: Recast bake from collision, then `buildPathByNavMesh` when there is no useful grid path (or for travel that leaves the grid). Vanilla Morrowind never had this. First split is bake + F6 draw ([phase 42](phase42-navmesh-bake.md)); queries and wander-on-mesh stay later.
 
 ## Why it is large
 
@@ -81,11 +81,12 @@ Travel, Follow, Escort, Activate packages stay [AI packages](big-topics.md). Thi
 
 ### 6. Detour navmesh
 
-- [ ] Recast bake from `CollisionMesh` / land. Agent radius. Tile cache as the 5×5 moves.
+- [ ] **Bake + draw (first split):** Recast from land + collision, or OpenMW `navmesh.db` for the **loaded 5×5**. Overlay walkable polys. **F6**. Actors still pathgrid-wander. Spec: [phase42-navmesh-bake.md](phase42-navmesh-bake.md).
+- [ ] Tile cache as the 5×5 moves / writing our own `navmeshdb`.
 - [ ] `buildPathByNavMesh` when the pathgrid cannot connect start to dest (OpenMW `buildPath` tries both).
-- [ ] Debug draw of nav polys (OpenMW has a recast overlay).
+- [ ] Water swim surface, off-mesh pathgrid links, per-actor agent sizes.
 
-Last on purpose. Do not start here. Do not vendor a second physics engine; Recast/Detour as libraries is allowed, `ModelBatch` is not a nav concern.
+Pathfinding stays last. Recast/Detour as libraries is allowed; do not vendor a second physics engine. `ModelBatch` is not a nav concern.
 
 ## Stay out of this topic
 

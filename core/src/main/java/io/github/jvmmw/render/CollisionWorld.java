@@ -57,7 +57,7 @@ public final class CollisionWorld {
     private final Vector3 r = new Vector3();
     private final Hit best = new Hit();
 
-    public void clear() {
+    public synchronized void clear() {
         lands.clear();
         chunks.clear();
         onGround = false;
@@ -66,7 +66,7 @@ public final class CollisionWorld {
         vy = 0f;
     }
 
-    public void bake(List<LandRecord> land, List<Pending> pending) {
+    public synchronized void bake(List<LandRecord> land, List<Pending> pending) {
         clear();
         if (land != null) {
             lands.addAll(land);
@@ -94,6 +94,20 @@ public final class CollisionWorld {
                 chunk.aabb.min.add(-1f, -1f, -1f);
                 chunk.aabb.max.add(1f, 1f, 1f);
                 chunks.add(chunk);
+            }
+        }
+    }
+
+    /** Packed xyz triples of object triangles whose AABB overlaps the GL XZ box. */
+    public synchronized void appendObjectTris(float minX, float maxX, float minZ, float maxZ, List<Float> xyz) {
+        for (Chunk chunk : chunks) {
+            if (chunk.aabb.max.x < minX || chunk.aabb.min.x > maxX
+                || chunk.aabb.max.z < minZ || chunk.aabb.min.z > maxZ) {
+                continue;
+            }
+            float[] t = chunk.tris;
+            for (int i = 0; i < t.length; i++) {
+                xyz.add(t[i]);
             }
         }
     }

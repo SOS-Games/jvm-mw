@@ -55,6 +55,7 @@ import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.GpuCache;
 import io.github.jvmmw.render.NifSceneBuilder;
 import io.github.jvmmw.render.PathgridDebug;
+import io.github.jvmmw.render.NavmeshDebug;
 import io.github.jvmmw.render.SceneNode;
 import io.github.jvmmw.render.WaterMesh;
 import io.github.jvmmw.resource.TestData;
@@ -70,7 +71,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * activate. Scene2D is only the overlay — the 3D pass is ForwardRenderer.
  *
  * Town is Seyda Neen. Walking recenters nearby cells in the background.
- * F3 dumps a snapshot; F4 toggles the fps overlay; F5 toggles pathgrid.
+ * F3 dumps a snapshot; F4 toggles the fps overlay; F5 toggles pathgrid;
+ * F6 toggles the Recast carpet.
  */
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
@@ -181,6 +183,11 @@ public final class JvmMwApp extends ApplicationAdapter {
                 if (keycode == Input.Keys.F5) {
                     boolean on = PathgridDebug.toggleVisible();
                     Gdx.app.log("JVM-MW", on ? "pathgrid on" : "pathgrid off");
+                    return true;
+                }
+                if (keycode == Input.Keys.F6) {
+                    boolean on = NavmeshDebug.toggleVisible();
+                    Gdx.app.log("JVM-MW", on ? "navmesh on" : "navmesh off");
                     return true;
                 }
                 if (keycode == Input.Keys.E) {
@@ -915,7 +922,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         status = new Label("Loading…", skin);
         status.setWrap(true);
         win.add(status).width(420).colspan(3).row();
-        win.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid.", skin))
+        win.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh.", skin))
             .width(420).colspan(3).row();
         win.add(meshButton("Chair", TestData.CHAIR));
         win.add(meshButton("Shack", TestData.SHACK));
@@ -1192,6 +1199,9 @@ public final class JvmMwApp extends ApplicationAdapter {
                 snapshotBuf.append("spawn inbound tes=(").append(loadedCell.spawnPos[0]).append(',')
                     .append(loadedCell.spawnPos[1]).append(',').append(loadedCell.spawnPos[2]).append(")\n");
             }
+            snapshotBuf.append("nav=").append(cellBuilder.navPolys)
+                .append(" tiles=").append(cellBuilder.navTiles)
+                .append(" src=").append(cellBuilder.navSource).append('\n');
         }
         snapshotBuf.append("glError=").append(lastGlError).append('\n');
         profiler.appendDump(snapshotBuf);

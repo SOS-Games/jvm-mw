@@ -30,7 +30,10 @@ import java.util.TreeMap;
  * roll a creature at chargen level and stand it there. Actors with a wander
  * radius shuffle around that spawn along the cell’s pathgrid when it has
  * one. Walking outdoors builds the next grid in the background, then swaps
- * it in. F5 shows the cell’s pathgrid as spheres and lines.
+ * it in. F5 shows the cell’s pathgrid as spheres and lines. F6 shows the
+ * Recast walkable carpet for the loaded cells (OpenMW navmesh.db when present).
+ * Sqlite and Recast run on a worker. Already-fetched tiles stay when the
+ * walk grid moves; only the new ring is loaded.
  *
  * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
  * north) stay out.
@@ -48,6 +51,9 @@ public final class CellSceneBuilder {
     public int skippedDeleted;
     public int skippedNif;
     public int placedStat;
+    public int navPolys;
+    public int navTiles;
+    public String navSource = "none";
     public String cellName = "";
     public final CellLighting lighting = new CellLighting();
     public final DoorSwing doors = new DoorSwing();
@@ -58,6 +64,8 @@ public final class CellSceneBuilder {
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
     private final PathgridDebug pathgridDebug = new PathgridDebug();
+    private NavmeshDebug navmeshDebug;
+    private String navWorld = "";
 
     private final NpcMannequin mannequin = new NpcMannequin(TestData.testdataRoot());
     private EsmFile.LoadedCell cell;
@@ -82,6 +90,12 @@ public final class CellSceneBuilder {
     public void begin(EsmFile.LoadedCell cell) {
         this.cell = cell;
         cellName = cell.name;
+        cancelNavmesh();
+        navWorld = NavmeshDb.worldspace(cell);
+        navmeshDebug = NavmeshDebug.of(navWorld);
+        navPolys = NavmeshCache.polys(navWorld);
+        navTiles = NavmeshCache.tiles(navWorld);
+        navSource = navTiles > 0 ? "db" : "none";
         placed = skippedUnknown = skippedEmpty = skippedActor = skippedDeleted = skippedNif = placedStat = placedNpc
             = placedCrea = placedLevc = skippedLevcNone = 0;
         levcRng = new Random();
@@ -146,11 +160,15 @@ public final class CellSceneBuilder {
         }
         List<LandRecord> lands = cell.interior || cell.land == null ? List.of()
             : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
-        collision.bake(lands, pendingCol);
-        pathgridDebug.attach(buildingRoot, cell);
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
+        collision.bake(lands, pendingCol);
+        pathgridDebug.attach(buildingRoot, cell);
         finishLights();
+        startNavmesh();
+        if (navmeshDebug != null) {
+            navmeshDebug.attachTo(buildingRoot);
+        }
         log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
             + " npc=" + placedNpc + " crea=" + placedCrea + " levc=" + placedLevc + " levcNone=" + skippedLevcNone
             + " byRec=" + byRec + " empty=" + skippedEmpty
@@ -160,6 +178,7 @@ public final class CellSceneBuilder {
             + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
             + " cont=" + containers.withOpen() + "/" + containers.containers.size()
             + " take=" + items.takeCount()
+            + " nav=" + navPolys + " tiles=" + navTiles + " navSrc=" + navSource
             + (cell.interior ? "" : " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight
                 + " vtex=" + cell.land.uniqueVtex() + " ltex=" + cell.landTextures.size())
             + '\n');
@@ -172,6 +191,7 @@ public final class CellSceneBuilder {
     }
 
     public void update(float dt) {
+        pumpNavmesh();
         mannequin.update(dt, collision);
         waterMesh.update(dt);
         doors.process(dt);
@@ -179,6 +199,37 @@ public final class CellSceneBuilder {
         if (buildingRoot != null) {
             Matrix4 id = new Matrix4();
             buildingRoot.updateWorld(id);
+        }
+    }
+
+    private void startNavmesh() {
+        NavmeshCache.request(cell, collision);
+        navPolys = NavmeshCache.polys(navWorld);
+        navTiles = NavmeshCache.tiles(navWorld);
+        navSource = "load";
+    }
+
+    private void pumpNavmesh() {
+        if (navmeshDebug == null || buildingRoot == null) {
+            return;
+        }
+        navmeshDebug.attachTo(buildingRoot);
+        long start = System.nanoTime();
+        while (System.nanoTime() - start < 4_000_000L) {
+            NavmeshCache.Tile tile = NavmeshCache.poll(navWorld);
+            if (tile == null) {
+                break;
+            }
+            navmeshDebug.addTile(tile);
+        }
+        navPolys = NavmeshCache.polys(navWorld);
+        navTiles = NavmeshCache.tiles(navWorld);
+        navSource = NavmeshCache.source(navWorld);
+    }
+
+    private void cancelNavmesh() {
+        if (navmeshDebug != null) {
+            navmeshDebug.detachFrom(buildingRoot);
         }
     }
 
@@ -486,6 +537,7 @@ public final class CellSceneBuilder {
     }
 
     public void dispose() {
+        cancelNavmesh();
         pathgridDebug.dispose();
         landMesh.dispose();
         waterMesh.dispose();

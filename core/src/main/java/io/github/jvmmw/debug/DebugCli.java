@@ -31,7 +31,7 @@ import java.util.Random;
  * nif — a door or wall that looks offset. cell / spawn — fog and where you
  * arrive. exterior — the 21-cell walk grid. npc / crea / levc / kf — how a
  * person, creature, or wilderness spawn list is put together. pgrd — that
- * cell’s walk-graph nodes.
+ * cell’s walk-graph nodes. navdb — OpenMW navmesh.db tiles vs cell edges.
  */
 public final class DebugCli {
     private DebugCli() {
@@ -53,6 +53,7 @@ public final class DebugCli {
             case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
             case "exterior" -> exterior(require(args, 1, "exterior <gridX> <gridY>"));
             case "pgrd" -> pgrd(require(args, 1, "pgrd <interior name> | <gridX> <gridY>"));
+            case "navdb" -> NavmeshDbDump.run(args.length > 1 ? require(args, 1, "navdb") : "");
             default -> {
                 System.err.println("Unknown command: " + args[0]);
                 System.out.print(help());
@@ -76,6 +77,7 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
             gradlew.bat :core:debugCli --args="exterior -2 -9"
             gradlew.bat :core:debugCli --args="pgrd -2 -9"
+            gradlew.bat :core:debugCli --args="navdb -2 -9"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
             cell       One interior: fog, spawn, doors, NPCs. Kit STAT lines include world AABB.
@@ -90,6 +92,9 @@ public final class DebugCli {
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
                        crea= hardcoded, levc=/levcNone= a dry roll at player level 1. Each grid= has pgrd=.
             pgrd       One cell's pathgrid nodes and edges. Interior name or exterior grid.
+            navdb      OpenMW navmesh.db Recast tiles vs TES cell edges. Default Town (-2,-9) 5x5.
+                       Writes build/navdb-*.png (green tris, yellow cell grid, red missing tiles,
+                       magenta uncovered edge samples). verdict= says if the db already has the cracks.
 
             Viewer: HUD Dump or F3 copies camera/fog/perf to the clipboard and writes build/debug-snapshot.txt.
             F4 toggles the fps overlay. Wait for overlay n=60 before treating fps as settled. Headless CLI has no fps.

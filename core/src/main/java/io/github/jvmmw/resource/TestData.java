@@ -61,6 +61,27 @@ public final class TestData {
         return Path.of("testdata");
     }
 
+    /**
+     * OpenMW {@code navmesh.db} from umo / navmeshtool. Override with
+     * {@code jvmmw.navmesh} / {@code JVMMW_NAVMESH}.
+     */
+    public static Path navmeshDb() {
+        String configured = configured("JVMMW_NAVMESH", "jvmmw.navmesh");
+        if (configured != null) {
+            return Path.of(configured);
+        }
+        Path home = Path.of(System.getProperty("user.home", "."));
+        Path docs = home.resolve("Documents").resolve("My Games").resolve("OpenMW").resolve("navmesh.db");
+        if (Files.isRegularFile(docs)) {
+            return docs;
+        }
+        Path linux = home.resolve(".config").resolve("openmw").resolve("navmesh.db");
+        if (Files.isRegularFile(linux)) {
+            return linux;
+        }
+        return docs;
+    }
+
     public static boolean vfsExists(String vfsPath) {
         try {
             return vfs().exists(vfsPath);

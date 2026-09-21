@@ -4,6 +4,14 @@ Pick one, then say **proceed** to spec that slice. This is the **small** queue.
 
 Big holes (occlusion, combat, shadows, full UI, …) live in [big-topics.md](big-topics.md). Do not spec those here.
 
+## Nav
+
+Split from [nav-paths.md](nav-paths.md) **6**. Leftover (pathfinding, 5×5 tile cache) stays there.
+
+| Topic | Why |
+| --- | --- |
+| **Bake Recast overlay** | Pathgrid is drawn; Recast walkable polys are not. Spec: [phase42-navmesh-bake.md](phase42-navmesh-bake.md). Loaded 5×5 from `navmesh.db`, worker thread. Do not pathfind yet. |
+
 ## Strong next slices
 
 These match what the viewer already is (walk Town, look, Dump) and were explicitly left out of recent phases.

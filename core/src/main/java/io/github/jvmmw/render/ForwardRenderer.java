@@ -527,7 +527,13 @@ public final class ForwardRenderer {
             // OpenMW reflection detail 2: sky + land + statics, not NPCs or creatures.
             return;
         }
-        if (node.debugDraw && (!PathgridDebug.visible || reflection || waterRtt)) {
+        if (node.debugDraw && (reflection || waterRtt)) {
+            return;
+        }
+        if ("pathgrid-debug".equals(node.name) && !PathgridDebug.visible) {
+            return;
+        }
+        if ("navmesh-debug".equals(node.name) && !NavmeshDebug.visible) {
             return;
         }
         if (!node.skipMeshes) {
@@ -634,6 +640,9 @@ public final class ForwardRenderer {
         }
         cullBox.inf();
         mesh.expandWorldAabb(node.world, cullBox);
+        if (node.debugDraw) {
+            return !cam.frustum.boundsInFrustum(cullBox);
+        }
         boolean tiny;
         if (waterRtt) {
             tiny = !mesh.terrainPass && featureCulled(cam, WaterMesh.RTT_SIZE, WaterMesh.RTT_FEATURE_PIXELS);

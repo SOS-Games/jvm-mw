@@ -81,6 +81,12 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwmechanics/pathgrid.hpp` | `PathgridGraph` | `esm.PathgridGraph` | rewrite |
 | `components/misc/pathgridutils.hpp` | `Misc::getClosestPoint` | `PathgridGraph.closest` | rewrite |
 | `apps/openmw/mwmechanics/aiwander.cpp` | `AiWander::fillAllowedPositions` | `PathgridGraph.allowed` | rewrite |
+| `components/detournavigator/navmeshdb.cpp` | `NavMeshDb` sqlite tiles | `render.NavmeshDb` + `NavmeshCache` keep tiles | rewrite |
+| `components/detournavigator/makenavmesh.cpp` | Recast bake | `render.NavmeshBaker` fallback if db misses | rewrite |
+| `files/settings-default.cfg` `[Navigator]` | Recast defaults | same numbers in `NavmeshBaker` | same |
+| `components/detournavigator/settingsutils.hpp` | `toNavMeshCoordinates` scale | scale GL verts, no OSG YZ swap | rewrite |
+| `apps/openmw/mwworld/worldimp.cpp` | `getPathfindingAgentBounds` exterior default | one AABB agent | rewrite |
+| `components/sceneutil/navmesh.cpp` | navmesh debug draw | `render.NavmeshDebug` + **F6** | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` | viewer **E** + `DoorSwing` pick | rewrite |
 | `apps/openmw/mwworld/actiondoor.cpp` | `ActionDoor` | `DoorSwing.activateDoor` | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `activateDoor` / `rotateDoor` / `processDoors` | `render.DoorSwing` | rewrite |

@@ -24,7 +24,7 @@ public final class SceneNode {
     public final List<MeshInstance> meshes = new ArrayList<>();
     public boolean skipMeshes;
     public boolean actor;
-    /** Pathgrid spheres/lines. Water cameras skip these. */
+    /** Pathgrid / navmesh overlays. Water cameras skip these. */
     public boolean debugDraw;
 
     public void addChild(SceneNode child) {
