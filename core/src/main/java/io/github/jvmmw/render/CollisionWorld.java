@@ -10,13 +10,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Player walk: a capsule on land and against object triangles. No Bullet.
- * WASD slides on walls, steps onto docks, and sticks to the floor. Ceilings
- * and dock undersides stop the camera from embedding. NPCs are ignored.
- * Wide floors (cave hulls, wooden platforms) hit the triangle face, not
- * only its edges — otherwise you fall through the middle. Interior spawn
- * traces down from the door arrival, not from above the hull — a cave
- * roof is a walkable hit if you start outside.
+ * Old capsule tracer, frozen. NPCs still snap TES Z to land bilinear, and
+ * Recast still gathers shack triangles from this bake. Player WASD is
+ * Bullet now. Do not extend this class.
  */
 public final class CollisionWorld {
     public static final float EYE_HEIGHT = 96f;

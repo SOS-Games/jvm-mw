@@ -5,30 +5,46 @@ import io.github.jvmmw.esm.LandRecord;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
+import com.badlogic.gdx.physics.bullet.collision.ClosestConvexResultCallback;
 import com.badlogic.gdx.physics.bullet.collision.ClosestRayResultCallback;
+import com.badlogic.gdx.physics.bullet.collision.ContactResultCallback;
 import com.badlogic.gdx.physics.bullet.collision.btBvhTriangleMeshShape;
+import com.badlogic.gdx.physics.bullet.collision.btCapsuleShape;
 import com.badlogic.gdx.physics.bullet.collision.btCollisionDispatcher;
 import com.badlogic.gdx.physics.bullet.collision.btCollisionObject;
+import com.badlogic.gdx.physics.bullet.collision.btCollisionObjectWrapper;
 import com.badlogic.gdx.physics.bullet.collision.btCollisionWorld;
 import com.badlogic.gdx.physics.bullet.collision.btDbvtBroadphase;
 import com.badlogic.gdx.physics.bullet.collision.btDefaultCollisionConfiguration;
+import com.badlogic.gdx.physics.bullet.collision.btManifoldPoint;
 import com.badlogic.gdx.physics.bullet.collision.btTriangleMesh;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * JNI Bullet collision world for the loaded cell. Land is one mesh per TES
- * tile; docks and kit use the same collision tris as the old tracer, at
- * load pose. WASD still uses that tracer. Chair HUD has no world.
+ * tile; docks, trees, and kit are world-space triangles at load pose, same
+ * as F7. WASD sweeps a capsule (not a rigid body) against World and
+ * HeightMap. NPCs still stick with the old tracer. Chair HUD has no world.
  */
 public final class BulletWorld {
     static final int WORLD = 1;
     static final int HEIGHT_MAP = 1 << 3;
     static final int ACTOR = 1 << 2;
     static final int PROJECTILE = 1 << 4;
+
+    private static final float EYE_HEIGHT = CollisionWorld.EYE_HEIGHT;
+    private static final float HEIGHT = CollisionWorld.HEIGHT;
+    private static final float HALF_H = HEIGHT * 0.5f;
+    private static final float RADIUS = CollisionWorld.RADIUS;
+    private static final float STEP_UP = CollisionWorld.STEP_UP;
+    private static final float STEP_DOWN = CollisionWorld.STEP_DOWN;
+    private static final float GROUND_OFFSET = CollisionWorld.GROUND_OFFSET;
+    private static final float GRAVITY = CollisionWorld.GRAVITY;
+    private static final float MARGIN = CollisionWorld.MARGIN;
+    private static final float MAX_SLOPE_COS = (float) Math.cos(Math.toRadians(46));
+    private static final int PLAYER_MASK = WORLD | HEIGHT_MAP;
 
     private static final float STEP = LandRecord.CELL_SIZE / (float) (LandRecord.SIZE - 1);
     private static final float RAY_DOWN = 8192f;
@@ -43,7 +59,8 @@ public final class BulletWorld {
     private static final List<btCollisionObject> bodies = new ArrayList<>();
     private static final List<btBvhTriangleMeshShape> landShapes = new ArrayList<>();
     private static final List<btTriangleMesh> landMeshes = new ArrayList<>();
-    private static final Map<CollisionMesh, Interned> interned = new IdentityHashMap<>();
+    private static final List<btBvhTriangleMeshShape> objectShapes = new ArrayList<>();
+    private static final List<btTriangleMesh> objectMeshes = new ArrayList<>();
     private static final Vector3 hit = new Vector3();
     private static final Vector3 rayFrom = new Vector3();
     private static final Vector3 rayTo = new Vector3();
@@ -51,7 +68,25 @@ public final class BulletWorld {
     private static final Vector3 vb = new Vector3();
     private static final Vector3 vc = new Vector3();
     private static final Vector3 vd = new Vector3();
+    private static final Vector3 from = new Vector3();
+    private static final Vector3 to = new Vector3();
+    private static final Vector3 n = new Vector3();
     private static final Matrix4 tmpMat = new Matrix4();
+    private static final Matrix4 fromMat = new Matrix4();
+    private static final Matrix4 toMat = new Matrix4();
+    private static final float[] slid = new float[3];
+    private static final Hit best = new Hit();
+
+    private static btCapsuleShape capsule;
+    private static btCollisionObject probe;
+    private static ClosestConvexResultCallback sweepCb;
+    private static DeepestContact contactCb;
+    private static ClosestRayResultCallback rayCb;
+
+    public static boolean onGround;
+    public static float floorY = Float.NaN;
+    public static float ceilY = Float.NaN;
+    private static float vy;
 
     private BulletWorld() {
     }
@@ -63,6 +98,19 @@ public final class BulletWorld {
         }
         Bullet.init();
         natives = true;
+        float cyl = HEIGHT - 2f * RADIUS;
+        capsule = new btCapsuleShape(RADIUS, Math.max(0.01f, cyl));
+        probe = new btCollisionObject();
+        probe.setCollisionShape(capsule);
+        probe.setCollisionFlags(btCollisionObject.CollisionFlags.CF_NO_CONTACT_RESPONSE);
+        sweepCb = new ClosestConvexResultCallback(from, to);
+        sweepCb.setCollisionFilterGroup(ACTOR);
+        sweepCb.setCollisionFilterMask(PLAYER_MASK);
+        contactCb = new DeepestContact();
+        contactCb.setCollisionFilterGroup(ACTOR);
+        contactCb.setCollisionFilterMask(PLAYER_MASK);
+        rayCb = new ClosestRayResultCallback(rayFrom, rayTo);
+        rayCb.setCollisionFilterGroup(ACTOR);
     }
 
     /** Same moments as CollisionWorld.clear: interior load and walk-grid swap. */
@@ -76,6 +124,10 @@ public final class BulletWorld {
         broadphase = new btDbvtBroadphase();
         world = new btCollisionWorld(dispatcher, broadphase, config);
         world.setForceUpdateAllAabbs(false);
+        onGround = false;
+        floorY = Float.NaN;
+        ceilY = Float.NaN;
+        vy = 0f;
     }
 
     /** One HeightMap body per loaded TES land tile. Interior passes an empty list. */
@@ -97,19 +149,7 @@ public final class BulletWorld {
             if (pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
                 continue;
             }
-            Interned shape = internShape(pnd.mesh);
-            if (shape == null) {
-                continue;
-            }
-            btCollisionObject obj = new btCollisionObject();
-            obj.setCollisionShape(shape.shape);
-            obj.setCollisionFlags(btCollisionObject.CollisionFlags.CF_STATIC_OBJECT);
-            tmpMat.set(pnd.node.world);
-            obj.setWorldTransform(tmpMat);
-            world.addCollisionObject(obj, WORLD, ACTOR | PROJECTILE);
-            world.updateSingleAabb(obj);
-            bodies.add(obj);
-            worldBodies++;
+            addObjectMesh(pnd);
         }
     }
 
@@ -133,13 +173,28 @@ public final class BulletWorld {
         }
     }
 
-    /** Interned NIF shapes. Viewer shutdown only. */
+    /** Player capsule. Viewer shutdown only. */
     public static void disposeInterned() {
-        for (Interned hold : interned.values()) {
-            hold.shape.dispose();
-            hold.mesh.dispose();
+        if (sweepCb != null) {
+            sweepCb.dispose();
+            sweepCb = null;
         }
-        interned.clear();
+        if (contactCb != null) {
+            contactCb.dispose();
+            contactCb = null;
+        }
+        if (rayCb != null) {
+            rayCb.dispose();
+            rayCb = null;
+        }
+        if (probe != null) {
+            probe.dispose();
+            probe = null;
+        }
+        if (capsule != null) {
+            capsule.dispose();
+            capsule = null;
+        }
     }
 
     public static boolean alive() {
@@ -158,33 +213,333 @@ public final class BulletWorld {
         return worldBodies;
     }
 
-    /** HeightMap hit Y under the camera, or NaN. Not used for walk. */
+    /** HeightMap hit Y under the camera, or NaN. */
     public static float floorY(float glX, float glY, float glZ) {
         return rayDown(glX, glY, glZ, HEIGHT_MAP);
     }
 
-    /** World + HeightMap hit Y under the camera, or NaN. Not used for walk. */
+    /** World + HeightMap hit Y under the camera, or NaN. */
     public static float hitY(float glX, float glY, float glZ) {
-        return rayDown(glX, glY, glZ, WORLD | HEIGHT_MAP);
+        return rayDown(glX, glY, glZ, PLAYER_MASK);
+    }
+
+    /** Land or kit bodies for the current cell. Empty during Chair and while a cell is still placing. */
+    public static boolean hasPhysics() {
+        return world != null && !bodies.isEmpty();
+    }
+
+    public static void snapSpawn(Vector3 eye, boolean interior) {
+        if (!hasPhysics()) {
+            return;
+        }
+        vy = 0f;
+        float origin = eye.y - EYE_HEIGHT;
+        float feet = origin;
+        if (interior) {
+            sweepDown(eye.x, origin + 8f, eye.z, STEP_DOWN + 96f);
+            if (best.ok && best.walkable && best.y <= origin + 8f) {
+                feet = best.y + GROUND_OFFSET;
+            }
+        } else {
+            sweepDown(eye.x, origin + 256f, eye.z, 512f);
+            if (best.ok && best.walkable) {
+                feet = best.y + GROUND_OFFSET;
+            }
+        }
+        sweepUp(eye.x, feet, eye.z, 8f);
+        if (best.ok && feet + HEIGHT > best.y - MARGIN) {
+            feet = best.y - HEIGHT - MARGIN;
+        }
+        eye.y = feet + EYE_HEIGHT;
+        refreshDebug(eye.x, feet, eye.z);
+    }
+
+    /**
+     * Player camera walk: split WASD, slide, step onto docks, stick to a
+     * walkable floor, fall if there is none. Space and look-dolly stop at
+     * roofs and dock undersides. The capsule is not added as a body.
+     */
+    public static void move(Vector3 eye, float dx, float dy, float dz, float dt) {
+        if (!hasPhysics()) {
+            vy = 0f;
+            return;
+        }
+        float x = eye.x;
+        float z = eye.z;
+        float feet = eye.y - EYE_HEIGHT;
+        float horiz = (float) Math.hypot(dx, dz);
+        int parts = Math.max(1, (int) (horiz / 16f) + 1);
+        float sdx = dx / parts;
+        float sdz = dz / parts;
+        for (int i = 0; i < parts; i++) {
+            slide(x, feet, z, sdx, sdz);
+            x = slid[0];
+            feet = slid[1];
+            z = slid[2];
+        }
+        if (dy != 0f) {
+            feet = sweepY(x, feet, z, dy);
+        }
+        sweepDown(x, feet + 2f, z, STEP_DOWN + 4f);
+        boolean floorHere = best.ok && best.walkable && best.y <= feet + 2f
+            && feet - best.y <= STEP_DOWN;
+        if (floorHere && dy <= 0f) {
+            feet = best.y + GROUND_OFFSET;
+            onGround = true;
+            vy = 0f;
+        } else {
+            onGround = false;
+            if (dy <= 0f) {
+                vy -= GRAVITY * dt;
+                if (vy > 0f) {
+                    vy = 0f;
+                }
+                feet = sweepY(x, feet, z, vy * dt);
+                sweepDown(x, feet + 2f, z, STEP_DOWN + 4f);
+                if (best.ok && best.walkable && feet - best.y <= GROUND_OFFSET + 4f) {
+                    feet = best.y + GROUND_OFFSET;
+                    onGround = true;
+                    vy = 0f;
+                }
+            } else {
+                vy = 0f;
+            }
+        }
+        sweepUp(x, feet, z, STEP_UP + 8f);
+        if (best.ok && feet + HEIGHT > best.y - MARGIN) {
+            feet = best.y - HEIGHT - MARGIN;
+            if (vy > 0f) {
+                vy = 0f;
+            }
+        }
+        depenetrate(x, feet, z);
+        x = best.px;
+        feet = best.py;
+        z = best.pz;
+        eye.set(x, feet + EYE_HEIGHT, z);
+        refreshDebug(x, feet, z);
+    }
+
+    private static void slide(float x, float feet, float z, float dx, float dz) {
+        if (dx == 0f && dz == 0f) {
+            setSlid(x, feet, z);
+            return;
+        }
+        float landAt = rayDown(x + dx, feet + 512f, z + dz, HEIGHT_MAP);
+        if (!Float.isNaN(landAt) && landAt > feet + STEP_UP + GROUND_OFFSET + 4f) {
+            setSlid(x, feet, z);
+            return;
+        }
+        sweepPose(x, feet, z, x + dx, feet, z + dz);
+        if (!best.ok) {
+            setSlid(x + dx, feet, z + dz);
+            return;
+        }
+        float hitFrac = best.fraction;
+        float hitNx = best.nx;
+        float hitNy = best.ny;
+        float hitNz = best.nz;
+        float up = STEP_UP;
+        sweepUp(x, feet, z, STEP_UP);
+        if (best.ok) {
+            up = Math.max(0f, best.y - (feet + HEIGHT) - MARGIN);
+        }
+        if (up > MARGIN) {
+            sweepPose(x, feet + up, z, x + dx, feet + up, z + dz);
+            if (!best.ok) {
+                sweepDown(x + dx, feet + up + 2f, z + dz, up + STEP_DOWN);
+                if (best.ok && best.walkable) {
+                    setSlid(x + dx, best.y + GROUND_OFFSET, z + dz);
+                } else {
+                    setSlid(x + dx, feet + up, z + dz);
+                }
+                return;
+            }
+        }
+        applyFraction(x, feet, z, dx, dz, hitFrac);
+        float px = hitNx;
+        float pz = hitNz;
+        if (hitNy > MAX_SLOPE_COS || hitNy < -0.5f) {
+            return;
+        }
+        float plen = (float) Math.hypot(px, pz);
+        if (plen < 1e-4f) {
+            return;
+        }
+        px /= plen;
+        pz /= plen;
+        float keep = dx * px + dz * pz;
+        if (keep > 0f) {
+            dx -= px * keep;
+            dz -= pz * keep;
+        }
+        if (dx == 0f && dz == 0f) {
+            return;
+        }
+        float sx = slid[0];
+        float sz = slid[2];
+        sweepPose(sx, feet, sz, sx + dx, feet, sz + dz);
+        if (!best.ok) {
+            setSlid(sx + dx, feet, sz + dz);
+            return;
+        }
+        applyFraction(sx, feet, sz, dx, dz, best.fraction);
+    }
+
+    private static void applyFraction(float x, float feet, float z, float dx, float dz, float fraction) {
+        float dist = (float) Math.hypot(dx, dz);
+        float travel = fraction * dist - MARGIN;
+        if (travel < 0f) {
+            travel = 0f;
+        }
+        float s = dist > 1e-4f ? travel / dist : 0f;
+        setSlid(x + dx * s, feet, z + dz * s);
+    }
+
+    private static void setSlid(float x, float feet, float z) {
+        slid[0] = x;
+        slid[1] = feet;
+        slid[2] = z;
+    }
+
+    private static float sweepY(float x, float feet, float z, float dy) {
+        if (dy == 0f) {
+            return feet;
+        }
+        if (dy > 0f) {
+            sweepUp(x, feet, z, Math.abs(dy) + 4f);
+            if (best.ok) {
+                return Math.min(feet + dy, best.y - HEIGHT - MARGIN);
+            }
+            return feet + dy;
+        }
+        sweepDown(x, feet + 2f, z, Math.abs(dy) + 4f);
+        if (best.ok && best.walkable) {
+            return Math.max(feet + dy, best.y + GROUND_OFFSET);
+        }
+        if (fits(x, feet + dy, z)) {
+            return feet + dy;
+        }
+        return feet;
+    }
+
+    private static boolean fits(float x, float feet, float z) {
+        if (!deepest(x, feet, z)) {
+            return true;
+        }
+        if (best.walkable || best.ny < -0.5f) {
+            return true;
+        }
+        return best.depth < MARGIN * 4f;
+    }
+
+    private static void depenetrate(float x, float feet, float z) {
+        best.px = x;
+        best.py = feet;
+        best.pz = z;
+        for (int i = 0; i < 8; i++) {
+            if (!deepest(best.px, best.py, best.pz) || (best.walkable && best.depth < RADIUS * 0.25f)) {
+                return;
+            }
+            if (best.walkable) {
+                best.py = Math.max(best.py, best.y + GROUND_OFFSET);
+                continue;
+            }
+            best.px += best.nx * (best.depth + MARGIN);
+            best.py += best.ny * (best.depth + MARGIN) * (best.ny < -0.2f || best.ny > MAX_SLOPE_COS ? 1f : 0f);
+            best.pz += best.nz * (best.depth + MARGIN);
+        }
+    }
+
+    private static void refreshDebug(float x, float feet, float z) {
+        sweepDown(x, feet + 2f, z, STEP_DOWN + 8f);
+        floorY = best.ok ? best.y : Float.NaN;
+        onGround = best.ok && best.walkable && feet - best.y <= STEP_DOWN;
+        sweepUp(x, feet, z, 256f);
+        ceilY = best.ok ? best.y : Float.NaN;
+    }
+
+    private static void sweepDown(float x, float fromFeet, float z, float maxDist) {
+        sweepPose(x, fromFeet, z, x, fromFeet - maxDist, z);
+    }
+
+    private static void sweepUp(float x, float feet, float z, float maxDist) {
+        sweepPose(x, feet, z, x, feet + maxDist, z);
+    }
+
+    private static void sweepPose(float x0, float feet0, float z0, float x1, float feet1, float z1) {
+        best.clear();
+        if (world == null || capsule == null) {
+            return;
+        }
+        from.set(x0, feet0 + HALF_H, z0);
+        to.set(x1, feet1 + HALF_H, z1);
+        if (from.epsilonEquals(to, 1e-4f)) {
+            return;
+        }
+        fromMat.setToTranslation(from);
+        toMat.setToTranslation(to);
+        sweepCb.setRayFromWorld(from);
+        sweepCb.setConvexToWorld(to);
+        sweepCb.setClosestHitFraction(1f);
+        sweepCb.setHitCollisionObject(null);
+        sweepCb.setCollisionFilterGroup(ACTOR);
+        sweepCb.setCollisionFilterMask(PLAYER_MASK);
+        world.convexSweepTest(capsule, fromMat, toMat, sweepCb);
+        if (!sweepCb.hasHit()) {
+            return;
+        }
+        sweepCb.getHitPointWorld(hit);
+        sweepCb.getHitNormalWorld(n);
+        best.ok = true;
+        best.fraction = sweepCb.getClosestHitFraction();
+        best.y = hit.y;
+        best.nx = n.x;
+        best.ny = n.y;
+        best.nz = n.z;
+        best.walkable = n.y > MAX_SLOPE_COS;
+    }
+
+    private static boolean deepest(float x, float feet, float z) {
+        best.clear();
+        if (world == null || probe == null) {
+            return false;
+        }
+        fromMat.setToTranslation(x, feet + HALF_H, z);
+        probe.setWorldTransform(fromMat);
+        contactCb.reset();
+        world.contactTest(probe, contactCb);
+        if (!contactCb.ok) {
+            return false;
+        }
+        best.ok = true;
+        best.depth = contactCb.depth;
+        best.y = contactCb.y;
+        best.nx = contactCb.nx;
+        best.ny = contactCb.ny;
+        best.nz = contactCb.nz;
+        best.walkable = contactCb.walkable;
+        return true;
     }
 
     private static float rayDown(float glX, float glY, float glZ, int mask) {
-        if (world == null || bodies.isEmpty()) {
+        if (world == null || bodies.isEmpty() || rayCb == null) {
             return Float.NaN;
         }
         rayFrom.set(glX, glY, glZ);
         rayTo.set(glX, glY - RAY_DOWN, glZ);
-        ClosestRayResultCallback cb = new ClosestRayResultCallback(rayFrom, rayTo);
-        cb.setCollisionFilterGroup(ACTOR);
-        cb.setCollisionFilterMask(mask);
-        world.rayTest(rayFrom, rayTo, cb);
-        float y = Float.NaN;
-        if (cb.hasHit()) {
-            cb.getHitPointWorld(hit);
-            y = hit.y;
+        rayCb.setCollisionObject(null);
+        rayCb.setClosestHitFraction(1f);
+        rayCb.setRayFromWorld(rayFrom);
+        rayCb.setRayToWorld(rayTo);
+        rayCb.setCollisionFilterGroup(ACTOR);
+        rayCb.setCollisionFilterMask(mask);
+        world.rayTest(rayFrom, rayTo, rayCb);
+        if (!rayCb.hasHit()) {
+            return Float.NaN;
         }
-        cb.dispose();
-        return y;
+        rayCb.getHitPointWorld(hit);
+        return hit.y;
     }
 
     private static void addLandMesh(LandRecord land) {
@@ -222,29 +577,36 @@ public final class BulletWorld {
         out.set(tesX, land.height(x, y), -tesY);
     }
 
-    private static Interned internShape(CollisionMesh col) {
-        Interned hold = interned.get(col);
-        if (hold != null) {
-            return hold;
-        }
-        float[] tris = col.tris;
+    private static void addObjectMesh(CollisionWorld.Pending pnd) {
+        float[] tris = pnd.mesh.tris;
         if (tris.length < 9) {
-            return null;
+            return;
         }
         btTriangleMesh mesh = new btTriangleMesh();
+        tmpMat.set(pnd.node.world);
         for (int i = 0; i + 8 < tris.length; i += 9) {
-            va.set(tris[i], tris[i + 1], tris[i + 2]);
-            vb.set(tris[i + 3], tris[i + 4], tris[i + 5]);
-            vc.set(tris[i + 6], tris[i + 7], tris[i + 8]);
-            mesh.addTriangle(va, vb, vc, true);
+            va.set(tris[i], tris[i + 1], tris[i + 2]).mul(tmpMat);
+            vb.set(tris[i + 3], tris[i + 4], tris[i + 5]).mul(tmpMat);
+            vc.set(tris[i + 6], tris[i + 7], tris[i + 8]).mul(tmpMat);
+            mesh.addTriangle(va, vb, vc, false);
+            mesh.addTriangle(va, vc, vb, false);
         }
         if (mesh.getNumTriangles() == 0) {
             mesh.dispose();
-            return null;
+            return;
         }
-        hold = new Interned(mesh, new btBvhTriangleMeshShape(mesh, true, true));
-        interned.put(col, hold);
-        return hold;
+        btBvhTriangleMeshShape shape = new btBvhTriangleMeshShape(mesh, true, true);
+        btCollisionObject obj = new btCollisionObject();
+        obj.setCollisionShape(shape);
+        obj.setCollisionFlags(btCollisionObject.CollisionFlags.CF_STATIC_OBJECT);
+        tmpMat.idt();
+        obj.setWorldTransform(tmpMat);
+        world.addCollisionObject(obj, WORLD, ACTOR | PROJECTILE);
+        world.updateSingleAabb(obj);
+        bodies.add(obj);
+        objectShapes.add(shape);
+        objectMeshes.add(mesh);
+        worldBodies++;
     }
 
     private static void disposeBodies() {
@@ -262,13 +624,88 @@ public final class BulletWorld {
         for (btTriangleMesh mesh : landMeshes) {
             mesh.dispose();
         }
+        for (btBvhTriangleMeshShape shape : objectShapes) {
+            shape.dispose();
+        }
+        for (btTriangleMesh mesh : objectMeshes) {
+            mesh.dispose();
+        }
         bodies.clear();
         landShapes.clear();
         landMeshes.clear();
+        objectShapes.clear();
+        objectMeshes.clear();
         landBodies = 0;
         worldBodies = 0;
     }
 
-    private record Interned(btTriangleMesh mesh, btBvhTriangleMeshShape shape) {
+    private static final class DeepestContact extends ContactResultCallback {
+        boolean ok;
+        float depth;
+        float y;
+        float nx;
+        float ny = 1f;
+        float nz;
+        boolean walkable;
+        private final Vector3 normal = new Vector3();
+        private final Vector3 point = new Vector3();
+
+        void reset() {
+            ok = false;
+            depth = 0f;
+            y = 0f;
+            nx = 0f;
+            ny = 1f;
+            nz = 0f;
+            walkable = false;
+        }
+
+        @Override
+        public float addSingleResult(btManifoldPoint cp, btCollisionObjectWrapper colObj0Wrap, int partId0, int index0,
+            btCollisionObjectWrapper colObj1Wrap, int partId1, int index1) {
+            float dist = cp.getDistance();
+            if (dist >= 0f) {
+                return 1f;
+            }
+            float d = -dist;
+            if (ok && d <= depth) {
+                return 1f;
+            }
+            cp.getNormalWorldOnB(normal);
+            cp.getPositionWorldOnB(point);
+            ok = true;
+            depth = d;
+            y = point.y;
+            nx = normal.x;
+            ny = normal.y;
+            nz = normal.z;
+            walkable = normal.y > MAX_SLOPE_COS;
+            return d;
+        }
+    }
+
+    private static final class Hit {
+        boolean ok;
+        boolean walkable;
+        float depth;
+        float fraction;
+        float y;
+        float nx;
+        float ny = 1f;
+        float nz;
+        float px;
+        float py;
+        float pz;
+
+        void clear() {
+            ok = false;
+            walkable = false;
+            depth = 0f;
+            fraction = 1f;
+            y = 0f;
+            nx = 0f;
+            ny = 1f;
+            nz = 0f;
+        }
     }
 }

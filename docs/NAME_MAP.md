@@ -156,9 +156,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `Resource::ImageManager::getImage` | `GpuCache` intern DDS by corrected VFS path | rewrite |
 | `Terrain::TextureManager::getTexture` | `LandMesh` uses `GpuCache` | rewrite |
 | `Resource::SceneManager::getTemplate` | `GpuCache` static NIF `MeshGpu` template intern | rewrite |
-| `MovementSolver::move` / `traceDown` | `CollisionWorld` player capsule traces | rewrite |
-| `Stepper` `sStepSizeUp` 34 / `sStepSizeDown` 62 | `CollisionWorld` dock/stair step | rewrite |
-| `sMaxSlope` 46 / `sGroundOffset` 1 | `CollisionWorld` walkable floor | same |
+| `MovementSolver::move` / `traceDown` | `BulletWorld` player capsule sweeps | rewrite |
+| `Stepper` `sStepSizeUp` 34 / `sStepSizeDown` 62 | `BulletWorld` dock/stair step | rewrite |
+| `sMaxSlope` 46 / `sGroundOffset` 1 | `BulletWorld` walkable floor | same |
 | `HeightField` TES3 65×65 | `LandRecord` bilinear + `CollisionWorld` | rewrite |
 | `btCollisionWorld` + dispatcher / dbvt | `render.BulletWorld` (JNI world) | rewrite |
 | `HeightField` / `btHeightfieldTerrainShape` | `BulletWorld` land tris (Y-up GL) | rewrite |

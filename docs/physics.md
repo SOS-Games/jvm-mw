@@ -14,7 +14,7 @@ While the player is on Bullet, Recast may keep pulling shack tris from `Collisio
 
 ## What Town has now
 
-WASD is a custom capsule vs land + object triangles (`CollisionWorld`, [phase 36](phase36-stay-on-land.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPCs are ignored by the tracer; outdoor wanderers only snap TES Z to land bilinear. Doors and chest lids do not update collision after they move. Chair HUD still flies.
+WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPCs still snap TES Z to land bilinear on the frozen tracer. Doors and chest lids do not update collision after they move. Chair HUD still flies.
 
 That tracer is ours. OpenMW does the same *movement* on **Bullet** collision tests, not a hand-rolled triangle loop.
 
@@ -33,9 +33,9 @@ libGDX already ships this library as **`gdx-bullet`** (JNI natives next to the L
 
 ## Frozen custom tracer
 
-`CollisionWorld` stays for NPCs (land stick) and Recast object tris **only until player Bullet works**. Do **not** fix, extend, or re-tune it. No new features on that path. Bugs in NPC stick or the old tracer are accepted until the delete-and-port slice.
+`CollisionWorld` stays for NPCs (land stick) and Recast object tris until (2). Do **not** fix, extend, or re-tune it. No new features on that path. Bugs in NPC stick or the old tracer are accepted until the delete-and-port slice.
 
-Player WASD stays on the old tracer until the last spec in (1). Then spawn snap, Dump `onGround` / `floorY` / `ceilY`, and ceilings go through Bullet.
+Player WASD, spawn snap, Dump `onGround` / `floorY` / `ceilY`, and ceilings go through Bullet.
 
 ## Why it is large
 
@@ -59,7 +59,7 @@ NPCs keep today’s `CollisionWorld` land stick through every 1.x. Recast gather
 
 ### 1. Player walk on Bullet (several specs)
 
-Do not switch WASD off the old tracer until **1.4**. Town docks must not go fly-through in 1.1–1.3. Two worlds may exist on purpose until (2).
+**1.1–1.3** kept WASD on the old tracer so Town docks did not go fly-through. Two worlds exist on purpose until (2).
 
 #### 1.1 Wire `gdx-bullet`
 
@@ -91,11 +91,13 @@ Spec: [phase47-bullet-objects.md](phase47-bullet-objects.md). **Working.**
 
 #### 1.4 Player WASD on Bullet
 
-- [ ] Player WASD / step / slide / gravity / spawn `traceDown` go through Bullet convex sweeps / rays. Keep the Phase 36 numbers (eye 96, capsule 128×30, step 34/62, slope 46°, ground offset 1, gravity 627). Player hits World + HeightMap only.
-- [ ] Dump `onGround` / `floorY` / `ceilY` from Bullet for the camera.
-- [ ] NPCs still on `CollisionWorld`. Recast gather still may use `appendObjectTris`.
+Spec: [phase48-bullet-walk.md](phase48-bullet-walk.md). **Working.**
 
-**Town test:** Census `DODT`. Dirt, docks, dock undersides, hills, Census rafters, Addamasartus roof. Same pass/fail as Phase 36. `glError=0`. F5 / F6 / `src=db` / `patch=` / Detour wander unchanged. NPCs may still clip shacks and float on bilinear land.
+- [x] Player WASD / step / slide / gravity / spawn `traceDown` go through Bullet convex sweeps / rays. Keep the Phase 36 numbers (eye 96, capsule 128×30, step 34/62, slope 46°, ground offset 1, gravity 627). Player hits World + HeightMap only.
+- [x] Dump `onGround` / `floorY` / `ceilY` from Bullet for the camera.
+- [x] NPCs still on `CollisionWorld`. Recast gather still may use `appendObjectTris`.
+
+**Town test:** Census `DODT`. Dirt, docks, dock undersides, hills, Census rafters, Addamasartus roof. Same pass/fail as Phase 36. `glError=0`. F5 / F6 / F7 / `src=db` / `patch=` / Detour wander unchanged. NPCs may still clip shacks and float on bilinear land.
 
 When **1.4** is **working**, do not patch `CollisionWorld`; next is (2) delete-and-port.
 

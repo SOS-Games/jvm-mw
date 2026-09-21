@@ -858,7 +858,7 @@ public final class JvmMwApp extends ApplicationAdapter {
 
     private void snapWalk() {
         if (cellBuilder != null) {
-            cellBuilder.collision.snapSpawn(eye, loadedCell != null && loadedCell.interior);
+            BulletWorld.snapSpawn(eye, loadedCell != null && loadedCell.interior);
         }
     }
 
@@ -1245,10 +1245,9 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(") eyeHeight=").append(EYE_HEIGHT)
                 .append(" recast=(").append(NavmeshDb.recastTile(tesX)).append(',')
                 .append(NavmeshDb.recastTile(tesY)).append(")\n");
-            CollisionWorld col = cellBuilder.collision;
-            snapshotBuf.append("onGround=").append(col.onGround)
-                .append(" floorY=").append(Float.isNaN(col.floorY) ? "none" : col.floorY)
-                .append(" ceilY=").append(Float.isNaN(col.ceilY) ? "none" : col.ceilY).append('\n');
+            snapshotBuf.append("onGround=").append(BulletWorld.onGround)
+                .append(" floorY=").append(Float.isNaN(BulletWorld.floorY) ? "none" : BulletWorld.floorY)
+                .append(" ceilY=").append(Float.isNaN(BulletWorld.ceilY) ? "none" : BulletWorld.ceilY).append('\n');
             snapshotBuf.append("bullet=").append(BulletWorld.alive() ? 1 : 0)
                 .append(" bodies=").append(BulletWorld.bodyCount())
                 .append(" land=").append(BulletWorld.landCount())
@@ -1429,7 +1428,9 @@ public final class JvmMwApp extends ApplicationAdapter {
             dy -= speed;
         }
         if (cellBuilder != null && !isLoading()) {
-            cellBuilder.collision.move(eye, dx, dy, dz, dt);
+            if (BulletWorld.hasPhysics()) {
+                BulletWorld.move(eye, dx, dy, dz, dt);
+            }
         } else {
             eye.add(dx, dy, dz);
         }

@@ -125,7 +125,6 @@ public final class CellSceneBuilder {
         pathgridDebug.dispose();
         colliderDebug.dispose();
         collision.clear();
-        BulletWorld.rebuild();
         lighting.lights.clear();
         lighting.resetTime();
         lighting.exterior = !cell.interior;
@@ -175,6 +174,7 @@ public final class CellSceneBuilder {
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
         collision.bake(lands, pendingCol);
+        BulletWorld.rebuild();
         BulletWorld.addLand(lands);
         BulletWorld.addObjects(pendingCol);
         colliderDebug.attach(buildingRoot, pendingCol, lands);
