@@ -62,6 +62,10 @@ public final class BulletColliderDebug {
         cellRoot.addChild(group);
     }
 
+    public boolean attached() {
+        return group != null;
+    }
+
     public static boolean toggleVisible() {
         visible = !visible;
         return visible;

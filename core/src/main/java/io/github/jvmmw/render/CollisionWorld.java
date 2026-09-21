@@ -707,10 +707,18 @@ public final class CollisionWorld {
     public static final class Pending {
         final CollisionMesh mesh;
         final SceneNode node;
+        final int gridX;
+        final int gridY;
 
         public Pending(CollisionMesh mesh, SceneNode node) {
+            this(mesh, node, 0, 0);
+        }
+
+        public Pending(CollisionMesh mesh, SceneNode node, int gridX, int gridY) {
             this.mesh = mesh;
             this.node = node;
+            this.gridX = gridX;
+            this.gridY = gridY;
         }
     }
 

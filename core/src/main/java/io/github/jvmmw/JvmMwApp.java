@@ -613,6 +613,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 long gpuStart = System.nanoTime();
                 walkBuilder = new CellSceneBuilder();
                 walkBuilder.takenKeys = takenKeys;
+                walkBuilder.deferBullet = true;
                 walkBuilder.begin(cell);
                 profiler.addWalkGpuNs(System.nanoTime() - gpuStart);
                 walkIncoming = cell;
@@ -655,6 +656,9 @@ public final class JvmMwApp extends ApplicationAdapter {
             lastWalkGx = loadedCell.gridX;
             lastWalkGy = loadedCell.gridY;
             currentVfs = loadedCell.name + " (" + loadedCell.gridX + "," + loadedCell.gridY + ")";
+            if (!cellBuilder.bulletLive()) {
+                cellBuilder.attachLiveCollision();
+            }
             keepWalkCamera();
             applyExteriorCycle(cellBuilder.lighting);
             Gdx.app.log("JVM-MW", cellBuilder.log.toString());
@@ -1428,7 +1432,11 @@ public final class JvmMwApp extends ApplicationAdapter {
             dy -= speed;
         }
         if (cellBuilder != null && !isLoading()) {
-            if (BulletWorld.hasPhysics()) {
+            if (BulletWorld.readyAtGl(eye.x, eye.z)) {
+                if ((dx != 0f || dz != 0f) && !BulletWorld.readyAtGl(eye.x + dx, eye.z + dz)) {
+                    dx = 0f;
+                    dz = 0f;
+                }
                 BulletWorld.move(eye, dx, dy, dz, dt);
             }
         } else {

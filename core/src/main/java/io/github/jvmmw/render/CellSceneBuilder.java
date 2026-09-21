@@ -81,6 +81,15 @@ public final class CellSceneBuilder {
     private Map<String, Integer> byRec;
     private int refIndex;
     private int landIndex;
+    private int gpu;
+    private int colTile;
+    private int colObj;
+    private boolean colLandDone;
+    private boolean bulletLive;
+    /** Walk-grid builds must not wipe the live Bullet world until swap. */
+    public boolean deferBullet;
+    private final List<BulletWorld.Staged> staged = new ArrayList<>();
+    private final List<EsmFile.GridTile> colOrder = new ArrayList<>();
     private boolean finished;
     private Random levcRng;
     private final List<PendingLight> pendingLights = new ArrayList<>();
@@ -116,6 +125,13 @@ public final class CellSceneBuilder {
         buildingRoot.local.setToRotation(1, 0, 0, -90);
         refIndex = 0;
         landIndex = 0;
+        gpu = 0;
+        colTile = 0;
+        colObj = 0;
+        colLandDone = false;
+        bulletLive = false;
+        disposeStaged();
+        colOrder.clear();
         finished = false;
         pendingLights.clear();
         doors.clear();
@@ -152,53 +168,87 @@ public final class CellSceneBuilder {
             return true;
         }
         long start = System.nanoTime();
-        if (!cell.interior) {
-            while (landIndex < landCount()) {
-                LandRecord land = cell.lands.isEmpty() ? cell.land : cell.lands.get(landIndex);
-                List<LandRecord> neighbors = cell.lands.isEmpty() ? List.of(land) : cell.lands;
-                landMesh.attach(buildingRoot, land, cell.landTextures, neighbors);
-                landIndex++;
+        if (gpu == 0) {
+            if (!cell.interior) {
+                while (landIndex < landCount()) {
+                    LandRecord land = cell.lands.isEmpty() ? cell.land : cell.lands.get(landIndex);
+                    List<LandRecord> neighbors = cell.lands.isEmpty() ? List.of(land) : cell.lands;
+                    landMesh.attach(buildingRoot, land, cell.landTextures, neighbors);
+                    landIndex++;
+                    if (System.nanoTime() - start >= budgetNanos) {
+                        return false;
+                    }
+                }
+            }
+            gpu = 1;
+        }
+        if (gpu == 1) {
+            while (refIndex < cell.refs.size()) {
+                place(cell.refs.get(refIndex++));
                 if (System.nanoTime() - start >= budgetNanos) {
                     return false;
                 }
             }
+            gpu = 2;
         }
-        while (refIndex < cell.refs.size()) {
-            place(cell.refs.get(refIndex++));
-            if (System.nanoTime() - start >= budgetNanos) {
+        if (gpu == 2) {
+            finishPrep();
+            if (!deferBullet) {
+                BulletWorld.rebuild();
+            }
+            gpu = 3;
+            return false;
+        }
+        if (gpu == 3) {
+            if (deferBullet) {
+                if (!fillCurrentCollision(start, budgetNanos, false, true)) {
+                    return false;
+                }
+                finishLog();
+                finished = true;
+                return true;
+            }
+            if (!fillCurrentCollision(start, budgetNanos, false, false)) {
                 return false;
             }
+            bulletLive = true;
+            colTile = Math.min(1, colOrder.size());
+            colObj = 0;
+            colLandDone = false;
+            finishLog();
+            finished = true;
+            return true;
         }
-        List<LandRecord> lands = cell.interior || cell.land == null ? List.of()
-            : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
-        Matrix4 id = new Matrix4();
-        buildingRoot.updateWorld(id);
-        collision.bake(lands, pendingCol);
-        BulletWorld.rebuild();
-        BulletWorld.addLand(lands);
-        BulletWorld.addObjects(pendingCol);
-        colliderDebug.attach(buildingRoot, pendingCol, lands);
-        pathgridDebug.attach(buildingRoot, cell);
-        finishLights();
-        startNavmesh();
-        if (navmeshDebug != null) {
-            navmeshDebug.attachTo(buildingRoot);
-        }
-        log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
-            + " npc=" + placedNpc + " crea=" + placedCrea + " levc=" + placedLevc + " levcNone=" + skippedLevcNone
-            + " byRec=" + byRec + " empty=" + skippedEmpty
-            + " actor=" + skippedActor
-            + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
-            + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
-            + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
-            + " cont=" + containers.withOpen() + "/" + containers.containers.size()
-            + " take=" + items.takeCount()
-            + " nav=" + navPolys + " tiles=" + navTiles + " navSrc=" + navSource
-            + (cell.interior ? "" : " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight
-                + " vtex=" + cell.land.uniqueVtex() + " ltex=" + cell.landTextures.size())
-            + '\n');
-        finished = true;
         return true;
+    }
+
+    /** After a walk-grid swap: replace the live Bullet world with this cell’s pre-cooked bodies. */
+    public void attachLiveCollision() {
+        if (bulletLive || cell == null) {
+            return;
+        }
+        BulletWorld.rebuild();
+        if (!staged.isEmpty()) {
+            for (BulletWorld.Staged body : staged) {
+                BulletWorld.adopt(body);
+            }
+            staged.clear();
+            if (cell.interior) {
+                BulletWorld.markInteriorReady();
+            } else {
+                BulletWorld.markReady(cell.gridX, cell.gridY);
+            }
+        } else {
+            fillCurrentCollision(System.nanoTime(), Long.MAX_VALUE, true, false);
+        }
+        bulletLive = true;
+        colTile = Math.min(1, colOrder.size());
+        colObj = 0;
+        colLandDone = false;
+    }
+
+    public boolean bulletLive() {
+        return bulletLive;
     }
 
     public SceneNode end() {
@@ -214,6 +264,8 @@ public final class CellSceneBuilder {
     }
 
     public void update(float dt) {
+        pumpCollision(4_000_000L);
+        ensureColliderDebug();
         pumpNavmesh();
         mannequin.update(dt, collision);
         navPath = NavmeshQuery.lastPath(navWorld);
@@ -257,6 +309,183 @@ public final class CellSceneBuilder {
     private void cancelNavmesh() {
         if (navmeshDebug != null) {
             navmeshDebug.detachFrom(buildingRoot);
+        }
+    }
+
+    private void finishPrep() {
+        List<LandRecord> lands = cell.interior || cell.land == null ? List.of()
+            : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
+        Matrix4 id = new Matrix4();
+        buildingRoot.updateWorld(id);
+        collision.bake(lands, pendingCol);
+        if (!deferBullet) {
+            colliderDebug.attach(buildingRoot, pendingCol, lands);
+        }
+        pathgridDebug.attach(buildingRoot, cell);
+        finishLights();
+        startNavmesh();
+        if (navmeshDebug != null) {
+            navmeshDebug.attachTo(buildingRoot);
+        }
+        buildColOrder();
+        colTile = 0;
+        colObj = 0;
+        colLandDone = false;
+    }
+
+    private void finishLog() {
+        log.insert(0, "cell=" + cell.name + " refs=" + cell.refs.size() + " placed=" + placed
+            + " npc=" + placedNpc + " crea=" + placedCrea + " levc=" + placedLevc + " levcNone=" + skippedLevcNone
+            + " byRec=" + byRec + " empty=" + skippedEmpty
+            + " actor=" + skippedActor
+            + " unknown=" + skippedUnknown + " deleted=" + skippedDeleted + " nifFail=" + skippedNif
+            + " lights=" + lighting.lights.size() + " fog=" + lighting.fogDensity
+            + " doors=" + doors.swingCount() + "+" + doors.teleportCount()
+            + " cont=" + containers.withOpen() + "/" + containers.containers.size()
+            + " take=" + items.takeCount()
+            + " nav=" + navPolys + " tiles=" + navTiles + " navSrc=" + navSource
+            + (cell.interior ? "" : " land=" + (int) cell.land.minHeight + ".." + (int) cell.land.maxHeight
+                + " vtex=" + cell.land.uniqueVtex() + " ltex=" + cell.landTextures.size())
+            + '\n');
+    }
+
+    private void buildColOrder() {
+        colOrder.clear();
+        if (cell.interior || cell.tiles.isEmpty()) {
+            return;
+        }
+        EsmFile.GridTile center = null;
+        List<EsmFile.GridTile> rest = new ArrayList<>();
+        for (EsmFile.GridTile tile : cell.tiles) {
+            if (tile.gridX == cell.gridX && tile.gridY == cell.gridY) {
+                center = tile;
+            } else {
+                rest.add(tile);
+            }
+        }
+        if (center != null) {
+            colOrder.add(center);
+        }
+        int cx = cell.gridX;
+        int cy = cell.gridY;
+        rest.sort((a, b) -> {
+            int da = Math.max(Math.abs(a.gridX - cx), Math.abs(a.gridY - cy));
+            int db = Math.max(Math.abs(b.gridX - cx), Math.abs(b.gridY - cy));
+            return Integer.compare(da, db);
+        });
+        colOrder.addAll(rest);
+    }
+
+    private boolean fillCurrentCollision(long start, long budgetNanos, boolean all, boolean stage) {
+        if (cell.interior) {
+            while (colObj < pendingCol.size()) {
+                addCollisionObject(pendingCol.get(colObj++), stage);
+                if (!all && System.nanoTime() - start >= budgetNanos) {
+                    return false;
+                }
+            }
+            if (!stage) {
+                BulletWorld.markInteriorReady();
+            }
+            return true;
+        }
+        if (colOrder.isEmpty()) {
+            if (!colLandDone) {
+                List<LandRecord> lands = cell.land == null ? List.of()
+                    : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
+                addCollisionLand(lands, stage);
+                colLandDone = true;
+                if (!all && System.nanoTime() - start >= budgetNanos) {
+                    return false;
+                }
+            }
+            while (colObj < pendingCol.size()) {
+                addCollisionObject(pendingCol.get(colObj++), stage);
+                if (!all && System.nanoTime() - start >= budgetNanos) {
+                    return false;
+                }
+            }
+            if (!stage) {
+                BulletWorld.markReady(cell.gridX, cell.gridY);
+            }
+            return true;
+        }
+        return addTileCollision(colOrder.get(0), start, budgetNanos, all, stage);
+    }
+
+    private boolean addTileCollision(EsmFile.GridTile tile, long start, long budgetNanos, boolean all) {
+        return addTileCollision(tile, start, budgetNanos, all, false);
+    }
+
+    private boolean addTileCollision(EsmFile.GridTile tile, long start, long budgetNanos, boolean all, boolean stage) {
+        if (!colLandDone) {
+            if (tile.land != null) {
+                addCollisionLand(List.of(tile.land), stage);
+            }
+            colLandDone = true;
+            if (!all && System.nanoTime() - start >= budgetNanos) {
+                return false;
+            }
+        }
+        while (colObj < pendingCol.size()) {
+            CollisionWorld.Pending pnd = pendingCol.get(colObj);
+            if (pnd.gridX != tile.gridX || pnd.gridY != tile.gridY) {
+                colObj++;
+                continue;
+            }
+            addCollisionObject(pnd, stage);
+            colObj++;
+            if (!all && System.nanoTime() - start >= budgetNanos) {
+                return false;
+            }
+        }
+        if (!stage) {
+            BulletWorld.markReady(tile.gridX, tile.gridY);
+        }
+        return true;
+    }
+
+    private void addCollisionLand(List<LandRecord> lands, boolean stage) {
+        if (stage) {
+            if (lands == null) {
+                return;
+            }
+            for (LandRecord land : lands) {
+                BulletWorld.Staged body = BulletWorld.cookLand(land);
+                if (body != null) {
+                    staged.add(body);
+                }
+            }
+            return;
+        }
+        BulletWorld.addLand(lands);
+    }
+
+    private void addCollisionObject(CollisionWorld.Pending pnd, boolean stage) {
+        if (stage) {
+            BulletWorld.Staged body = BulletWorld.cookObject(pnd);
+            if (body != null) {
+                staged.add(body);
+            }
+            return;
+        }
+        BulletWorld.addObject(pnd);
+    }
+
+    private void pumpCollision(long budgetNanos) {
+        if (!finished || !bulletLive || cell == null || cell.interior || colTile >= colOrder.size()) {
+            return;
+        }
+        long start = System.nanoTime();
+        while (colTile < colOrder.size()) {
+            if (addTileCollision(colOrder.get(colTile), start, budgetNanos, false)) {
+                colTile++;
+                colObj = 0;
+                colLandDone = false;
+            }
+            if (System.nanoTime() - start >= budgetNanos) {
+                return;
+            }
         }
     }
 
@@ -309,10 +538,19 @@ public final class CellSceneBuilder {
         if (cell == null) {
             return "";
         }
-        if (!cell.interior && landIndex < landCount()) {
-            return "land " + landIndex + "/" + landCount();
+        if (!finished) {
+            if (!cell.interior && landIndex < landCount()) {
+                return "loading land " + landIndex + "/" + landCount();
+            }
+            if (gpu <= 1 && refIndex < refCount()) {
+                return "loading models " + refIndex + "/" + Math.max(1, refCount());
+            }
+            return "loading collision";
         }
-        return "refs " + refIndex + "/" + refCount();
+        if (bulletLive && colTile < colOrder.size()) {
+            return "loading collision " + colTile + "/" + colOrder.size();
+        }
+        return "loading models " + refIndex + "/" + Math.max(1, refCount());
     }
 
     public float tileProgress(int gx, int gy) {
@@ -429,7 +667,9 @@ public final class CellSceneBuilder {
             buildingRoot.addChild(inst);
             CollisionMesh col = CollisionMesh.intern(mesh);
             if (!col.isEmpty()) {
-                pendingCol.add(new CollisionWorld.Pending(col, inst));
+                int gx = cell.interior ? 0 : LandRecord.cellGrid(ref.pos[0]);
+                int gy = cell.interior ? 0 : LandRecord.cellGrid(ref.pos[1]);
+                pendingCol.add(new CollisionWorld.Pending(col, inst, gx, gy));
             }
             placed++;
             if ("STAT".equals(obj.rec)) {
@@ -563,8 +803,25 @@ public final class CellSceneBuilder {
     private record PendingLight(SceneNode node, EsmObject obj, String refId) {
     }
 
+    private void ensureColliderDebug() {
+        if (!BulletColliderDebug.visible || colliderDebug.attached() || buildingRoot == null || !finished) {
+            return;
+        }
+        List<LandRecord> lands = cell == null || cell.interior || cell.land == null ? List.of()
+            : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
+        colliderDebug.attach(buildingRoot, pendingCol, lands);
+    }
+
+    private void disposeStaged() {
+        for (BulletWorld.Staged body : staged) {
+            BulletWorld.disposeStaged(body);
+        }
+        staged.clear();
+    }
+
     public void dispose() {
         cancelNavmesh();
+        disposeStaged();
         pathgridDebug.dispose();
         colliderDebug.dispose();
         landMesh.dispose();

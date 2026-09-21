@@ -20,7 +20,9 @@ import com.badlogic.gdx.physics.bullet.collision.btManifoldPoint;
 import com.badlogic.gdx.physics.bullet.collision.btTriangleMesh;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * JNI Bullet collision world for the loaded cell. Land is one mesh per TES
@@ -61,6 +63,8 @@ public final class BulletWorld {
     private static final List<btTriangleMesh> landMeshes = new ArrayList<>();
     private static final List<btBvhTriangleMeshShape> objectShapes = new ArrayList<>();
     private static final List<btTriangleMesh> objectMeshes = new ArrayList<>();
+    private static final Set<Long> readyCells = new HashSet<>();
+    private static boolean interiorReady;
     private static final Vector3 hit = new Vector3();
     private static final Vector3 rayFrom = new Vector3();
     private static final Vector3 rayTo = new Vector3();
@@ -128,6 +132,8 @@ public final class BulletWorld {
         floorY = Float.NaN;
         ceilY = Float.NaN;
         vy = 0f;
+        readyCells.clear();
+        interiorReady = false;
     }
 
     /** One HeightMap body per loaded TES land tile. Interior passes an empty list. */
@@ -138,6 +144,14 @@ public final class BulletWorld {
         for (LandRecord land : lands) {
             addLandMesh(land);
         }
+    }
+
+    /** One World body. Empty NC meshes are skipped. */
+    public static void addObject(CollisionWorld.Pending pnd) {
+        if (world == null || pnd == null || pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
+            return;
+        }
+        addObjectMesh(pnd);
     }
 
     /** One World body per pending placement. Empty NC meshes are skipped. */
@@ -226,6 +240,90 @@ public final class BulletWorld {
     /** Land or kit bodies for the current cell. Empty during Chair and while a cell is still placing. */
     public static boolean hasPhysics() {
         return world != null && !bodies.isEmpty();
+    }
+
+    public static void markReady(int gridX, int gridY) {
+        readyCells.add(gridKey(gridX, gridY));
+    }
+
+    public static void markInteriorReady() {
+        interiorReady = true;
+    }
+
+    /** TES cell under this point has HeightMap / kit in Bullet. */
+    public static boolean readyAt(float tesX, float tesY) {
+        if (world == null) {
+            return false;
+        }
+        if (interiorReady) {
+            return true;
+        }
+        return readyCells.contains(gridKey(LandRecord.cellGrid(tesX), LandRecord.cellGrid(tesY)));
+    }
+
+    public static boolean readyAtGl(float glX, float glZ) {
+        return readyAt(glX, -glZ);
+    }
+
+    private static long gridKey(int gx, int gy) {
+        return ((long) gx << 32) ^ (gy & 0xffffffffL);
+    }
+
+    public static Staged cookLand(LandRecord land) {
+        if (land == null) {
+            return null;
+        }
+        return cookLandMesh(land);
+    }
+
+    public static Staged cookObject(CollisionWorld.Pending pnd) {
+        if (pnd == null || pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
+            return null;
+        }
+        return cookObjectMesh(pnd);
+    }
+
+    public static void adopt(Staged staged) {
+        if (world == null || staged == null) {
+            return;
+        }
+        world.addCollisionObject(staged.obj, staged.group, ACTOR | PROJECTILE);
+        world.updateSingleAabb(staged.obj);
+        bodies.add(staged.obj);
+        if (staged.land) {
+            landShapes.add(staged.shape);
+            landMeshes.add(staged.mesh);
+            landBodies++;
+        } else {
+            objectShapes.add(staged.shape);
+            objectMeshes.add(staged.mesh);
+            worldBodies++;
+        }
+    }
+
+    public static void disposeStaged(Staged staged) {
+        if (staged == null) {
+            return;
+        }
+        staged.obj.dispose();
+        staged.shape.dispose();
+        staged.mesh.dispose();
+    }
+
+    public static final class Staged {
+        final btCollisionObject obj;
+        final btBvhTriangleMeshShape shape;
+        final btTriangleMesh mesh;
+        final int group;
+        final boolean land;
+
+        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, int group, boolean land) {
+            this.obj = obj;
+            this.shape = shape;
+            this.mesh = mesh;
+            this.group = group;
+            this.land = land;
+        }
     }
 
     public static void snapSpawn(Vector3 eye, boolean interior) {
@@ -543,6 +641,13 @@ public final class BulletWorld {
     }
 
     private static void addLandMesh(LandRecord land) {
+        Staged staged = cookLandMesh(land);
+        if (staged != null) {
+            adopt(staged);
+        }
+    }
+
+    private static Staged cookLandMesh(LandRecord land) {
         btTriangleMesh mesh = new btTriangleMesh();
         float originX = land.gridX * (float) LandRecord.CELL_SIZE;
         float originY = land.gridY * (float) LandRecord.CELL_SIZE;
@@ -563,12 +668,7 @@ public final class BulletWorld {
         obj.setCollisionFlags(btCollisionObject.CollisionFlags.CF_STATIC_OBJECT);
         tmpMat.idt();
         obj.setWorldTransform(tmpMat);
-        world.addCollisionObject(obj, HEIGHT_MAP, ACTOR | PROJECTILE);
-        world.updateSingleAabb(obj);
-        bodies.add(obj);
-        landShapes.add(shape);
-        landMeshes.add(mesh);
-        landBodies++;
+        return new Staged(obj, shape, mesh, HEIGHT_MAP, true);
     }
 
     private static void landVert(Vector3 out, float originX, float originY, LandRecord land, int x, int y) {
@@ -578,9 +678,16 @@ public final class BulletWorld {
     }
 
     private static void addObjectMesh(CollisionWorld.Pending pnd) {
+        Staged staged = cookObjectMesh(pnd);
+        if (staged != null) {
+            adopt(staged);
+        }
+    }
+
+    private static Staged cookObjectMesh(CollisionWorld.Pending pnd) {
         float[] tris = pnd.mesh.tris;
         if (tris.length < 9) {
-            return;
+            return null;
         }
         btTriangleMesh mesh = new btTriangleMesh();
         tmpMat.set(pnd.node.world);
@@ -593,7 +700,7 @@ public final class BulletWorld {
         }
         if (mesh.getNumTriangles() == 0) {
             mesh.dispose();
-            return;
+            return null;
         }
         btBvhTriangleMeshShape shape = new btBvhTriangleMeshShape(mesh, true, true);
         btCollisionObject obj = new btCollisionObject();
@@ -601,12 +708,7 @@ public final class BulletWorld {
         obj.setCollisionFlags(btCollisionObject.CollisionFlags.CF_STATIC_OBJECT);
         tmpMat.idt();
         obj.setWorldTransform(tmpMat);
-        world.addCollisionObject(obj, WORLD, ACTOR | PROJECTILE);
-        world.updateSingleAabb(obj);
-        bodies.add(obj);
-        objectShapes.add(shape);
-        objectMeshes.add(mesh);
-        worldBodies++;
+        return new Staged(obj, shape, mesh, WORLD, false);
     }
 
     private static void disposeBodies() {
@@ -637,6 +739,8 @@ public final class BulletWorld {
         objectMeshes.clear();
         landBodies = 0;
         worldBodies = 0;
+        readyCells.clear();
+        interiorReady = false;
     }
 
     private static final class DeepestContact extends ContactResultCallback {

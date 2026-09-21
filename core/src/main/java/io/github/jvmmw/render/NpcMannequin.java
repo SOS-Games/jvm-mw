@@ -353,7 +353,12 @@ public final class NpcMannequin {
 
     public void update(float dt, CollisionWorld collision) {
         for (NpcActor actor : actors) {
-            wander(actor, dt, wanderScale(actor), collision);
+            if (BulletWorld.readyAt(actor.tesPos[0], actor.tesPos[1])) {
+                wander(actor, dt, wanderScale(actor), collision);
+            } else {
+                actor.moving = false;
+                actor.moved = 0f;
+            }
             syncWalkAnim(actor);
             if (actor.idle == null) {
                 continue;
