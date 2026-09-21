@@ -17,9 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * E on a door. Plain doors swing open and shut. A named destination loads
- * that interior. An empty destination loads the outdoor grid around that
- * door’s arrival point.
+ * E on a door. Plain doors swing open and shut; Bullet follows that pose
+ * so the leaf blocks WASD. Closing it on the camera stalls the leaf until
+ * you step aside. A named destination loads that interior. An empty
+ * destination loads the outdoor grid around that door’s arrival point.
  */
 public final class DoorSwing {
     /** GMST {@code iMaxActivateDist}. */
@@ -44,6 +45,9 @@ public final class DoorSwing {
         public final float[] liveRot = new float[3];
         public final float scale;
         public State state = State.Idle;
+        float rotBefore;
+        boolean turned;
+        boolean reached;
 
         Placed(SceneNode node, CellRef ref) {
             this.node = node;
@@ -128,12 +132,34 @@ public final class DoorSwing {
 
     public void process(float duration) {
         for (Placed door : doors) {
+            door.turned = false;
             if (door.state != State.Idle) {
-                if (rotateDoor(door, duration)) {
-                    door.state = State.Idle;
-                }
+                rotateDoor(door, duration);
             }
         }
+    }
+
+    /**
+     * If this frame’s swing overlaps the camera, put the leaf back. The door
+     * stays opening or closing and tries again once you step aside.
+     */
+    public boolean blockOnPlayer(Vector3 eye) {
+        boolean rewound = false;
+        for (Placed door : doors) {
+            if (!door.turned) {
+                continue;
+            }
+            door.turned = false;
+            if (eye != null && BulletWorld.hitsPlayer(door.node, eye.x, eye.y, eye.z)) {
+                door.liveRot[2] = door.rotBefore;
+                door.reached = false;
+                EsmTransforms.setLocal(door.node.local, door.pos, door.liveRot, door.scale);
+                rewound = true;
+            } else if (door.reached) {
+                door.state = State.Idle;
+            }
+        }
+        return rewound;
     }
 
     public Hit nearest(Vector3 origin, Vector3 direction) {
@@ -194,11 +220,14 @@ public final class DoorSwing {
     boolean rotateDoor(Placed door, float duration) {
         float minRot = door.minRot();
         float maxRot = door.maxRot();
+        door.rotBefore = door.liveRot[2];
         float diff = duration * RAD_PER_SEC * (door.state == State.Opening ? 1f : -1f);
         float targetRot = clamp(door.liveRot[2] + diff, minRot, maxRot);
         door.liveRot[2] = targetRot;
+        door.turned = targetRot != door.rotBefore;
         EsmTransforms.setLocal(door.node.local, door.pos, door.liveRot, door.scale);
-        return (targetRot == maxRot && door.state != State.Idle) || targetRot == minRot;
+        door.reached = (targetRot == maxRot && door.state != State.Idle) || targetRot == minRot;
+        return door.reached;
     }
 
     Placed pick(Vector3 origin, Vector3 direction) {

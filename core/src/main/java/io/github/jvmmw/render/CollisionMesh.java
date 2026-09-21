@@ -209,16 +209,22 @@ public final class CollisionMesh {
         final SceneNode node;
         final int gridX;
         final int gridY;
+        final boolean live;
 
         public Pending(CollisionMesh mesh, SceneNode node) {
-            this(mesh, node, 0, 0);
+            this(mesh, node, 0, 0, false);
         }
 
         public Pending(CollisionMesh mesh, SceneNode node, int gridX, int gridY) {
+            this(mesh, node, gridX, gridY, false);
+        }
+
+        public Pending(CollisionMesh mesh, SceneNode node, int gridX, int gridY, boolean live) {
             this.mesh = mesh;
             this.node = node;
             this.gridX = gridX;
             this.gridY = gridY;
+            this.live = live;
         }
     }
 }

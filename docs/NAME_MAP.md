@@ -166,6 +166,8 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `BulletNifLoader` RootCollisionNode / NC / NCC | `CollisionMesh` tris from NIF | rewrite |
 | `BulletNifLoader` instance in `btCollisionWorld` | `BulletWorld` World bodies from `CollisionMesh` | rewrite |
 | Recast object input | `CollisionTris` from `CollisionMesh` placements | rewrite |
+| `Object::commitPositionChange` | `BulletWorld` follow `SceneNode.world` | rewrite |
+| `World::deleteObject` collision | `BulletWorld.remove` on take | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` empty `DNAM` | **E** → `loadExterior` | rewrite |
 | `apps/openmw/mwworld/scene.cpp` | `changeToExteriorCell` | dest grid + 5×5-minus-corners | rewrite |
 | `apps/openmw/mwworld/class.cpp` | `Class::defaultItemActivate` | **E** + item pick | rewrite |

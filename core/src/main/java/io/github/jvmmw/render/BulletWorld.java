@@ -3,6 +3,7 @@ package io.github.jvmmw.render;
 import io.github.jvmmw.esm.LandRecord;
 
 import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.physics.bullet.Bullet;
 import com.badlogic.gdx.physics.bullet.collision.ClosestConvexResultCallback;
@@ -21,15 +22,18 @@ import com.badlogic.gdx.physics.bullet.collision.btTriangleMesh;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * JNI Bullet collision world for the loaded cell. Land is one mesh per TES
  * tile; docks, trees, and kit are world-space triangles at load pose, same
  * as F7. WASD sweeps a capsule (not a rigid body) against World and
- * HeightMap. NPC feet snap with a down hit on the same world. Chair HUD has
- * no world.
+ * HeightMap. NPC feet snap with a down hit on the same world. Swung doors
+ * and takeable items follow their SceneNode; trees stay baked at load pose.
+ * Chair HUD has no world.
  */
 public final class BulletWorld {
     static final int WORLD = 1;
@@ -64,6 +68,7 @@ public final class BulletWorld {
     private static final List<btTriangleMesh> landMeshes = new ArrayList<>();
     private static final List<btBvhTriangleMeshShape> objectShapes = new ArrayList<>();
     private static final List<btTriangleMesh> objectMeshes = new ArrayList<>();
+    private static final Map<SceneNode, Live> byNode = new IdentityHashMap<>();
     private static final Set<Long> readyCells = new HashSet<>();
     private static boolean interiorReady;
     private static final Vector3 hit = new Vector3();
@@ -77,6 +82,10 @@ public final class BulletWorld {
     private static final Vector3 to = new Vector3();
     private static final Vector3 n = new Vector3();
     private static final Matrix4 tmpMat = new Matrix4();
+    private static final Quaternion tmpQ = new Quaternion();
+    private static final Vector3 tmpT = new Vector3();
+    private static final Vector3 tmpS = new Vector3();
+    private static final Vector3 ones = new Vector3(1f, 1f, 1f);
     private static final Matrix4 fromMat = new Matrix4();
     private static final Matrix4 toMat = new Matrix4();
     private static final float[] slid = new float[3];
@@ -300,6 +309,55 @@ public final class BulletWorld {
             objectMeshes.add(staged.mesh);
             worldBodies++;
         }
+        if (staged.node != null) {
+            byNode.put(staged.node, new Live(staged.obj, staged.shape, staged.mesh, staged.follow));
+        }
+    }
+
+    public static void syncFollowers() {
+        if (world == null || byNode.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<SceneNode, Live> e : byNode.entrySet()) {
+            Live live = e.getValue();
+            if (!live.follow) {
+                continue;
+            }
+            followPose(e.getKey(), live);
+            world.updateSingleAabb(live.obj);
+        }
+    }
+
+    public static boolean hitsPlayer(SceneNode node, float eyeX, float eyeY, float eyeZ) {
+        Live live = node == null ? null : byNode.get(node);
+        if (live == null || world == null || probe == null || contactCb == null) {
+            return false;
+        }
+        fromMat.setToTranslation(eyeX, eyeY - EYE_HEIGHT + HALF_H, eyeZ);
+        probe.setWorldTransform(fromMat);
+        contactCb.reset();
+        world.contactPairTest(probe, live.obj, contactCb);
+        return contactCb.ok;
+    }
+
+    public static void remove(SceneNode node) {
+        if (node == null) {
+            return;
+        }
+        Live live = byNode.remove(node);
+        if (live == null) {
+            return;
+        }
+        if (world != null) {
+            world.removeCollisionObject(live.obj);
+        }
+        bodies.remove(live.obj);
+        objectShapes.remove(live.shape);
+        objectMeshes.remove(live.mesh);
+        live.obj.dispose();
+        live.shape.dispose();
+        live.mesh.dispose();
+        worldBodies = Math.max(0, worldBodies - 1);
     }
 
     public static void disposeStaged(Staged staged) {
@@ -317,13 +375,36 @@ public final class BulletWorld {
         final btTriangleMesh mesh;
         final int group;
         final boolean land;
+        final SceneNode node;
+        final boolean follow;
 
         Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, int group, boolean land) {
+            this(obj, shape, mesh, group, land, null, false);
+        }
+
+        Staged(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, int group, boolean land,
+            SceneNode node, boolean follow) {
             this.obj = obj;
             this.shape = shape;
             this.mesh = mesh;
             this.group = group;
             this.land = land;
+            this.node = node;
+            this.follow = follow;
+        }
+    }
+
+    private static final class Live {
+        final btCollisionObject obj;
+        final btBvhTriangleMeshShape shape;
+        final btTriangleMesh mesh;
+        final boolean follow;
+
+        Live(btCollisionObject obj, btBvhTriangleMeshShape shape, btTriangleMesh mesh, boolean follow) {
+            this.obj = obj;
+            this.shape = shape;
+            this.mesh = mesh;
+            this.follow = follow;
         }
     }
 
@@ -545,7 +626,6 @@ public final class BulletWorld {
                 continue;
             }
             best.px += best.nx * (best.depth + MARGIN);
-            best.py += best.ny * (best.depth + MARGIN) * (best.ny < -0.2f || best.ny > MAX_SLOPE_COS ? 1f : 0f);
             best.pz += best.nz * (best.depth + MARGIN);
         }
     }
@@ -691,13 +771,23 @@ public final class BulletWorld {
             return null;
         }
         btTriangleMesh mesh = new btTriangleMesh();
-        tmpMat.set(pnd.node.world);
-        for (int i = 0; i + 8 < tris.length; i += 9) {
-            va.set(tris[i], tris[i + 1], tris[i + 2]).mul(tmpMat);
-            vb.set(tris[i + 3], tris[i + 4], tris[i + 5]).mul(tmpMat);
-            vc.set(tris[i + 6], tris[i + 7], tris[i + 8]).mul(tmpMat);
-            mesh.addTriangle(va, vb, vc, false);
-            mesh.addTriangle(va, vc, vb, false);
+        if (pnd.live) {
+            for (int i = 0; i + 8 < tris.length; i += 9) {
+                va.set(tris[i], tris[i + 1], tris[i + 2]);
+                vb.set(tris[i + 3], tris[i + 4], tris[i + 5]);
+                vc.set(tris[i + 6], tris[i + 7], tris[i + 8]);
+                mesh.addTriangle(va, vb, vc, false);
+                mesh.addTriangle(va, vc, vb, false);
+            }
+        } else {
+            tmpMat.set(pnd.node.world);
+            for (int i = 0; i + 8 < tris.length; i += 9) {
+                va.set(tris[i], tris[i + 1], tris[i + 2]).mul(tmpMat);
+                vb.set(tris[i + 3], tris[i + 4], tris[i + 5]).mul(tmpMat);
+                vc.set(tris[i + 6], tris[i + 7], tris[i + 8]).mul(tmpMat);
+                mesh.addTriangle(va, vb, vc, false);
+                mesh.addTriangle(va, vc, vb, false);
+            }
         }
         if (mesh.getNumTriangles() == 0) {
             mesh.dispose();
@@ -707,9 +797,26 @@ public final class BulletWorld {
         btCollisionObject obj = new btCollisionObject();
         obj.setCollisionShape(shape);
         obj.setCollisionFlags(btCollisionObject.CollisionFlags.CF_STATIC_OBJECT);
-        tmpMat.idt();
+        if (pnd.live) {
+            followPose(pnd.node, obj, shape);
+        } else {
+            tmpMat.idt();
+            obj.setWorldTransform(tmpMat);
+        }
+        return new Staged(obj, shape, mesh, WORLD, false, pnd.node, pnd.live);
+    }
+
+    private static void followPose(SceneNode node, Live live) {
+        followPose(node, live.obj, live.shape);
+    }
+
+    private static void followPose(SceneNode node, btCollisionObject obj, btBvhTriangleMeshShape shape) {
+        node.world.getTranslation(tmpT);
+        node.world.getRotation(tmpQ, true);
+        node.world.getScale(tmpS);
+        shape.setLocalScaling(tmpS);
+        tmpMat.set(tmpT, tmpQ, ones);
         obj.setWorldTransform(tmpMat);
-        return new Staged(obj, shape, mesh, WORLD, false);
     }
 
     private static void disposeBodies() {
@@ -738,6 +845,7 @@ public final class BulletWorld {
         landMeshes.clear();
         objectShapes.clear();
         objectMeshes.clear();
+        byNode.clear();
         landBodies = 0;
         worldBodies = 0;
         readyCells.clear();

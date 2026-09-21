@@ -18,8 +18,9 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * E on a world item: the mesh leaves the scene (no inventory). Books only
- * log a line. Fixture lights that you cannot carry stay put.
+ * E on a world item: the mesh leaves the scene (no inventory) and its
+ * Bullet hull goes with it. Books only log a line. Fixture lights that you
+ * cannot carry stay put.
  */
 public final class ItemTake {
     public static final class Hit {
@@ -106,6 +107,7 @@ public final class ItemTake {
             return "book " + item.refId;
         }
         item.node.removeFromParent();
+        BulletWorld.remove(item.node);
         if (item.light != null) {
             lighting.lights.remove(item.light);
         }

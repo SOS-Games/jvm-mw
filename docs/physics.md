@@ -14,7 +14,7 @@ While the player is on Bullet, Recast gathers shack tris from a `CollisionTris` 
 
 ## What Town has now
 
-WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPC feet snap TES Z from a Bullet down hit ([phase 49](phase49-npc-bullet-stick.md)). They still walk through shacks. Recast gathers shack tris from a `CollisionTris` snapshot ([phase 50](phase50-delete-tracer.md)). Doors and chest lids do not update collision after they move. Chair HUD still flies.
+WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPC feet snap TES Z from a Bullet down hit ([phase 49](phase49-npc-bullet-stick.md)). They still walk through shacks. Recast gathers shack tris from a `CollisionTris` snapshot ([phase 50](phase50-delete-tracer.md)). Swung doors follow the leaf and stall if they hit you ([phase 51](phase51-live-poses.md)). Taken items leave Bullet. Extra-data chest lids still do not. Chair HUD still flies.
 
 OpenMW does the same *movement* on **Bullet** collision tests, not a hand-rolled triangle loop.
 
@@ -127,10 +127,12 @@ Spec: [phase50-delete-tracer.md](phase50-delete-tracer.md). **Working.**
 
 ### 3. Live object poses
 
-- [ ] Door swing and chest lid update the Bullet mesh transform (or rebuild that one body). **E** that opens a hide door actually blocks the camera.
-- [ ] Taken world items leave the collision world when the mesh unparents.
+Spec: [phase51-live-poses.md](phase51-live-poses.md). **Working.**
 
-Clipping a swung door is expected until this row. Update **Bullet** only.
+- [x] Door swing follows the leaf in Bullet. **E** that opens a hide door blocks the camera. Closing it on the player stalls the leaf.
+- [x] Taken world items leave the collision world when the mesh unparents.
+
+Extra-data chest lid bones still have no hull. Next is **4**.
 
 ### 4. Actor vs world (shacks, not only land stick)
 

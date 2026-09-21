@@ -1140,7 +1140,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             applyExteriorCycle(mood);
             mood.updateFlicker(Gdx.graphics.getDeltaTime());
             profiler.begin(FrameProfiler.UPDATE);
-            cellBuilder.update(Gdx.graphics.getDeltaTime());
+            cellBuilder.update(Gdx.graphics.getDeltaTime(), eye);
             profiler.end(FrameProfiler.UPDATE);
             Gdx.gl.glClearColor(mood.fogColor[0], mood.fogColor[1], mood.fogColor[2], 1f);
         } else {

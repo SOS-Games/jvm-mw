@@ -263,7 +263,7 @@ public final class CellSceneBuilder {
         mannequin.copyWanderFrom(live.mannequin, cell);
     }
 
-    public void update(float dt) {
+    public void update(float dt, Vector3 eye) {
         pumpCollision(4_000_000L);
         ensureColliderDebug();
         pumpNavmesh();
@@ -275,6 +275,11 @@ public final class CellSceneBuilder {
         if (buildingRoot != null) {
             Matrix4 id = new Matrix4();
             buildingRoot.updateWorld(id);
+            BulletWorld.syncFollowers();
+            if (doors.blockOnPlayer(eye)) {
+                buildingRoot.updateWorld(id);
+                BulletWorld.syncFollowers();
+            }
         }
     }
 
@@ -669,7 +674,7 @@ public final class CellSceneBuilder {
             if (!col.isEmpty()) {
                 int gx = cell.interior ? 0 : LandRecord.cellGrid(ref.pos[0]);
                 int gy = cell.interior ? 0 : LandRecord.cellGrid(ref.pos[1]);
-                pendingCol.add(new CollisionMesh.Pending(col, inst, gx, gy));
+                pendingCol.add(new CollisionMesh.Pending(col, inst, gx, gy, livePose(obj)));
             }
             placed++;
             if ("STAT".equals(obj.rec)) {
@@ -817,6 +822,10 @@ public final class CellSceneBuilder {
             BulletWorld.disposeStaged(body);
         }
         staged.clear();
+    }
+
+    private static boolean livePose(EsmObject obj) {
+        return "DOOR".equals(obj.rec) || "CONT".equals(obj.rec) || EsmObject.isTakeable(obj);
     }
 
     public void dispose() {
