@@ -37,15 +37,15 @@ public final class BulletWorld {
     static final int ACTOR = 1 << 2;
     static final int PROJECTILE = 1 << 4;
 
-    private static final float EYE_HEIGHT = CollisionWorld.EYE_HEIGHT;
-    private static final float HEIGHT = CollisionWorld.HEIGHT;
+    public static final float EYE_HEIGHT = 96f;
+    public static final float HEIGHT = 128f;
     private static final float HALF_H = HEIGHT * 0.5f;
-    private static final float RADIUS = CollisionWorld.RADIUS;
-    private static final float STEP_UP = CollisionWorld.STEP_UP;
-    private static final float STEP_DOWN = CollisionWorld.STEP_DOWN;
-    private static final float GROUND_OFFSET = CollisionWorld.GROUND_OFFSET;
-    private static final float GRAVITY = CollisionWorld.GRAVITY;
-    private static final float MARGIN = CollisionWorld.MARGIN;
+    public static final float RADIUS = 30f;
+    public static final float STEP_UP = 34f;
+    public static final float STEP_DOWN = 62f;
+    public static final float GROUND_OFFSET = 1f;
+    public static final float GRAVITY = 627f;
+    public static final float MARGIN = 0.2f;
     private static final float MAX_SLOPE_COS = (float) Math.cos(Math.toRadians(46));
     private static final int PLAYER_MASK = WORLD | HEIGHT_MAP;
 
@@ -118,7 +118,7 @@ public final class BulletWorld {
         rayCb.setCollisionFilterGroup(ACTOR);
     }
 
-    /** Same moments as CollisionWorld.clear: interior load and walk-grid swap. */
+    /** Same moments as a cell graph swap: interior load and walk-grid swap. */
     public static void rebuild() {
         if (!natives) {
             return;
@@ -148,7 +148,7 @@ public final class BulletWorld {
     }
 
     /** One World body. Empty NC meshes are skipped. */
-    public static void addObject(CollisionWorld.Pending pnd) {
+    public static void addObject(CollisionMesh.Pending pnd) {
         if (world == null || pnd == null || pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
             return;
         }
@@ -156,11 +156,11 @@ public final class BulletWorld {
     }
 
     /** One World body per pending placement. Empty NC meshes are skipped. */
-    public static void addObjects(List<CollisionWorld.Pending> pending) {
+    public static void addObjects(List<CollisionMesh.Pending> pending) {
         if (world == null || pending == null) {
             return;
         }
-        for (CollisionWorld.Pending pnd : pending) {
+        for (CollisionMesh.Pending pnd : pending) {
             if (pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
                 continue;
             }
@@ -277,7 +277,7 @@ public final class BulletWorld {
         return cookLandMesh(land);
     }
 
-    public static Staged cookObject(CollisionWorld.Pending pnd) {
+    public static Staged cookObject(CollisionMesh.Pending pnd) {
         if (pnd == null || pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
             return null;
         }
@@ -678,14 +678,14 @@ public final class BulletWorld {
         out.set(tesX, land.height(x, y), -tesY);
     }
 
-    private static void addObjectMesh(CollisionWorld.Pending pnd) {
+    private static void addObjectMesh(CollisionMesh.Pending pnd) {
         Staged staged = cookObjectMesh(pnd);
         if (staged != null) {
             adopt(staged);
         }
     }
 
-    private static Staged cookObjectMesh(CollisionWorld.Pending pnd) {
+    private static Staged cookObjectMesh(CollisionMesh.Pending pnd) {
         float[] tris = pnd.mesh.tris;
         if (tris.length < 9) {
             return null;

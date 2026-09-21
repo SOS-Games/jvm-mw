@@ -57,7 +57,7 @@ public final class NavmeshCache {
     private NavmeshCache() {
     }
 
-    static void request(EsmFile.LoadedCell cell, CollisionWorld collision) {
+    static void request(EsmFile.LoadedCell cell, CollisionTris collision) {
         if (cell == null) {
             return;
         }
@@ -104,7 +104,7 @@ public final class NavmeshCache {
         return n == null ? 0 : n.get();
     }
 
-    private static void load(EsmFile.LoadedCell cell, CollisionWorld collision) {
+    private static void load(EsmFile.LoadedCell cell, CollisionTris collision) {
         String world = NavmeshDb.worldspace(cell);
         if (cell.interior && interiorsDone.contains(world)) {
             return;
@@ -130,7 +130,7 @@ public final class NavmeshCache {
         }
     }
 
-    private static void runPatch(String world, EsmFile.LoadedCell cell, CollisionWorld collision) {
+    private static void runPatch(String world, EsmFile.LoadedCell cell, CollisionTris collision) {
         List<Tile> haveTiles = snapshot(world);
         if (haveTiles.isEmpty()) {
             return;

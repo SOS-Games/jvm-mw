@@ -66,7 +66,7 @@ public final class CellSceneBuilder {
     public final DoorSwing doors = new DoorSwing();
     public final ContainerOpen containers = new ContainerOpen();
     public final ItemTake items = new ItemTake();
-    public final CollisionWorld collision = new CollisionWorld();
+    public final CollisionTris recastTris = new CollisionTris();
     public Set<String> takenKeys = new HashSet<>();
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
@@ -93,7 +93,7 @@ public final class CellSceneBuilder {
     private boolean finished;
     private Random levcRng;
     private final List<PendingLight> pendingLights = new ArrayList<>();
-    private final List<CollisionWorld.Pending> pendingCol = new ArrayList<>();
+    private final List<CollisionMesh.Pending> pendingCol = new ArrayList<>();
     private final Vector3 tmpPos = new Vector3();
 
     public SceneNode build(EsmFile.LoadedCell cell) {
@@ -140,7 +140,7 @@ public final class CellSceneBuilder {
         pendingCol.clear();
         pathgridDebug.dispose();
         colliderDebug.dispose();
-        collision.clear();
+        recastTris.clear();
         lighting.lights.clear();
         lighting.resetTime();
         lighting.exterior = !cell.interior;
@@ -279,7 +279,7 @@ public final class CellSceneBuilder {
     }
 
     private void startNavmesh() {
-        NavmeshCache.request(cell, collision);
+        NavmeshCache.request(cell, recastTris);
         navPolys = NavmeshCache.polys(navWorld);
         navTiles = NavmeshCache.tiles(navWorld);
         navSource = "load";
@@ -317,7 +317,7 @@ public final class CellSceneBuilder {
             : cell.lands.isEmpty() ? List.of(cell.land) : cell.lands;
         Matrix4 id = new Matrix4();
         buildingRoot.updateWorld(id);
-        collision.bake(lands, pendingCol);
+        recastTris.bake(pendingCol);
         if (!deferBullet) {
             colliderDebug.attach(buildingRoot, pendingCol, lands);
         }
@@ -428,7 +428,7 @@ public final class CellSceneBuilder {
             }
         }
         while (colObj < pendingCol.size()) {
-            CollisionWorld.Pending pnd = pendingCol.get(colObj);
+            CollisionMesh.Pending pnd = pendingCol.get(colObj);
             if (pnd.gridX != tile.gridX || pnd.gridY != tile.gridY) {
                 colObj++;
                 continue;
@@ -461,7 +461,7 @@ public final class CellSceneBuilder {
         BulletWorld.addLand(lands);
     }
 
-    private void addCollisionObject(CollisionWorld.Pending pnd, boolean stage) {
+    private void addCollisionObject(CollisionMesh.Pending pnd, boolean stage) {
         if (stage) {
             BulletWorld.Staged body = BulletWorld.cookObject(pnd);
             if (body != null) {
@@ -669,7 +669,7 @@ public final class CellSceneBuilder {
             if (!col.isEmpty()) {
                 int gx = cell.interior ? 0 : LandRecord.cellGrid(ref.pos[0]);
                 int gy = cell.interior ? 0 : LandRecord.cellGrid(ref.pos[1]);
-                pendingCol.add(new CollisionWorld.Pending(col, inst, gx, gy));
+                pendingCol.add(new CollisionMesh.Pending(col, inst, gx, gy));
             }
             placed++;
             if ("STAT".equals(obj.rec)) {

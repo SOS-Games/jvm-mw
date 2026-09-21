@@ -202,4 +202,23 @@ public final class CollisionMesh {
 
     private static final Matrix4 TMP_M = new Matrix4();
     private static final Vector3 TMP_V = new Vector3();
+
+    /** One interned mesh at a placed instance. Bullet, F7, and Recast share this. */
+    public static final class Pending {
+        final CollisionMesh mesh;
+        final SceneNode node;
+        final int gridX;
+        final int gridY;
+
+        public Pending(CollisionMesh mesh, SceneNode node) {
+            this(mesh, node, 0, 0);
+        }
+
+        public Pending(CollisionMesh mesh, SceneNode node, int gridX, int gridY) {
+            this.mesh = mesh;
+            this.node = node;
+            this.gridX = gridX;
+            this.gridY = gridY;
+        }
+    }
 }

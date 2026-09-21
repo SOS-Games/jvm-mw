@@ -53,7 +53,6 @@ import io.github.jvmmw.render.BulletColliderDebug;
 import io.github.jvmmw.render.BulletWorld;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
-import io.github.jvmmw.render.CollisionWorld;
 import io.github.jvmmw.render.DoorSwing;
 import io.github.jvmmw.render.ForwardRenderer;
 import io.github.jvmmw.render.GpuCache;
@@ -804,7 +803,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         eye.mulAdd(lookDir, -moveScale);
     }
 
-    private static final float EYE_HEIGHT = CollisionWorld.EYE_HEIGHT;
+    private static final float EYE_HEIGHT = BulletWorld.EYE_HEIGHT;
 
     private void frameCellCamera() {
         camera.near = 1f;

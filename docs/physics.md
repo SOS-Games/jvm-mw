@@ -10,13 +10,13 @@ Align with `apps/openmw/mwphysics/movementsolver.cpp` (`move`, `traceDown`, slid
 
 Recast, Detour, sqlite `navmesh.db`, F6 overlay, and the Phase 44 patch pass **stay as they are**. They are working. This work replaces **player movement**, not the walkable carpet.
 
-While the player is on Bullet, Recast may keep pulling shack tris from `CollisionWorld.appendObjectTris`. Do not change Recast config, tile size, Detour queries, or gap detection. When the old tracer is deleted (after player Bullet works), that gather must still see the same `CollisionMesh` intern + live node matrices and land — plumbing only.
+While the player is on Bullet, Recast gathers shack tris from a `CollisionTris` snapshot of `CollisionMesh` placements. Do not change Recast config, tile size, Detour queries, or gap detection.
 
 ## What Town has now
 
-WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPC feet snap TES Z from a Bullet down hit ([phase 49](phase49-npc-bullet-stick.md)). They still walk through shacks. Doors and chest lids do not update collision after they move. Chair HUD still flies.
+WASD is a Bullet capsule vs land and object triangles ([phase 48](phase48-bullet-walk.md)). Same numbers as OpenMW’s stepper (eye 96, capsule 128×30, step 34/62, slope 46°, gravity 627). NPC feet snap TES Z from a Bullet down hit ([phase 49](phase49-npc-bullet-stick.md)). They still walk through shacks. Recast gathers shack tris from a `CollisionTris` snapshot ([phase 50](phase50-delete-tracer.md)). Doors and chest lids do not update collision after they move. Chair HUD still flies.
 
-That tracer is ours. OpenMW does the same *movement* on **Bullet** collision tests, not a hand-rolled triangle loop.
+OpenMW does the same *movement* on **Bullet** collision tests, not a hand-rolled triangle loop.
 
 Navmesh is separate: sqlite first, then a background rebake of cracked Recast tiles ([phase 44](phase44-navmesh-patch.md)). Straight wander dests use Detour ([phase 43](phase43-navmesh-path.md)). Pathgrid wander stays on F5 edges ([phase 41](phase41-pathgrid-wander.md)).
 
@@ -25,7 +25,7 @@ Navmesh is separate: sqlite first, then a background rebake of cracked Recast ti
 Bullet is the **library**. OpenMW does not write a physics engine. `mwphysics` is a few thousand lines of glue:
 
 - A Bullet collision world holds heightfields (TES 65×65 land) and triangle meshes from NIFs (`RootCollisionNode` if it has children, else rendered tris; `NC` extra = no collide; empty collision node / `NCC` still hits the camera).
-- The player and actors are **not** rigid bodies. `MovementSolver` does kinematic traces: convex sweep the capsule, slide, step up, snap down. Same idea as today’s `CollisionWorld.move`, with Bullet answering “what did I hit?”
+- The player and actors are **not** rigid bodies. `MovementSolver` does kinematic traces: convex sweep the capsule, slide, step up, snap down. Same idea as `BulletWorld.move`, with Bullet answering “what did I hit?”
 - Actors are capsules on **Actor** + **World** + **HeightMap**. The player does not collide with actors in the default camera walk (that is a later flag / occupancy).
 - Projectiles and contact tests sit on the same world. `mtphysics` runs steps off the main thread. Swimming is a different move mode.
 
@@ -33,9 +33,7 @@ libGDX already ships this library as **`gdx-bullet`** (JNI natives next to the L
 
 ## Frozen custom tracer
 
-`CollisionWorld` stays for Recast object tris until **2.2**. Do **not** fix, extend, or re-tune it. No new features on that path.
-
-Player WASD, spawn snap, Dump `onGround` / `floorY` / `ceilY`, and ceilings go through Bullet.
+Deleted in **2.2**. Recast object input is `CollisionTris`. Player WASD, NPC feet, spawn snap, Dump `onGround` / `floorY` / `ceilY`, and ceilings go through Bullet.
 
 ## Why it is large
 
@@ -99,11 +97,11 @@ Spec: [phase48-bullet-walk.md](phase48-bullet-walk.md). **Working.**
 
 **Town test:** Census `DODT`. Dirt, docks, dock undersides, hills, Census rafters, Addamasartus roof. Same pass/fail as Phase 36. `glError=0`. F5 / F6 / F7 / `src=db` / `patch=` / Detour wander unchanged. NPCs may still clip shacks and float on bilinear land.
 
-When **2.1** is **working**, do not patch `CollisionWorld`; next is **2.2**.
+When **2.2** is **working**, next is **3** (live door / chest poses). Do not patch a deleted tracer.
 
 ### 2. Delete the custom tracer, port NPCs to Bullet (several specs)
 
-**(1)** shipped. Two worlds still exist on purpose until **2.2**.
+**(1)** shipped. One Bullet world; Recast gather is `CollisionTris`.
 
 #### 2.1 NPC floor from Bullet
 
@@ -117,20 +115,22 @@ Spec: [phase49-npc-bullet-stick.md](phase49-npc-bullet-stick.md). **Working.**
 
 #### 2.2 Delete `CollisionWorld`
 
-- [ ] Recast `gatherTesRecast` object tris come from `CollisionMesh` placements (or the Bullet mesh verts — same triangles). No Recast config or patch logic changes.
-- [ ] Delete `CollisionWorld` (triangle loop, `fits`, interned-float traces, `landHeight`, unused `move`). Constants live on `BulletWorld`. No leftover dual path.
-- [ ] Still no actor-actor unless that is explicitly in the spec.
+Spec: [phase50-delete-tracer.md](phase50-delete-tracer.md). **Working.**
+
+- [x] Recast `gatherTesRecast` object tris come from `CollisionMesh` placements (or the Bullet mesh verts — same triangles). No Recast config or patch logic changes.
+- [x] Delete `CollisionWorld` (triangle loop, `fits`, interned-float traces, `landHeight`, unused `move`). Constants live on `BulletWorld`. No leftover dual path.
+- [x] Still no actor-actor unless that is explicitly in the spec.
 
 **Town test:** player and NPC floors unchanged from **2.1**. Recast `src=db` and patch still work. Chair still flies.
 
-Until **2.2** ships, do not invest in the old tracer. Actor vs shack collision is **4**, not this row.
+**2** shipped. Actor vs shack collision is **4**, not a tracer bugfix.
 
 ### 3. Live object poses
 
 - [ ] Door swing and chest lid update the Bullet mesh transform (or rebuild that one body). **E** that opens a hide door actually blocks the camera.
 - [ ] Taken world items leave the collision world when the mesh unparents.
 
-Clipping a swung door is expected until this row. Update **Bullet** only. Do not teach `CollisionWorld` about swinging doors.
+Clipping a swung door is expected until this row. Update **Bullet** only.
 
 ### 4. Actor vs world (shacks, not only land stick)
 
@@ -174,4 +174,5 @@ Clipping a swung door is expected until this row. Update **Bullet** only. Do not
 | `btCollisionWorld` convex sweep / ray | gdx-bullet world | rewrite |
 | `MovementSolver::move` | player move on that world | rewrite |
 | `BulletNifLoader` | `CollisionMesh` + `BulletWorld` World bodies | rewrite |
-| `CollisionWorld` triangle tracer | **delete** after **2.2**; Recast gather until then | — |
+| Recast object input | `CollisionTris` from `CollisionMesh` placements | rewrite |
+| `CollisionWorld` triangle tracer | **deleted** | — |

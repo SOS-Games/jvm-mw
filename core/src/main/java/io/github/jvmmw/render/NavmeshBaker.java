@@ -20,7 +20,7 @@ import java.util.Optional;
 /**
  * Walkable Recast surface for the loaded cells. Prefers OpenMW’s navmesh.db
  * (umo) and keeps tiles when the 5×5 moves. If that file is missing, bakes
- * the center cell from land and shack collision. Cracked sqlite tiles are
+ * the center cell from land and CollisionMesh shack tris. Cracked sqlite tiles are
  * rebaked one Recast square at a time in TES space so they join the live
  * mesh. Straight wander dests query the same tiles through Detour.
  */
@@ -51,12 +51,12 @@ public final class NavmeshBaker {
     private NavmeshBaker() {
     }
 
-    public static Result bake(CollisionWorld collision, EsmFile.LoadedCell cell) {
+    public static Result bake(CollisionTris collision, EsmFile.LoadedCell cell) {
         NavmeshCache.request(cell, collision);
         return new Result();
     }
 
-    static List<NavmeshCache.Tile> bakeRuntime(CollisionWorld collision, EsmFile.LoadedCell cell) {
+    static List<NavmeshCache.Tile> bakeRuntime(CollisionTris collision, EsmFile.LoadedCell cell) {
         List<NavmeshCache.Tile> out = new ArrayList<>();
         if (collision == null || cell == null) {
             return out;
@@ -151,7 +151,7 @@ public final class NavmeshBaker {
      * One Recast tile in sqlite space (TES x/height/y). Used to fill a cracked
      * db tile without rebaking the rest of Town.
      */
-    public static NavmeshCache.Tile bakeRecastTile(CollisionWorld collision, EsmFile.LoadedCell cell, int tx, int ty) {
+    public static NavmeshCache.Tile bakeRecastTile(CollisionTris collision, EsmFile.LoadedCell cell, int tx, int ty) {
         return bakeRecastTile(gatherTesRecast(collision, cell, tx, ty), tx, ty);
     }
 
@@ -220,7 +220,7 @@ public final class NavmeshBaker {
     }
 
     /** Recast verts (x, height, tesY) * scale for one tile plus Recast border. */
-    public static float[] gatherTesRecast(CollisionWorld collision, EsmFile.LoadedCell cell, int tx, int ty) {
+    public static float[] gatherTesRecast(CollisionTris collision, EsmFile.LoadedCell cell, int tx, int ty) {
         float tileTes = TILE_SIZE * CELL_SIZE / SCALE;
         float pad = BORDER * CELL_SIZE / SCALE;
         float minX = tx * tileTes - pad;

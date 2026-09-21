@@ -31,7 +31,7 @@ public final class BulletColliderDebug {
     private final Matrix4 world = new Matrix4();
     private final Matrix4 invCell = new Matrix4();
 
-    public void attach(SceneNode cellRoot, List<CollisionWorld.Pending> pending, List<LandRecord> lands) {
+    public void attach(SceneNode cellRoot, List<CollisionMesh.Pending> pending, List<LandRecord> lands) {
         dispose();
         if (cellRoot == null) {
             return;
@@ -45,7 +45,7 @@ public final class BulletColliderDebug {
             }
         }
         if (pending != null) {
-            for (CollisionWorld.Pending pnd : pending) {
+            for (CollisionMesh.Pending pnd : pending) {
                 addWorldTris(pnd, worldTris);
             }
         }
@@ -116,7 +116,7 @@ public final class BulletColliderDebug {
         out.set(tesX, land.height(x, y), -tesY);
     }
 
-    private void addWorldTris(CollisionWorld.Pending pnd, List<float[]> out) {
+    private void addWorldTris(CollisionMesh.Pending pnd, List<float[]> out) {
         if (pnd.mesh == null || pnd.mesh.isEmpty() || pnd.node == null) {
             return;
         }
