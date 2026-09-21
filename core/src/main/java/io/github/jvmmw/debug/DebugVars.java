@@ -24,6 +24,12 @@ public final class DebugVars {
     public static final float wanderSpeed = f("wanderSpeed", 3f);
 
     /**
+     * Creature wander move speed. Same units as wanderSpeed. NPCs keep
+     * wanderSpeed.
+     */
+    public static final float creaWanderSpeed = f("creaWanderSpeed", 9f);
+
+    /**
      * Pivot degrees per second. OpenMW is 900. Does not follow wanderSpeed.
      */
     public static final float wanderTurn = f("wanderTurn", 270f);
@@ -44,6 +50,7 @@ public final class DebugVars {
 
     public static void appendDump(StringBuilder sb) {
         sb.append("debug.wanderSpeed=").append(wanderSpeed)
+            .append(" creaWanderSpeed=").append(creaWanderSpeed)
             .append(" wanderTurn=").append(wanderTurn)
             .append(" wanderRadius=").append(wanderRadius)
             .append(" nodeWanderRadius=").append(nodeWanderRadius)
@@ -52,8 +59,8 @@ public final class DebugVars {
     }
 
     public static String hudLine() {
-        return String.format(Locale.US, "debug spd=%.2g turn=%.2g r=%.0f node=%.0f freq=%.2g",
-            wanderSpeed, wanderTurn, wanderRadius, nodeWanderRadius, wanderFrequency);
+        return String.format(Locale.US, "debug spd=%.2g crea=%.2g turn=%.2g r=%.0f node=%.0f freq=%.2g",
+            wanderSpeed, creaWanderSpeed, wanderTurn, wanderRadius, nodeWanderRadius, wanderFrequency);
     }
 
     private static float f(String name, float fallback) {

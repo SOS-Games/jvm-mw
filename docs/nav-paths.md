@@ -8,7 +8,7 @@ Align with `components/esm3/loadpgrd.*`, `apps/openmw/mwmechanics/pathgrid.*` (`
 
 ## What Town has now
 
-Wander uses the cell pathgrid when the reachable cluster has three or more nodes ([phase 41](phase41-pathgrid-wander.md)); otherwise a random TES XY near spawn ([phase 38](phase38-cheap-wander.md)). Walk cycles play while they move ([phase 39](phase39-walk-cycle.md)). They clip shacks, docks, and each other. Pathgrids parse, dump, and draw ([phase 40](phase40-pathgrid-parse.md)); F5 toggles spheres and edges.
+Wander uses the cell pathgrid when the reachable cluster has three or more nodes ([phase 41](phase41-pathgrid-wander.md)); otherwise a random TES XY near spawn ([phase 38](phase38-cheap-wander.md)) walked along Detour on the F6 carpet when the mesh is ready ([phase 43](phase43-navmesh-path.md)). Walk cycles play while they move ([phase 39](phase39-walk-cycle.md)). They clip each other. Pathgrids parse, dump, and draw ([phase 40](phase40-pathgrid-parse.md)); F5 toggles spheres and edges. Recast overlay is [phase 42](phase42-navmesh-bake.md).
 
 Vanilla wander is not that fallback. Bethesda authored a **pathgrid** per cell: nodes and edges NPCs are allowed to walk. OpenMW follows those nodes when the cell has at least two points; only then does it use `wanderNearStart`.
 
@@ -20,7 +20,7 @@ Vanilla wander is not that fallback. Bethesda authored a **pathgrid** per cell: 
 
 `AiWander::fillAllowedPositions`: closest node to spawn, keep nodes with distance² ≤ wander² that `isPointConnected`. Need **two** points or wander along the grid is off. One node in range adds spawn plus points partway along that node’s edges. Pure water creatures ignore the grid (it rarely has water). Then A* to a random allowed node and walk the polyline (`PathFinder`).
 
-**Detour navmesh** is OpenMW’s extra layer: Recast bake from collision, then `buildPathByNavMesh` when there is no useful grid path (or for travel that leaves the grid). Vanilla Morrowind never had this. First split is bake + F6 draw ([phase 42](phase42-navmesh-bake.md)); queries and wander-on-mesh stay later.
+**Detour navmesh** is OpenMW’s extra layer: Recast bake from collision, then `buildPathByNavMesh` when there is no useful grid path (or for travel that leaves the grid). Vanilla Morrowind never had this. Bake + F6 is [phase 42](phase42-navmesh-bake.md); straight-dest Detour is [phase 43](phase43-navmesh-path.md). Detour-first wander stays later.
 
 ## Why it is large
 
@@ -81,10 +81,10 @@ Travel, Follow, Escort, Activate packages stay [AI packages](big-topics.md). Thi
 
 ### 6. Detour navmesh
 
-- [ ] **Bake + draw (first split):** Recast from land + collision, or OpenMW `navmesh.db` for the **loaded 5×5**. Overlay walkable polys. **F6**. Actors still pathgrid-wander. Spec: [phase42-navmesh-bake.md](phase42-navmesh-bake.md).
+- [x] **Bake + draw (first split):** Recast from land + collision, or OpenMW `navmesh.db` for the **loaded 5×5**. Overlay walkable polys. **F6**. Actors still pathgrid-wander. Spec: [phase42-navmesh-bake.md](phase42-navmesh-bake.md). **Working.**
 - [ ] Tile cache as the 5×5 moves / writing our own `navmeshdb`.
-- [ ] `buildPathByNavMesh` when the pathgrid cannot connect start to dest (OpenMW `buildPath` tries both).
-- [ ] Water swim surface, off-mesh pathgrid links, per-actor agent sizes.
+- [x] **`buildPathByNavMesh` (this split):** Detour polyline for wander dests that today go straight. Pathgrid wander stays when the graph is usable. Spec: [phase43-navmesh-path.md](phase43-navmesh-path.md). **Working.**
+- [ ] Detour-first wander (OpenMW `buildPath` order), water swim surface, off-mesh pathgrid links, per-actor agent sizes.
 
 Pathfinding stays last. Recast/Detour as libraries is allowed; do not vendor a second physics engine. `ModelBatch` is not a nav concern.
 

@@ -6,6 +6,9 @@ import io.github.jvmmw.resource.TestData;
 
 import net.jpountz.lz4.LZ4Factory;
 
+import org.recast4j.recast.PolyMesh;
+import org.recast4j.recast.PolyMeshDetail;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
@@ -296,10 +299,12 @@ public final class NavmeshDb {
         b.getInt();
         b.getFloat();
         b.getFloat();
-        int npolysMesh = skipPolyMesh(b);
-        if (npolysMesh < 0) {
+        PolyMesh mesh = readPolyMesh(b);
+        if (mesh == null) {
             return false;
         }
+        out.mesh = mesh;
+        int npolysMesh = mesh.npolys;
         if (b.remaining() < 4) {
             return false;
         }
@@ -356,32 +361,67 @@ public final class NavmeshDb {
         if (added <= 0) {
             return false;
         }
+        PolyMeshDetail detail = new PolyMeshDetail();
+        detail.nmeshes = nmeshes;
+        detail.meshes = meshes;
+        detail.nverts = nverts;
+        detail.verts = verts;
+        detail.ntris = ntris;
+        detail.tris = tris;
+        out.detail = detail;
+        out.tesSpace = true;
         out.polys = npolysMesh > 0 ? npolysMesh : 1;
         return true;
     }
 
-    private static int skipPolyMesh(ByteBuffer b) {
+    private static PolyMesh readPolyMesh(ByteBuffer b) {
         if (b.remaining() < 4 * 4 + 12 + 12 + 4 + 4 + 4 + 4) {
-            return -1;
+            return null;
         }
-        int nverts = b.getInt();
-        int npolys = b.getInt();
-        int maxpolys = b.getInt();
-        int nvp = b.getInt();
-        if (nverts < 0 || npolys < 0 || maxpolys < 0 || nvp < 0) {
-            return -1;
+        PolyMesh mesh = new PolyMesh();
+        mesh.nverts = b.getInt();
+        mesh.npolys = b.getInt();
+        mesh.maxpolys = b.getInt();
+        mesh.nvp = b.getInt();
+        if (mesh.nverts < 0 || mesh.npolys < 0 || mesh.maxpolys < 0 || mesh.nvp < 0) {
+            return null;
         }
-        b.position(b.position() + 24);
-        b.getFloat();
-        b.getFloat();
-        b.getInt();
-        b.getFloat();
-        long bytes = 2L * 3 * nverts + 2L * 2 * (long) maxpolys * nvp + 2L * maxpolys + 2L * npolys + maxpolys;
-        if (nverts > 1_000_000 || maxpolys > 1_000_000 || bytes > b.remaining()) {
-            return -1;
+        mesh.bmin[0] = b.getFloat();
+        mesh.bmin[1] = b.getFloat();
+        mesh.bmin[2] = b.getFloat();
+        mesh.bmax[0] = b.getFloat();
+        mesh.bmax[1] = b.getFloat();
+        mesh.bmax[2] = b.getFloat();
+        mesh.cs = b.getFloat();
+        mesh.ch = b.getFloat();
+        mesh.borderSize = b.getInt();
+        mesh.maxEdgeError = b.getFloat();
+        long bytes = 2L * 3 * mesh.nverts + 2L * 2 * (long) mesh.maxpolys * mesh.nvp
+            + 2L * mesh.maxpolys + 2L * mesh.npolys + mesh.maxpolys;
+        if (mesh.nverts > 1_000_000 || mesh.maxpolys > 1_000_000 || bytes > b.remaining()) {
+            return null;
         }
-        b.position(b.position() + (int) bytes);
-        return npolys;
+        mesh.verts = new int[3 * mesh.nverts];
+        for (int i = 0; i < mesh.verts.length; i++) {
+            mesh.verts[i] = b.getShort() & 0xffff;
+        }
+        mesh.polys = new int[2 * mesh.maxpolys * mesh.nvp];
+        for (int i = 0; i < mesh.polys.length; i++) {
+            mesh.polys[i] = b.getShort() & 0xffff;
+        }
+        mesh.regs = new int[mesh.maxpolys];
+        for (int i = 0; i < mesh.regs.length; i++) {
+            mesh.regs[i] = b.getShort() & 0xffff;
+        }
+        mesh.flags = new int[mesh.npolys];
+        for (int i = 0; i < mesh.flags.length; i++) {
+            mesh.flags[i] = b.getShort() & 0xffff;
+        }
+        mesh.areas = new int[mesh.maxpolys];
+        for (int i = 0; i < mesh.areas.length; i++) {
+            mesh.areas[i] = b.get() & 0xff;
+        }
+        return mesh;
     }
 
     private static byte[] lz4(byte[] blob) {

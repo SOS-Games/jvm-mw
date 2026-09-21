@@ -3,6 +3,7 @@ eclipse.project.name = appName + '-core'
 dependencies {
   api "com.badlogicgames.gdx:gdx:$gdxVersion"
   implementation "org.recast4j:recast:1.5.7"
+  implementation "org.recast4j:detour:1.5.7"
   implementation "org.xerial:sqlite-jdbc:3.47.1.0"
   implementation "org.lz4:lz4-java:1.8.0"
 }

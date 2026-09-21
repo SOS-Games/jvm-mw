@@ -19,18 +19,31 @@ import java.util.Optional;
 /**
  * Walkable Recast surface for the loaded cells. Prefers OpenMW’s navmesh.db
  * (umo) and keeps tiles when the 5×5 moves. If that file is missing, bakes
- * the center cell from land and shack collision. Not used for wandering yet.
+ * the center cell from land and shack collision. Straight wander dests
+ * query the same tiles through Detour.
  */
 public final class NavmeshBaker {
     public static final float SCALE = 0.029411764705882353f;
+    static final float HALF_X = 29.279995f;
+    static final float HALF_Y = 28.479998f;
+    static final float HALF_Z = 66.5f;
     private static final float CELL_SIZE = 0.2f;
     private static final float CELL_HEIGHT = 0.2f;
     private static final int TILE_SIZE = 128;
     private static final int BORDER = 16;
-    private static final float HALF_X = 29.279995f;
-    private static final float HALF_Y = 28.479998f;
-    private static final float HALF_Z = 66.5f;
     private static final float LIFT = 6f;
+
+    static float walkableHeight() {
+        return 2f * HALF_Z * SCALE;
+    }
+
+    static float walkableRadius() {
+        return (float) (Math.max(HALF_X, HALF_Y) * Math.sqrt(2.0) * SCALE);
+    }
+
+    static float walkableClimb() {
+        return 34f * SCALE;
+    }
 
     private NavmeshBaker() {
     }
@@ -40,8 +53,8 @@ public final class NavmeshBaker {
         return new Result();
     }
 
-    static Result bakeRuntime(CollisionWorld collision, EsmFile.LoadedCell cell) {
-        Result out = new Result();
+    static List<NavmeshCache.Tile> bakeRuntime(CollisionWorld collision, EsmFile.LoadedCell cell) {
+        List<NavmeshCache.Tile> out = new ArrayList<>();
         if (collision == null || cell == null) {
             return out;
         }
@@ -89,45 +102,52 @@ public final class NavmeshBaker {
                 continue;
             }
             PolyMesh mesh = tile.getMesh();
-            if (mesh != null && mesh.npolys > 0) {
-                out.tiles++;
-                out.polys += mesh.npolys;
-            }
             PolyMeshDetail detail = tile.getMeshDetail();
-            if (detail == null || detail.ntris <= 0) {
-                continue;
+            NavmeshCache.Tile packed = new NavmeshCache.Tile();
+            packed.x = tile.tileX;
+            packed.y = tile.tileZ;
+            packed.mesh = mesh;
+            packed.detail = detail;
+            packed.tesSpace = false;
+            if (mesh != null && mesh.npolys > 0) {
+                packed.polys = mesh.npolys;
             }
-            for (int m = 0; m < detail.nmeshes; m++) {
-                int vertBase = detail.meshes[m * 4];
-                int triBase = detail.meshes[m * 4 + 2];
-                int triCount = detail.meshes[m * 4 + 3];
-                for (int t = 0; t < triCount; t++) {
-                    int to = (triBase + t) * 4;
-                    float[] tri = new float[9];
-                    for (int k = 0; k < 3; k++) {
-                        int vi = vertBase + detail.tris[to + k];
-                        float glX = detail.verts[vi * 3] * inv;
-                        float glY = detail.verts[vi * 3 + 1] * inv;
-                        float glZ = detail.verts[vi * 3 + 2] * inv;
-                        int o = k * 3;
-                        tri[o] = glX;
-                        tri[o + 1] = -glZ;
-                        tri[o + 2] = glY + LIFT;
+            if (detail != null && detail.ntris > 0) {
+                for (int m = 0; m < detail.nmeshes; m++) {
+                    int vertBase = detail.meshes[m * 4];
+                    int triBase = detail.meshes[m * 4 + 2];
+                    int triCount = detail.meshes[m * 4 + 3];
+                    for (int t = 0; t < triCount; t++) {
+                        int to = (triBase + t) * 4;
+                        float[] tri = new float[9];
+                        for (int k = 0; k < 3; k++) {
+                            int vi = vertBase + detail.tris[to + k];
+                            float glX = detail.verts[vi * 3] * inv;
+                            float glY = detail.verts[vi * 3 + 1] * inv;
+                            float glZ = detail.verts[vi * 3 + 2] * inv;
+                            int o = k * 3;
+                            tri[o] = glX;
+                            tri[o + 1] = -glZ;
+                            tri[o + 2] = glY + LIFT;
+                        }
+                        packed.tris.add(tri);
                     }
-                    out.tris.add(tri);
                 }
             }
-        }
-        if (out.polys > 0) {
-            out.source = "bake";
+            if (packed.polys > 0 || !packed.tris.isEmpty()) {
+                if (packed.polys <= 0) {
+                    packed.polys = 1;
+                }
+                out.add(packed);
+            }
         }
         return out;
     }
 
     private static RecastConfig recastConfig() {
-        float height = 2f * HALF_Z * SCALE;
-        float radius = (float) (Math.max(HALF_X, HALF_Y) * Math.sqrt(2.0) * SCALE);
-        float climb = 34f * SCALE;
+        float height = walkableHeight();
+        float radius = walkableRadius();
+        float climb = walkableClimb();
         return new RecastConfig(true, TILE_SIZE, TILE_SIZE, BORDER, PartitionType.WATERSHED, CELL_SIZE, CELL_HEIGHT,
             46f, true, true, true, height, radius, climb, 64 * CELL_SIZE * CELL_SIZE, 400 * CELL_SIZE * CELL_SIZE,
             12f, 1.3f, 6, true, 6f, 1f, new AreaModification(63));

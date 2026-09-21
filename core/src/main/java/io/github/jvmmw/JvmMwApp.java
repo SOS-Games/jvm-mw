@@ -625,6 +625,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
             long swapStart = System.nanoTime();
             SceneNode nextRoot = walkBuilder.end();
+            walkBuilder.takeWanderFrom(cellBuilder);
             profiler.addWalkGpuNs(System.nanoTime() - swapStart);
             CellSceneBuilder old = cellBuilder;
             cellBuilder = walkBuilder;
@@ -1201,7 +1202,8 @@ public final class JvmMwApp extends ApplicationAdapter {
             }
             snapshotBuf.append("nav=").append(cellBuilder.navPolys)
                 .append(" tiles=").append(cellBuilder.navTiles)
-                .append(" src=").append(cellBuilder.navSource).append('\n');
+                .append(" src=").append(cellBuilder.navSource)
+                .append(" navPath=").append(cellBuilder.navPath).append('\n');
         }
         snapshotBuf.append("glError=").append(lastGlError).append('\n');
         profiler.appendDump(snapshotBuf);

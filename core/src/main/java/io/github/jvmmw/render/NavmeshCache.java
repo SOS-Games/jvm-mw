@@ -2,6 +2,9 @@ package io.github.jvmmw.render;
 
 import io.github.jvmmw.esm.EsmFile;
 
+import org.recast4j.recast.PolyMesh;
+import org.recast4j.recast.PolyMeshDetail;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -14,7 +17,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Keeps decoded OpenMW navmesh tiles around when the walk grid moves.
  * Sqlite and Recast run on one worker; the overlay only uploads tiles we
- * do not already have.
+ * do not already have. Detour paths use those same tiles once the worker
+ * finishes a batch.
  */
 public final class NavmeshCache {
     private static final ConcurrentHashMap<String, ConcurrentHashMap<Long, Boolean>> have
@@ -87,12 +91,7 @@ public final class NavmeshCache {
             interiorsDone.add(world);
         }
         if (added == 0 && tiles(world) == 0) {
-            NavmeshBaker.Result baked = NavmeshBaker.bakeRuntime(collision, cell);
-            if (baked.polys > 0) {
-                Tile tile = new Tile();
-                tile.world = world;
-                tile.tris.addAll(baked.tris);
-                tile.polys = baked.polys;
+            for (Tile tile : NavmeshBaker.bakeRuntime(collision, cell)) {
                 put(world, tile, "bake");
             }
         }
@@ -117,6 +116,7 @@ public final class NavmeshCache {
         tileCounts.computeIfAbsent(world, w -> new AtomicInteger()).incrementAndGet();
         polyCounts.computeIfAbsent(world, w -> new AtomicInteger()).addAndGet(Math.max(1, tile.polys));
         sources.merge(world, origin, (a, b) -> "db".equals(a) || "db".equals(b) ? "db" : b);
+        NavmeshQuery.addTile(world, tile);
         ready.computeIfAbsent(world, w -> new ConcurrentLinkedQueue<>()).add(tile);
     }
 
@@ -129,6 +129,9 @@ public final class NavmeshCache {
         public int x;
         public int y;
         public int polys;
+        public boolean tesSpace = true;
+        public PolyMesh mesh;
+        public PolyMeshDetail detail;
         public final List<float[]> tris = new ArrayList<>();
     }
 }

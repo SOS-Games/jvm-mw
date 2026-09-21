@@ -30,10 +30,12 @@ import java.util.TreeMap;
  * roll a creature at chargen level and stand it there. Actors with a wander
  * radius shuffle around that spawn along the cell’s pathgrid when it has
  * one. Walking outdoors builds the next grid in the background, then swaps
- * it in. F5 shows the cell’s pathgrid as spheres and lines. F6 shows the
+ * it in. Wanderers in cells that stay loaded keep where they stood; only
+ * the new ring starts at spawn. F5 shows the cell’s pathgrid as spheres and lines. F6 shows the
  * Recast walkable carpet for the loaded cells (OpenMW navmesh.db when present).
  * Sqlite and Recast run on a worker. Already-fetched tiles stay when the
- * walk grid moves; only the new ring is loaded.
+ * walk grid moves; only the new ring is loaded. Random wander dests follow
+ * that carpet when Detour has a path; pathgrid NPCs stay on F5.
  *
  * Refs with no mesh are skipped. Invisible markers (prison, divine, temple,
  * north) stay out.
@@ -54,6 +56,7 @@ public final class CellSceneBuilder {
     public int navPolys;
     public int navTiles;
     public String navSource = "none";
+    public int navPath;
     public String cellName = "";
     public final CellLighting lighting = new CellLighting();
     public final DoorSwing doors = new DoorSwing();
@@ -93,6 +96,8 @@ public final class CellSceneBuilder {
         cancelNavmesh();
         navWorld = NavmeshDb.worldspace(cell);
         navmeshDebug = NavmeshDebug.of(navWorld);
+        mannequin.setNavWorld(navWorld);
+        navPath = 0;
         navPolys = NavmeshCache.polys(navWorld);
         navTiles = NavmeshCache.tiles(navWorld);
         navSource = navTiles > 0 ? "db" : "none";
@@ -190,9 +195,18 @@ public final class CellSceneBuilder {
         return buildingRoot;
     }
 
+    /** Overlapping NPCs/creatures keep the live TES pose; new ring cells spawn as placed. */
+    public void takeWanderFrom(CellSceneBuilder live) {
+        if (live == null || live == this) {
+            return;
+        }
+        mannequin.copyWanderFrom(live.mannequin, cell, collision);
+    }
+
     public void update(float dt) {
         pumpNavmesh();
         mannequin.update(dt, collision);
+        navPath = NavmeshQuery.lastPath(navWorld);
         waterMesh.update(dt);
         doors.process(dt);
         containers.process(dt);
@@ -225,6 +239,7 @@ public final class CellSceneBuilder {
         navPolys = NavmeshCache.polys(navWorld);
         navTiles = NavmeshCache.tiles(navWorld);
         navSource = NavmeshCache.source(navWorld);
+        navPath = NavmeshQuery.lastPath(navWorld);
     }
 
     private void cancelNavmesh() {

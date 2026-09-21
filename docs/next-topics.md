@@ -6,11 +6,7 @@ Big holes (occlusion, combat, shadows, full UI, …) live in [big-topics.md](big
 
 ## Nav
 
-Split from [nav-paths.md](nav-paths.md) **6**. Leftover (pathfinding, 5×5 tile cache) stays there.
-
-| Topic | Why |
-| --- | --- |
-| **Bake Recast overlay** | Pathgrid is drawn; Recast walkable polys are not. Spec: [phase42-navmesh-bake.md](phase42-navmesh-bake.md). Loaded 5×5 from `navmesh.db`, worker thread. Do not pathfind yet. |
+Leftover of [nav-paths.md](nav-paths.md) **6** (Detour-first wander, tile-count cap, water) is not a small next slice until you pick it.
 
 ## Strong next slices
 

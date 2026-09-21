@@ -8,10 +8,14 @@ import io.github.jvmmw.esm.EsmNpc;
 import io.github.jvmmw.esm.EsmObject;
 import io.github.jvmmw.esm.EsmPathgrid;
 import io.github.jvmmw.esm.EsmReader;
+import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.nif.NifFile;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.LandMesh;
+import io.github.jvmmw.render.NavmeshCache;
+import io.github.jvmmw.render.NavmeshDb;
+import io.github.jvmmw.render.NavmeshQuery;
 import io.github.jvmmw.render.NpcMannequin;
 import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
@@ -32,6 +36,7 @@ import java.util.Random;
  * arrive. exterior — the 21-cell walk grid. npc / crea / levc / kf — how a
  * person, creature, or wilderness spawn list is put together. pgrd — that
  * cell’s walk-graph nodes. navdb — OpenMW navmesh.db tiles vs cell edges.
+ * navpath — Detour corners from spawn to a point east of it.
  */
 public final class DebugCli {
     private DebugCli() {
@@ -54,6 +59,7 @@ public final class DebugCli {
             case "exterior" -> exterior(require(args, 1, "exterior <gridX> <gridY>"));
             case "pgrd" -> pgrd(require(args, 1, "pgrd <interior name> | <gridX> <gridY>"));
             case "navdb" -> NavmeshDbDump.run(args.length > 1 ? require(args, 1, "navdb") : "");
+            case "navpath" -> navpath(args.length > 1 ? require(args, 1, "navpath") : "-2 -9");
             default -> {
                 System.err.println("Unknown command: " + args[0]);
                 System.out.print(help());
@@ -78,6 +84,7 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="exterior -2 -9"
             gradlew.bat :core:debugCli --args="pgrd -2 -9"
             gradlew.bat :core:debugCli --args="navdb -2 -9"
+            gradlew.bat :core:debugCli --args="navpath -2 -9"
 
             nif        Node tree + local transforms. VFS path extracts from BSA into testdata/.
             cell       One interior: fog, spawn, doors, NPCs. Kit STAT lines include world AABB.
@@ -95,6 +102,8 @@ public final class DebugCli {
             navdb      OpenMW navmesh.db Recast tiles vs TES cell edges. Default Town (-2,-9) 5x5.
                        Writes build/navdb-*.png (green tris, yellow cell grid, red missing tiles,
                        magenta uncovered edge samples). verdict= says if the db already has the cracks.
+            navpath    Detour polyline from inbound spawn 512 TES east. Interior name or exterior grid.
+                       Prints db= tiles= path= and wp= TES corners. path=0 if the db is missing.
 
             Viewer: HUD Dump or F3 copies camera/fog/perf to the clipboard and writes build/debug-snapshot.txt.
             F4 toggles the fps overlay. Wait for overlay n=60 before treating fps as settled. Headless CLI has no fps.
@@ -445,6 +454,50 @@ public final class DebugCli {
         }
         for (EsmPathgrid.Edge e : grid.edges) {
             System.out.println("edge=" + e.v0 + " " + e.v1);
+        }
+    }
+
+    private static void navpath(String spec) throws Exception {
+        Path db = NavmeshDb.dbFile();
+        System.out.println("db=" + db.toAbsolutePath());
+        String[] parts = spec == null ? new String[0] : spec.trim().split("[,\\s]+");
+        if (parts.length == 1 && parts[0].isEmpty()) {
+            parts = new String[0];
+        }
+        EsmFile.LoadedCell cell;
+        NavmeshDb.Query q;
+        if (parts.length >= 2 && isInt(parts[0]) && isInt(parts[1])) {
+            int gx = Integer.parseInt(parts[0]);
+            int gy = Integer.parseInt(parts[1]);
+            cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), gx, gy);
+            int r = EsmFile.CELL_GRID_RADIUS;
+            q = NavmeshDb.queryExterior(gx - r, gy - r, gx + r, gy + r);
+        } else if (parts.length >= 1) {
+            cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), String.join(" ", parts));
+            q = NavmeshDb.queryInterior(cell.name.toLowerCase(Locale.ROOT));
+        } else {
+            cell = EsmFile.loadExterior(EsmReader.open(TestData.esmPath()), TestData.TOWN_GRID_X, TestData.TOWN_GRID_Y);
+            int r = EsmFile.CELL_GRID_RADIUS;
+            q = NavmeshDb.queryExterior(TestData.TOWN_GRID_X - r, TestData.TOWN_GRID_Y - r,
+                TestData.TOWN_GRID_X + r, TestData.TOWN_GRID_Y + r);
+        }
+        System.out.println("tiles=" + q.tiles.size());
+        if (q.tiles.isEmpty()) {
+            System.out.println("path=0");
+            return;
+        }
+        for (NavmeshCache.Tile tile : q.tiles) {
+            NavmeshQuery.addTile(q.world, tile);
+        }
+        float[] start = cell.hasSpawn ? cell.spawnPos : new float[] {
+            cell.gridX * (float) LandRecord.CELL_SIZE + LandRecord.CELL_SIZE * 0.5f,
+            cell.gridY * (float) LandRecord.CELL_SIZE + LandRecord.CELL_SIZE * 0.5f, 0f
+        };
+        List<float[]> path = NavmeshQuery.find(q.world, start[0], start[1], start[2],
+            start[0] + 512f, start[1], start[2]);
+        System.out.println("path=" + path.size());
+        for (float[] wp : path) {
+            System.out.println("wp=" + wp[0] + " " + wp[1] + " " + wp[2]);
         }
     }
 

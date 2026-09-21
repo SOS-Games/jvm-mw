@@ -43,7 +43,8 @@ import java.util.Random;
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
  * A wander radius greater than 0 walks them around spawn. If that cell has
  * a usable pathgrid they follow its edges (the F5 spheres); otherwise they
- * still slide a straight line. While they move the same .kf plays
+ * follow the F6 carpet around shacks when Detour has a path, or a straight
+ * line if the mesh is still loading. While they move the same .kf plays
  * walkforward, then idle again when they stop. They turn toward the next
  * point instead of snapping yaw. Walk clips shove Bip01 (or root bone)
  * forward — we zero that XY so the loop does not yank them back each
@@ -149,6 +150,7 @@ public final class NpcMannequin {
     private final List<NpcActor> actors = new ArrayList<>();
     private final Map<Long, PathgridGraph> graphs = new HashMap<>();
     private final Random wanderRng = new Random();
+    private String navWorld = "";
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
     private final Vector3 tmpS = new Vector3();
@@ -162,6 +164,10 @@ public final class NpcMannequin {
         this.testdata = testdata;
     }
 
+    public void setNavWorld(String world) {
+        navWorld = world == null ? "" : world;
+    }
+
     public void dispose() {
         for (MeshGpu gpu : ownedGpus) {
             gpu.dispose();
@@ -171,6 +177,49 @@ public final class NpcMannequin {
         kfs.clear();
         actors.clear();
         graphs.clear();
+    }
+
+    /** Keep overlapping wanderers on their last TES pose when the 5×5 rebuilds. */
+    void copyWanderFrom(NpcMannequin live, EsmFile.LoadedCell cell, CollisionWorld collision) {
+        if (live == null || live == this) {
+            return;
+        }
+        Map<String, NpcActor> byKey = new HashMap<>();
+        for (NpcActor actor : actors) {
+            if (!actor.refKey.isEmpty()) {
+                byKey.put(actor.refKey, actor);
+            }
+        }
+        for (NpcActor src : live.actors) {
+            if (src.refKey.isEmpty()) {
+                continue;
+            }
+            NpcActor dst = byKey.get(src.refKey);
+            if (dst == null) {
+                continue;
+            }
+            dst.tesPos[0] = src.tesPos[0];
+            dst.tesPos[1] = src.tesPos[1];
+            dst.tesPos[2] = src.tesPos[2];
+            dst.yaw = src.yaw;
+            dst.destX = src.destX;
+            dst.destY = src.destY;
+            dst.destRange = src.destRange;
+            dst.onGrid = src.onGrid;
+            dst.walking = src.walking;
+            dst.idleLeft = src.idleLeft;
+            dst.waypoints.clear();
+            dst.waypoints.addAll(src.waypoints);
+            dst.graph = src.graph == PathgridGraph.NONE ? PathgridGraph.NONE : graphFor(cell, dst.tesPos);
+            stickLand(dst, collision);
+            EsmTransforms.setActorLocal(dst.placed.local, dst.tesPos, dst.yaw, dst.sx, dst.sy, dst.sz);
+            if (dst.walking) {
+                if (playGroup(dst, "walkforward")) {
+                    dst.playingWalk = true;
+                    dst.noWalk = false;
+                }
+            }
+        }
     }
 
     public SceneNode build(EsmNpc npc, CellRef ref, EsmFile.LoadedCell cell) throws Exception {
@@ -261,6 +310,7 @@ public final class NpcMannequin {
         float sz = s * height;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], sx, sy, sz);
         beginWander(actor, ref.pos, ref.rot[2], sx, sy, sz, npc.wanderDistance, cell, false);
+        actor.refKey = ref.takeKey();
         return placed;
     }
 
@@ -296,13 +346,14 @@ public final class NpcMannequin {
         float s = ref.scale * crea.scale;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s, s, s);
         beginWander(actor, ref.pos, ref.rot[2], s, s, s, crea.wanderDistance, cell, crea.pureWater());
+        actor.creature = true;
+        actor.refKey = ref.takeKey();
         return placed;
     }
 
     public void update(float dt, CollisionWorld collision) {
-        float scale = wanderScale();
         for (NpcActor actor : actors) {
-            wander(actor, dt, scale, collision);
+            wander(actor, dt, wanderScale(actor), collision);
             syncWalkAnim(actor);
             if (actor.idle == null) {
                 continue;
@@ -619,9 +670,37 @@ public final class NpcMannequin {
             actor.destRange = range;
             actor.onGrid = false;
             actor.walking = true;
+            followDetour(actor, destX, destY);
             return;
         }
         actor.walking = false;
+    }
+
+    private void followDetour(NpcActor actor, float destX, float destY) {
+        List<float[]> path = NavmeshQuery.wanderPath(
+            navWorld, actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], destX, destY, actor.tesPos[2]);
+        if (path.size() < 2) {
+            return;
+        }
+        float arrive2 = WANDER_ARRIVE * WANDER_ARRIVE;
+        int i = 0;
+        while (i < path.size()) {
+            float dx = path.get(i)[0] - actor.tesPos[0];
+            float dy = path.get(i)[1] - actor.tesPos[1];
+            if (dx * dx + dy * dy > arrive2) {
+                break;
+            }
+            i++;
+        }
+        if (i >= path.size()) {
+            return;
+        }
+        actor.destX = path.get(i)[0];
+        actor.destY = path.get(i)[1];
+        actor.waypoints.clear();
+        for (int n = i + 1; n < path.size(); n++) {
+            actor.waypoints.add(path.get(n));
+        }
     }
 
     /** Remaining signed error after this frame's turn. */
@@ -681,8 +760,8 @@ public final class NpcMannequin {
         }
     }
 
-    private static float wanderScale() {
-        float s = DebugVars.wanderSpeed;
+    private static float wanderScale(NpcActor actor) {
+        float s = actor.creature ? DebugVars.creaWanderSpeed : DebugVars.wanderSpeed;
         return s > 0.01f ? s : 0.01f;
     }
 
@@ -1281,6 +1360,8 @@ public final class NpcMannequin {
         float sy = 1f;
         float sz = 1f;
         int wanderDistance;
+        boolean creature;
+        String refKey = "";
         float idleLeft;
         boolean walking;
         PathgridGraph graph = PathgridGraph.NONE;

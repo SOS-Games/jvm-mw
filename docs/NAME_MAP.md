@@ -87,6 +87,9 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `components/detournavigator/settingsutils.hpp` | `toNavMeshCoordinates` scale | scale GL verts, no OSG YZ swap | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `getPathfindingAgentBounds` exterior default | one AABB agent | rewrite |
 | `components/sceneutil/navmesh.cpp` | navmesh debug draw | `render.NavmeshDebug` + **F6** | rewrite |
+| `components/detournavigator/makenavmesh.cpp` `dtCreateNavMeshData` | pnav → Detour tile | recast4j `NavMeshBuilder` | rewrite |
+| `dtNavMeshQuery::findPath` / `findStraightPath` | Recast path | `render.NavmeshQuery` | rewrite |
+| `PathFinder::buildPathByNavMesh` | wander fallback polyline | `NpcMannequin` straight dest | rewrite |
 | `apps/openmw/mwclass/door.cpp` | `Door::activate` | viewer **E** + `DoorSwing` pick | rewrite |
 | `apps/openmw/mwworld/actiondoor.cpp` | `ActionDoor` | `DoorSwing.activateDoor` | rewrite |
 | `apps/openmw/mwworld/worldimp.cpp` | `activateDoor` / `rotateDoor` / `processDoors` | `render.DoorSwing` | rewrite |
