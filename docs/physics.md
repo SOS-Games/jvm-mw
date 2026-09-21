@@ -82,10 +82,12 @@ Spec: [phase46-bullet-land.md](phase46-bullet-land.md). **Working.**
 
 #### 1.3 Object meshes in Bullet
 
-- [ ] Static objects as meshes from existing `CollisionMesh` + `SceneNode` world matrices. Same `RootCollisionNode` / `NC` / `NCC` as today.
-- [ ] Player still uses `CollisionWorld`.
+Spec: [phase47-bullet-objects.md](phase47-bullet-objects.md). **Working.**
 
-**Town test:** walk unchanged. Bullet world has docks / kit / Census furniture. Doors still do not update after they swing.
+- [x] Static objects as meshes from existing `CollisionMesh` + `SceneNode` world matrices. Same `RootCollisionNode` / `NC` / `NCC` as today.
+- [x] Player still uses `CollisionWorld`. Dump `land=` / `world=` / `btHitY=`.
+
+**Town test:** walk unchanged. Dock `btHitY` ≈ `floorY`. Cave `world>0`. Doors still do not update after they swing. F7 yellow land / orange kit.
 
 #### 1.4 Player WASD on Bullet
 
@@ -156,5 +158,5 @@ Clipping a swung door is expected until this row. Update **Bullet** only. Do not
 | `HeightField` / `btHeightfieldTerrainShape` | `BulletWorld` land tris (Y-up GL) | rewrite |
 | `btCollisionWorld` convex sweep / ray | gdx-bullet world | rewrite |
 | `MovementSolver::move` | player move on that world | rewrite |
-| `BulletNifLoader` | keep `CollisionMesh`; feed Bullet | rewrite |
+| `BulletNifLoader` | `CollisionMesh` + `BulletWorld` World bodies | rewrite |
 | `CollisionWorld` triangle tracer | **delete** after (2); NPCs only until then | — |

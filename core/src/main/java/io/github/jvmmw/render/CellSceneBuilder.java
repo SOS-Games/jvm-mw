@@ -33,6 +33,7 @@ import java.util.TreeMap;
  * it in. Wanderers in cells that stay loaded keep where they stood; only
  * the new ring starts at spawn. F5 shows the cell’s pathgrid as spheres and lines. F6 shows the
  * Recast walkable carpet for the loaded cells (OpenMW navmesh.db when present).
+ * F7 shows orange Bullet dock/kit colliders.
  * Sqlite and Recast run on a worker. Already-fetched tiles stay when the
  * walk grid moves; only the new ring is loaded. After sqlite is in, a
  * second thread rebakes Recast tiles that fail coverage at TES cell edges
@@ -70,6 +71,7 @@ public final class CellSceneBuilder {
     private final LandMesh landMesh = new LandMesh();
     private final WaterMesh waterMesh = new WaterMesh();
     private final PathgridDebug pathgridDebug = new PathgridDebug();
+    private final BulletColliderDebug colliderDebug = new BulletColliderDebug();
     private NavmeshDebug navmeshDebug;
     private String navWorld = "";
 
@@ -121,6 +123,7 @@ public final class CellSceneBuilder {
         items.clear();
         pendingCol.clear();
         pathgridDebug.dispose();
+        colliderDebug.dispose();
         collision.clear();
         BulletWorld.rebuild();
         lighting.lights.clear();
@@ -173,6 +176,8 @@ public final class CellSceneBuilder {
         buildingRoot.updateWorld(id);
         collision.bake(lands, pendingCol);
         BulletWorld.addLand(lands);
+        BulletWorld.addObjects(pendingCol);
+        colliderDebug.attach(buildingRoot, pendingCol, lands);
         pathgridDebug.attach(buildingRoot, cell);
         finishLights();
         startNavmesh();
@@ -561,6 +566,7 @@ public final class CellSceneBuilder {
     public void dispose() {
         cancelNavmesh();
         pathgridDebug.dispose();
+        colliderDebug.dispose();
         landMesh.dispose();
         waterMesh.dispose();
         mannequin.dispose();

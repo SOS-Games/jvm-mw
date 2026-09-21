@@ -49,6 +49,7 @@ import io.github.jvmmw.esm.EsmReader;
 import io.github.jvmmw.esm.LandRecord;
 import io.github.jvmmw.esm.LevelledCreatures;
 import io.github.jvmmw.nif.NifFile;
+import io.github.jvmmw.render.BulletColliderDebug;
 import io.github.jvmmw.render.BulletWorld;
 import io.github.jvmmw.render.CellLighting;
 import io.github.jvmmw.render.CellSceneBuilder;
@@ -76,7 +77,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * Town is Seyda Neen. Walking recenters nearby cells in the background.
  * F3 dumps a snapshot; F4 toggles the fps overlay; F5 toggles pathgrid;
- * F6 toggles the Recast carpet.
+ * F6 toggles the Recast carpet; F7 toggles Bullet World colliders.
  */
 public final class JvmMwApp extends ApplicationAdapter {
     private static final String CELL_PREFIX = "cell:";
@@ -198,6 +199,11 @@ public final class JvmMwApp extends ApplicationAdapter {
                 if (keycode == Input.Keys.F6) {
                     boolean on = NavmeshDebug.toggleVisible();
                     Gdx.app.log("JVM-MW", on ? "navmesh on" : "navmesh off");
+                    return true;
+                }
+                if (keycode == Input.Keys.F7) {
+                    boolean on = BulletColliderDebug.toggleVisible();
+                    Gdx.app.log("JVM-MW", on ? "colliders on" : "colliders off");
                     return true;
                 }
                 if (keycode == Input.Keys.E) {
@@ -958,7 +964,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         });
         body.add(dumpButton);
         body.add(copyPosButton).row();
-        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh.", skin))
+        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh, F7 colliders (yellow land, orange kit).", skin))
             .width(420).colspan(3).row();
         body.add(meshButton("Chair", TestData.CHAIR));
         body.add(meshButton("Shack", TestData.SHACK));
@@ -1245,9 +1251,14 @@ public final class JvmMwApp extends ApplicationAdapter {
                 .append(" ceilY=").append(Float.isNaN(col.ceilY) ? "none" : col.ceilY).append('\n');
             snapshotBuf.append("bullet=").append(BulletWorld.alive() ? 1 : 0)
                 .append(" bodies=").append(BulletWorld.bodyCount())
+                .append(" land=").append(BulletWorld.landCount())
+                .append(" world=").append(BulletWorld.worldCount())
                 .append(" btFloorY=");
             float btFloor = BulletWorld.floorY(eye.x, eye.y, eye.z);
-            snapshotBuf.append(Float.isNaN(btFloor) ? "none" : btFloor).append('\n');
+            snapshotBuf.append(Float.isNaN(btFloor) ? "none" : btFloor);
+            snapshotBuf.append(" btHitY=");
+            float btHit = BulletWorld.hitY(eye.x, eye.y, eye.z);
+            snapshotBuf.append(Float.isNaN(btHit) ? "none" : btHit).append('\n');
             if (loadedCell != null && !loadedCell.interior) {
                 snapshotBuf.append("grid=(").append(loadedCell.gridX).append(',').append(loadedCell.gridY).append(")\n");
             }
@@ -1453,6 +1464,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             walkBuilder = null;
         }
         BulletWorld.disposeWorld();
+        BulletWorld.disposeInterned();
         if (renderer != null) {
             renderer.dispose();
         }

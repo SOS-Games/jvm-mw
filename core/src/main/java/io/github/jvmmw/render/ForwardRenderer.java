@@ -536,6 +536,9 @@ public final class ForwardRenderer {
         if ("navmesh-debug".equals(node.name) && !NavmeshDebug.visible) {
             return;
         }
+        if ("bullet-debug".equals(node.name) && !BulletColliderDebug.visible) {
+            return;
+        }
         if (!node.skipMeshes) {
             for (MeshInstance inst : node.meshes) {
                 MeshGpu mesh = inst.mesh;
