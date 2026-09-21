@@ -465,8 +465,8 @@ public final class BulletWorld {
     }
 
     /**
-     * Player camera walk: split WASD, slide, step onto docks, stick to a
-     * walkable floor, fall if there is none. Space and look-dolly stop at
+     * Player camera walk: split WASD, slide along walls, step onto docks, stick
+     * to a walkable floor, fall if there is none. Space and look-dolly stop at
      * roofs and dock undersides. The capsule is not added as a body.
      */
     public static void move(Vector3 eye, float dx, float dy, float dz, float dt) {
@@ -567,28 +567,40 @@ public final class BulletWorld {
             }
         }
         applyFraction(x, feet, z, dx, dz, hitFrac);
-        float px = hitNx;
-        float pz = hitNz;
         if (hitNy > MAX_SLOPE_COS || hitNy < -0.5f) {
             return;
         }
+        float px = hitNx;
+        float pz = hitNz;
         float plen = (float) Math.hypot(px, pz);
         if (plen < 1e-4f) {
             return;
         }
         px /= plen;
         pz /= plen;
+        // Leftover step after the hit. The normal points out of the wall, so a
+        // negative dot is still pushing in. Drop that part and keep the slide.
+        float remain = Math.max(0f, 1f - hitFrac);
+        dx *= remain;
+        dz *= remain;
         float keep = dx * px + dz * pz;
-        if (keep > 0f) {
+        if (keep < 0f) {
             dx -= px * keep;
             dz -= pz * keep;
         }
-        if (dx == 0f && dz == 0f) {
+        if (Math.abs(dx) < 1e-4f && Math.abs(dz) < 1e-4f) {
             return;
         }
         float sx = slid[0];
         float sz = slid[2];
         sweepPose(sx, feet, sz, sx + dx, feet, sz + dz);
+        if (best.ok && best.fraction <= 0.001f) {
+            // Already touching, so the sweep starts in the contact and stops.
+            // Step off the wall and try the along-wall move again.
+            sx += px * 2f;
+            sz += pz * 2f;
+            sweepPose(sx, feet, sz, sx + dx, feet, sz + dz);
+        }
         if (!best.ok) {
             setSlid(sx + dx, feet, sz + dz);
             return;
