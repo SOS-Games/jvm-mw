@@ -50,6 +50,7 @@ public final class DebugCli {
         AiPackage.checkWanderHours();
         AiPackage.checkTravelRange();
         AiPackage.checkFollow();
+        AiPackage.checkEscort();
         if (args.length == 0 || "help".equalsIgnoreCase(args[0]) || "-h".equals(args[0])) {
             System.out.print(help());
             return;

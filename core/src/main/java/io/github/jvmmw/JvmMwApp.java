@@ -209,6 +209,13 @@ public final class JvmMwApp extends ApplicationAdapter {
                     Gdx.app.log("JVM-MW", on ? "colliders on" : "colliders off");
                     return true;
                 }
+                if (keycode == Input.Keys.R) {
+                    if (cellBuilder != null && !isLoading()) {
+                        String msg = cellBuilder.commandEscort(eye, lookDir);
+                        Gdx.app.log("JVM-MW", msg == null ? "escort none in range" : msg);
+                    }
+                    return true;
+                }
                 if (keycode == Input.Keys.E) {
                     if (cellBuilder != null && !isLoading()) {
                         String msg = cellBuilder.activateLooking(eye, lookDir);
@@ -1008,7 +1015,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         });
         body.add(dumpButton);
         body.add(copyPosButton).row();
-        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate (closer NPC or creature logs packages), scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh, F7 colliders (yellow land, orange kit).", skin))
+        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate (closer NPC or creature logs packages), R that NPC escorts you, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh, F7 colliders (yellow land, orange kit).", skin))
             .width(420).colspan(3).row();
         body.add(meshButton("Chair", TestData.CHAIR));
         body.add(meshButton("Shack", TestData.SHACK));

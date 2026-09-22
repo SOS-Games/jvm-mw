@@ -8,7 +8,7 @@ Align with `components/esm3/aipackage.*` (the five subrecords), `apps/openmw/mwm
 
 ## What Town has now
 
-Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Any other front kind stands, even when a later wander has a distance, except travel. A front travel walks to its point when that point is within 7168, then the package ends. Farther than that, they stay. A front wander with a duration above 0 ends after that many Clear hours; 0 does not. While they stand, idle2–idle9 can play. The time-of-day byte is stored and unused. Finishing drops the front row and, when repeat is set, puts a copy on the back. A front follow walks toward the named actor when farther than 256 and stands when closer. No loaded target ends it. A cell name keeps them still outside that cell. Escort and activate are not run.
+Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). A front travel walks to its point when that point is within 7168, then the package ends. Farther than that, they stay. A front wander with a duration above 0 ends after that many Clear hours; 0 does not. While they stand, idle2–idle9 can play. The time-of-day byte is stored and unused. Finishing drops the front row and, when repeat is set, puts a copy on the back. A front follow walks toward the named actor when farther than 256 and stands when closer. No loaded target ends it. A cell name keeps them still outside that cell. A front escort leads the follower while they stay close, and waits when they lag. Activate is not run.
 
 ## What OpenMW does
 
@@ -96,9 +96,11 @@ Needs (4)’s walker.
 
 ### 6. Escort
 
-- [ ] Front `AI_E`: the target is the follower (the player, when the id is the player).
-- [ ] Follower in range: walk to the dest like travel. Follower too far: wait, `idle3` if that group exists.
-- [ ] No real dest: finish once the follower is in range.
+Spec: [phase57-escort.md](phase57-escort.md). **Working.**
+
+- [x] Front `AI_E`: the target is the follower (the player, when the id is the player).
+- [x] Follower in range: walk to the dest like travel. Follower too far: wait, `idle3` if that group exists.
+- [x] No real dest: finish once the follower is in range.
 
 Needs (5).
 

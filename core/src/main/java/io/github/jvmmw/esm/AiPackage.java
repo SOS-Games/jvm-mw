@@ -16,7 +16,9 @@ import java.util.List;
  * one cell (7168), then the package ends. Farther than that, they stay. A front
  * follow walks toward that actor when farther than 256 and stands when closer.
  * No loaded target ends it. A cell name keeps them still outside that cell.
- * Escort or activate in front leaves them standing. A front wander with a
+ * A front escort leads the follower while they are within 450, and waits when
+ * they lag. No destination finishes once the follower is close. Activate in
+ * front leaves them standing. A front wander with a
  * duration above 0 ends after that many Clear hours; 0 does not end. While they
  * stand, idle2 through idle9 can play. Finishing drops the front row; if it
  * repeats, a fresh copy goes on the back.
@@ -31,6 +33,10 @@ public final class AiPackage {
     public static final float TRAVEL_MAX = 7168f;
     /** Stand this close to the actor being followed. Farther than this, walk. */
     public static final float FOLLOW_NEAR = 256f;
+    /** Escort starts waiting once the follower is farther than this. */
+    public static final float ESCORT_LAG = 450f;
+    /** After waiting, escort walks again once the follower is this close. */
+    public static final float ESCORT_RESUME = 250f;
 
     public Kind kind = Kind.WANDER;
     /** Wander radius. Negative ESM values are stored as 0. */
@@ -218,6 +224,21 @@ public final class AiPackage {
         }
         if (spendWanderHours(24, 24f, 24f, unused) >= 0f || Math.abs(unused[0]) > 0.001f) {
             throw new IllegalStateException("follow duration end");
+        }
+    }
+
+    /** True when an escort has no destination. Morrowind stores that as the max float. */
+    public static boolean escortNowhere(float x, float y, float z) {
+        return !Float.isFinite(x) || !Float.isFinite(y) || x >= 1e30f || y >= 1e30f;
+    }
+
+    /** Headless check: a max float is no dest, and a normal point is a dest. */
+    public static void checkEscort() {
+        if (!escortNowhere(Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE)) {
+            throw new IllegalStateException("escort nowhere");
+        }
+        if (escortNowhere(110f, 70f, -340f)) {
+            throw new IllegalStateException("escort dest");
         }
     }
 

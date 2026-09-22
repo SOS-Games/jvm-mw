@@ -90,7 +90,7 @@ Env is `JVMMW_DEBUG_wanderSpeed` (dots to underscores). `-Djvmmw.debug.wanderSpe
 
 - WASD walk (Town land/docks; ceilings stop the camera)
 - HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** / **Zain** / **Manor** / **Club**, hour slider
-- **E** door / chest / take
+- **E** door / chest / take, **R** the looked-at NPC escorts you
 - **F3** Dump (`build/debug-snapshot.txt` + clipboard)
 - **F4** fps overlay
 - **F5** pathgrid (off at load)

@@ -50,7 +50,8 @@ import java.util.Random;
  * walks them around spawn. A front travel walks to that point when it is
  * within 7168, then the package ends; a farther point leaves them standing.
  * A front follow walks toward that person when farther than 256 and stands
- * when closer. Escort or activate in front leaves them standing. A front wander
+ * when closer. A front escort leads the follower to a point, and waits with
+ * idle3 when they lag. Activate in front leaves them standing. A front wander
  * with a duration above 0 ends after that many Clear hours (0 does not).
  * While they stand, idle2–idle9 can play; walking still uses walkforward.
  * When the cell has a usable pathgrid they follow its edges (the F5 spheres); otherwise they
@@ -156,6 +157,8 @@ public final class NpcMannequin {
     private static final float GRID_FAR = 0.28f;
     private static final float STICK_LIFT = 64f;
     /** Vanilla GMST fIdleChanceMultiplier. A roll above this keeps the plain idle. */
+    /** How far R sends an escort, in the direction you are looking. */
+    private static final float ESCORT_LEAD = 2048f;
     private static final float IDLE_CHANCE_MULT = 0.75f;
     private static final String[] IDLE_GROUPS = {
         "idle2", "idle3", "idle4", "idle5", "idle6", "idle7", "idle8", "idle9"
@@ -173,6 +176,11 @@ public final class NpcMannequin {
     private final Map<Long, PathgridGraph> graphs = new HashMap<>();
     private final Random wanderRng = new Random();
     private final float[] hourUnused = new float[1];
+    private final float[] followerPos = new float[3];
+    private float playerX;
+    private float playerY;
+    private float playerZ;
+    private boolean playerKnown;
     private String navWorld = "";
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
@@ -235,6 +243,8 @@ public final class NpcMannequin {
             dst.followHeld = src.followHeld;
             dst.followAimX = src.followAimX;
             dst.followAimY = src.followAimY;
+            dst.escortTight = src.escortTight;
+            dst.escortHeld = src.escortHeld;
             dst.idleLeft = src.idleLeft;
             dst.waypoints.clear();
             dst.waypoints.addAll(src.waypoints);
@@ -392,6 +402,14 @@ public final class NpcMannequin {
         return placed;
     }
 
+    /** Camera feet in TES. Escort treats the id player as this point. */
+    public void setPlayer(float x, float y, float z) {
+        playerX = x;
+        playerY = y;
+        playerZ = z;
+        playerKnown = true;
+    }
+
     public void update(float dt, float hoursPassed, EsmFile.LoadedCell cell) {
         for (NpcActor actor : actors) {
             spendHours(actor, hoursPassed, cell);
@@ -453,6 +471,9 @@ public final class NpcMannequin {
         actor.travelWalk = false;
         actor.travelSettled = false;
         actor.followHeld = false;
+        actor.escortTight = false;
+        actor.escortWait = false;
+        actor.escortHeld = false;
         actor.waypoints.clear();
         actor.graph = needsWalkGraph(actor, distance) && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
@@ -471,6 +492,9 @@ public final class NpcMannequin {
         actor.travelWalk = false;
         actor.travelSettled = false;
         actor.followHeld = false;
+        actor.escortTight = false;
+        actor.escortWait = false;
+        actor.escortHeld = false;
         actor.waypoints.clear();
         float[] spawn = new float[] { actor.spawnX, actor.spawnY, actor.spawnZ };
         actor.graph = needsWalkGraph(actor, distance) && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
@@ -485,7 +509,8 @@ public final class NpcMannequin {
         actor.hoursLeft = 0f;
         if (!actor.packages.isEmpty()) {
             AiPackage front = actor.packages.get(0);
-            if (front.kind == AiPackage.Kind.WANDER || front.kind == AiPackage.Kind.FOLLOW) {
+            if (front.kind == AiPackage.Kind.WANDER || front.kind == AiPackage.Kind.FOLLOW
+                || front.kind == AiPackage.Kind.ESCORT) {
                 actor.hoursLeft = front.duration;
             }
         }
@@ -510,10 +535,11 @@ public final class NpcMannequin {
                 break;
             }
             AiPackage front = actor.packages.get(0);
-            if (front.kind != AiPackage.Kind.WANDER && front.kind != AiPackage.Kind.FOLLOW) {
+            if (front.kind != AiPackage.Kind.WANDER && front.kind != AiPackage.Kind.FOLLOW
+                && front.kind != AiPackage.Kind.ESCORT) {
                 break;
             }
-            if (front.kind == AiPackage.Kind.FOLLOW
+            if ((front.kind == AiPackage.Kind.FOLLOW || front.kind == AiPackage.Kind.ESCORT)
                 && AiPackage.followPaused(front.cellName, cell == null ? "" : cell.name)) {
                 break;
             }
@@ -631,6 +657,10 @@ public final class NpcMannequin {
         }
         if (frontFollow(actor)) {
             follow(actor, dt, scale, cell);
+            return;
+        }
+        if (frontEscort(actor)) {
+            escort(actor, dt, scale, cell);
             return;
         }
         if (actor.wanderDistance <= 0) {
@@ -847,8 +877,107 @@ public final class NpcMannequin {
         return best;
     }
 
+    /** Front escort: lead the follower to the point. Wait when they lag. */
+    private void escort(NpcActor actor, float dt, float scale, EsmFile.LoadedCell cell) {
+        actor.moving = false;
+        actor.moved = 0f;
+        AiPackage pack = actor.packages.get(0);
+        String here = cell == null ? "" : cell.name;
+        if (AiPackage.followPaused(pack.cellName, here)) {
+            if (actor.walking) {
+                beginStand(actor);
+            }
+            return;
+        }
+        if (!followerAt(actor, pack, followerPos)) {
+            waitForFollower(actor);
+            return;
+        }
+        float dx = actor.tesPos[0] - followerPos[0];
+        float dy = actor.tesPos[1] - followerPos[1];
+        float dz = actor.tesPos[2] - followerPos[2];
+        float limit = actor.escortTight ? AiPackage.ESCORT_RESUME : AiPackage.ESCORT_LAG;
+        if (dx * dx + dy * dy + dz * dz > limit * limit) {
+            actor.escortTight = true;
+            waitForFollower(actor);
+            return;
+        }
+        actor.escortTight = false;
+        actor.escortWait = false;
+        if (AiPackage.escortNowhere(pack.x, pack.y, pack.z)) {
+            if (!actor.escortHeld) {
+                finishTravel(actor, cell);
+                if (frontEscort(actor) && AiPackage.escortNowhere(
+                    actor.packages.get(0).x, actor.packages.get(0).y, actor.packages.get(0).z)) {
+                    actor.escortHeld = true;
+                }
+            }
+            return;
+        }
+        float ddx = pack.x - actor.tesPos[0];
+        float ddy = pack.y - actor.tesPos[1];
+        if (ddx * ddx + ddy * ddy <= WANDER_ARRIVE * WANDER_ARRIVE) {
+            if (!actor.escortHeld) {
+                finishTravel(actor, cell);
+                if (frontEscort(actor)) {
+                    AiPackage next = actor.packages.get(0);
+                    float nx = next.x - actor.tesPos[0];
+                    float ny = next.y - actor.tesPos[1];
+                    if (!AiPackage.escortNowhere(next.x, next.y, next.z)
+                        && nx * nx + ny * ny <= WANDER_ARRIVE * WANDER_ARRIVE) {
+                        actor.escortHeld = true;
+                    }
+                }
+            }
+            return;
+        }
+        actor.escortHeld = false;
+        if (!actor.walking) {
+            armWalkTo(actor, pack.x, pack.y, pack.z);
+        }
+        if (actor.walking) {
+            stepPath(actor, dt, scale);
+        }
+    }
+
+    /** idle3 while the follower is too far. Plain idle when that group is missing. */
+    private void waitForFollower(NpcActor actor) {
+        if (actor.walking) {
+            beginStand(actor);
+        }
+        if (actor.escortWait) {
+            return;
+        }
+        actor.escortWait = true;
+        actor.playingWalk = false;
+        if (!playGroup(actor, "idle3", true)) {
+            playIdle(actor);
+        }
+    }
+
+    /** Follower feet. The id player is the camera, not a placed actor. */
+    private boolean followerAt(NpcActor self, AiPackage pack, float[] out) {
+        if (pack.targetId != null && pack.targetId.equalsIgnoreCase("player")) {
+            if (!playerKnown) {
+                return false;
+            }
+            out[0] = playerX;
+            out[1] = playerY;
+            out[2] = playerZ;
+            return true;
+        }
+        NpcActor target = findFollowTarget(self, pack.targetId);
+        if (target == null) {
+            return false;
+        }
+        out[0] = target.tesPos[0];
+        out[1] = target.tesPos[1];
+        out[2] = target.tesPos[2];
+        return true;
+    }
+
     private static boolean needsWalkGraph(NpcActor actor, int distance) {
-        return distance > 0 || frontTravel(actor) || frontFollow(actor);
+        return distance > 0 || frontTravel(actor) || frontFollow(actor) || frontEscort(actor);
     }
 
     /** Pathgrid to the travel point, else the carpet, else a straight line. */
@@ -906,6 +1035,10 @@ public final class NpcMannequin {
 
     private static boolean frontFollow(NpcActor actor) {
         return !actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.FOLLOW;
+    }
+
+    private static boolean frontEscort(NpcActor actor) {
+        return !actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.ESCORT;
     }
 
     /** Close enough on the ground that the walk counts as arrived. */
@@ -1228,6 +1361,52 @@ public final class NpcMannequin {
             base = "meshes/base_anim.nif";
         }
         return TexturePaths.correctActorModelPath(base, TestData::vfsExists);
+    }
+
+    /**
+     * Same crosshair pick as E. Puts an escort of the player in front, leading
+     * 2048 units along the look. Returns the log line, or null when nobody is there.
+     */
+    public String commandEscort(Vector3 origin, Vector3 direction, EsmFile.LoadedCell cell) {
+        if (cell == null) {
+            return null;
+        }
+        NpcActor actor = closestHit(origin, direction, DoorSwing.MAX_ACTIVATE);
+        if (actor == null) {
+            return null;
+        }
+        float dx = direction.x;
+        float dy = -direction.z;
+        float len = (float) Math.hypot(dx, dy);
+        if (len < 0.25f) {
+            dx = (float) Math.sin(actor.yaw);
+            dy = (float) Math.cos(actor.yaw);
+        } else {
+            dx /= len;
+            dy /= len;
+        }
+        AiPackage escort = new AiPackage();
+        escort.kind = AiPackage.Kind.ESCORT;
+        escort.targetId = "player";
+        escort.x = actor.tesPos[0] + dx * ESCORT_LEAD;
+        escort.y = actor.tesPos[1] + dy * ESCORT_LEAD;
+        escort.z = actor.tesPos[2];
+        escort.duration = 0;
+        escort.repeat = false;
+        actor.packages.add(0, escort);
+        actor.wanderDistance = 0;
+        actor.walking = false;
+        actor.travelWalk = false;
+        actor.travelSettled = false;
+        actor.followHeld = false;
+        actor.escortTight = false;
+        actor.escortWait = false;
+        actor.escortHeld = false;
+        actor.waypoints.clear();
+        actor.graph = !actor.water ? graphFor(cell, actor.tesPos) : PathgridGraph.NONE;
+        armPackageTimer(actor);
+        String id = actor.placed.name == null ? "" : actor.placed.name;
+        return "escort id=" + id + " dest=" + (int) escort.x + "," + (int) escort.y + "," + (int) escort.z;
     }
 
     /**
@@ -1886,6 +2065,12 @@ public final class NpcMannequin {
         boolean travelSettled;
         /** A follow whose target is not loaded. Do not finish every frame. */
         boolean followHeld;
+        /** Follower lagged, so they must catch up to the shorter range. */
+        boolean escortTight;
+        /** Already playing the wait pose. */
+        boolean escortWait;
+        /** A repeating escort that already finished where they stand. */
+        boolean escortHeld;
         /** Last point the follow path aimed at. */
         float followAimX;
         float followAimY;

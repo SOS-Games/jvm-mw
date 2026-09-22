@@ -289,6 +289,7 @@ public final class CellSceneBuilder {
         pumpNavmesh();
         PerfTrace.end();
         PerfTrace.begin("update.npc");
+        mannequin.setPlayer(eye.x, -eye.z, eye.y - BulletWorld.EYE_HEIGHT);
         mannequin.update(dt, hoursPassed, cell);
         PerfTrace.end();
         navPath = NavmeshQuery.lastPath(navWorld);
@@ -565,6 +566,11 @@ public final class CellSceneBuilder {
             takenKeys.add(item.item.takeKey);
         }
         return msg;
+    }
+
+    /** R: the NPC under the crosshair leads the player. Same pick as E. */
+    public String commandEscort(Vector3 origin, Vector3 direction) {
+        return mannequin.commandEscort(origin, direction, cell);
     }
 
     /** Name under the crosshair, or empty when it is not on an NPC or creature. */
