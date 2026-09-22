@@ -24,7 +24,7 @@ Vanilla wander is not that fallback. Bethesda authored a **pathgrid** per cell: 
 
 ## Why it is large
 
-Parse is small. Using the graph for wander is a real AI slice (components, local vs world coords, polyline follow). A general `PathFinder` is what Travel / Follow need ([AI packages](big-topics.md)). Recast/Detour is collision-mesh baking, tiles, and a third-party navigator — keep it last.
+Parse is small. Using the graph for wander is a real AI slice (components, local vs world coords, polyline follow). A general `PathFinder` is what Travel / Follow need ([ai-packages.md](ai-packages.md)). Recast/Detour is collision-mesh baking, tiles, and a third-party navigator — keep it last.
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ After (3). Do not pull actor collision or combat into this row.
 - [ ] Straight path, pathgrid A* path, arrive tolerance, drop waypoints when close, zTurn toward the next point (already in wander).
 - [ ] Used by wander (3) if that slice did not inline a one-off; required before Travel / Follow.
 
-Travel, Follow, Escort, Activate packages stay [AI packages](big-topics.md). This row only extracts the polyline helper.
+Travel, Follow, Escort, Activate packages stay [ai-packages.md](ai-packages.md). This row only extracts the polyline helper.
 
 ### 6. Detour navmesh
 
@@ -91,7 +91,7 @@ Pathfinding stays last. Recast/Detour as libraries is allowed; do not vendor a s
 
 ## Stay out of this topic
 
-- Follow / travel / dialogue greet (AI packages).
+- Follow / travel / escort / activate ([ai-packages.md](ai-packages.md)). Dialogue greet stays out of both.
 - Actor-actor or actor-world collision, jumping, swimming as movement.
 - Distant land, grass, navmesh for the player camera.
 - OpenMW tools (pathgrid editor).

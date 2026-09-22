@@ -1,5 +1,6 @@
 package io.github.jvmmw.debug;
 
+import io.github.jvmmw.esm.AiPackage;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmCreature;
 import io.github.jvmmw.esm.EsmFile;
@@ -33,8 +34,9 @@ import java.util.Random;
  * From the repo root: gradlew.bat :core:debugCli --args="help"
  *
  * nif — a door or wall that looks offset. cell / spawn — fog and where you
- * arrive. exterior — the 21-cell walk grid. npc / crea / levc / kf — how a
- * person, creature, or wilderness spawn list is put together. pgrd — that
+ * arrive. exterior — the 21-cell walk grid. npc / crea / actor / levc / kf —
+ * how a person or creature is put together, including their AI package list.
+ * pgrd — that
  * cell’s walk-graph nodes. navdb — OpenMW navmesh.db tiles vs cell edges
  * and which Recast tiles would patch. navpath — Detour corners from spawn
  * to a point east of it.
@@ -55,6 +57,7 @@ public final class DebugCli {
             case "spawn" -> spawn(require(args, 1, "spawn <interior name>"));
             case "npc" -> npc(require(args, 1, "npc <id>"));
             case "crea" -> crea(require(args, 1, "crea <id>"));
+            case "actor" -> actor(require(args, 1, "actor <id>"));
             case "levc" -> levc(require(args, 1, "levc <id>"));
             case "kf" -> kf(require(args, 1, "kf <vfs-or-path>"));
             case "exterior" -> exterior(require(args, 1, "exterior <gridX> <gridY>"));
@@ -80,6 +83,7 @@ public final class DebugCli {
             gradlew.bat :core:debugCli --args="spawn Addamasartus"
             gradlew.bat :core:debugCli --args="npc sellus gravius"
             gradlew.bat :core:debugCli --args="crea nix-hound"
+            gradlew.bat :core:debugCli --args="actor fargoth"
             gradlew.bat :core:debugCli --args="levc ex_bittercoast_lev+0"
             gradlew.bat :core:debugCli --args="kf meshes/xbase_anim.kf"
             gradlew.bat :core:debugCli --args="exterior -2 -9"
@@ -93,8 +97,9 @@ public final class DebugCli {
                        Header includes pgrd=N e=M.
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
-            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander= and allowed= pathgrid dests.
-            crea       One CREA: model, corrected x-path, flags, scale, wander= and allowed=.
+            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander= and allowed= pathgrid dests, then the AI package list.
+            crea       One CREA: model, corrected x-path, flags, scale, wander= and allowed=, then the AI package list.
+            actor      NPC_ or CREA by id or name. NPC wins if both match. Same text as npc or crea, including packages.
             levc       One creature leveled list: flags, chance-none, level/id rows.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).
             exterior   5x5 minus corners around a grid: 21 grid= lines, then center spawn/doors.
@@ -109,7 +114,7 @@ public final class DebugCli {
 
             Viewer: HUD Dump or F3 copies camera/fog/perf to the clipboard and writes build/debug-snapshot.txt.
             F4 toggles the fps overlay. Wait for overlay n=60 before treating fps as settled. Headless CLI has no fps.
-            E activates the closest door, container, or takeable item (192 units). Named interior dest loads that cell.
+            E activates the closest door, container, or takeable item (192 units). A closer NPC or creature logs their AI packages instead. Named interior dest loads that cell.
             Empty-DNAM dest loads a 5x5-minus-corners around that exterior grid. HUD Town loads exterior (-2, -9).
             """;
     }
@@ -318,40 +323,68 @@ public final class DebugCli {
 
     private static void npc(String id) throws Exception {
         EsmFile.LoadedCell cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), TestData.CENSUS_CELL);
-        String key = id.toLowerCase(Locale.ROOT);
-        EsmNpc npc = cell.npcs.get(key);
-        if (npc == null) {
-            for (EsmNpc candidate : cell.npcs.values()) {
-                if (candidate.id.toLowerCase(Locale.ROOT).contains(key)
-                    || candidate.name.toLowerCase(Locale.ROOT).contains(key)) {
-                    npc = candidate;
-                    break;
-                }
-            }
-        }
+        EsmNpc npc = findNpc(cell, id);
         if (npc == null) {
             throw new IllegalStateException("No NPC_ matching " + id);
         }
         System.out.print(NpcMannequin.describe(npc, cell));
+        System.out.print(AiPackage.format(npc.id, npc.name, npc.packages));
+    }
+
+    private static void actor(String id) throws Exception {
+        EsmFile.LoadedCell cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), TestData.CENSUS_CELL);
+        EsmNpc npc = findNpc(cell, id);
+        if (npc != null) {
+            System.out.print(NpcMannequin.describe(npc, cell));
+            System.out.print(AiPackage.format(npc.id, npc.name, npc.packages));
+            return;
+        }
+        EsmCreature crea = findCreature(cell, id);
+        if (crea == null) {
+            throw new IllegalStateException("No NPC_ or CREA matching " + id);
+        }
+        System.out.print(NpcMannequin.describeCreature(crea, cell));
+        System.out.print(AiPackage.format(crea.id, crea.name, crea.packages));
     }
 
     private static void crea(String id) throws Exception {
         EsmFile.LoadedCell cell = EsmFile.loadInterior(EsmReader.open(TestData.esmPath()), TestData.PUNSABANIT);
-        String key = id.toLowerCase(Locale.ROOT);
-        EsmCreature crea = cell.creatures.get(key);
-        if (crea == null) {
-            for (EsmCreature candidate : cell.creatures.values()) {
-                if (candidate.id.toLowerCase(Locale.ROOT).contains(key)
-                    || candidate.name.toLowerCase(Locale.ROOT).contains(key)) {
-                    crea = candidate;
-                    break;
-                }
-            }
-        }
+        EsmCreature crea = findCreature(cell, id);
         if (crea == null) {
             throw new IllegalStateException("No CREA matching " + id);
         }
         System.out.print(NpcMannequin.describeCreature(crea, cell));
+        System.out.print(AiPackage.format(crea.id, crea.name, crea.packages));
+    }
+
+    private static EsmNpc findNpc(EsmFile.LoadedCell cell, String id) {
+        String key = id.toLowerCase(Locale.ROOT);
+        EsmNpc npc = cell.npcs.get(key);
+        if (npc != null) {
+            return npc;
+        }
+        for (EsmNpc candidate : cell.npcs.values()) {
+            if (candidate.id.toLowerCase(Locale.ROOT).contains(key)
+                || candidate.name.toLowerCase(Locale.ROOT).contains(key)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private static EsmCreature findCreature(EsmFile.LoadedCell cell, String id) {
+        String key = id.toLowerCase(Locale.ROOT);
+        EsmCreature crea = cell.creatures.get(key);
+        if (crea != null) {
+            return crea;
+        }
+        for (EsmCreature candidate : cell.creatures.values()) {
+            if (candidate.id.toLowerCase(Locale.ROOT).contains(key)
+                || candidate.name.toLowerCase(Locale.ROOT).contains(key)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static void levc(String id) throws Exception {

@@ -73,6 +73,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwmechanics/levelledlist.cpp` | `getLevelledItem` (creature) | `esm.LevelledCreatures` | rewrite |
 | `apps/openmw/mwclass/creaturelevlist.cpp` | `CreatureLevList::insertObjectRendering` | `CellSceneBuilder` LEVC → `buildCreature` | rewrite |
 | `components/esm3/aipackage.hpp` | `ESM::AIWander` / `AI_W` | `EsmNpc` / `EsmCreature` wander distance | same |
+| `components/esm3/aipackage.hpp` | `ESM::AIPackageList` | `esm.AiPackage` list on NPC and creature | same |
 | `apps/openmw/mwmechanics/aiwander.cpp` | `wanderNearStart` / `getRandomPointAround` | `NpcMannequin` slide near spawn | rewrite |
 | `apps/openmw/mwmechanics/steering.cpp` | `zTurn` / `getAngularVelocity` | wander yaw toward dest | rewrite |
 | `components/esm3/loadpgrd.hpp` | `ESM::Pathgrid` / `REC_PGRD` | `esm.EsmPathgrid` | same |

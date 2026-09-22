@@ -495,13 +495,78 @@ public final class EsmFile {
         rgb[2] = ((clr >> 16) & 0xFF) / 255f;
     }
 
-    /** First {@code AI_W}: int16 distance. Duration, idle weights, and padding are unused. */
-    private static int readAiWander(EsmReader esm) {
+    /**
+     * One AI subrecord. A short record is skipped and logged. {@code CNDT} is
+     * handled by the caller. The first wander distance is still what they walk.
+     */
+    private static AiPackage readOnePackage(EsmReader esm, String sub, String owner) {
         esm.getSubHeader();
-        int dist = esm.getI16();
+        int need = switch (sub) {
+            case "AI_W" -> 14;
+            case "AI_T" -> 16;
+            case "AI_F", "AI_E" -> 48;
+            case "AI_A" -> 33;
+            default -> 0;
+        };
+        if (need == 0 || esm.leftSub() < need) {
+            System.err.println("JVM-MW short " + sub + " on " + owner + " bytes=" + esm.leftSub());
+            esm.skipRestOfSub();
+            return null;
+        }
+        AiPackage pack = new AiPackage();
+        switch (sub) {
+            case "AI_W" -> {
+                pack.kind = AiPackage.Kind.WANDER;
+                int dist = esm.getI16();
+                pack.distance = dist < 0 ? 0 : dist;
+                pack.duration = esm.getI16();
+                pack.timeOfDay = esm.getU8();
+                for (int i = 0; i < pack.idle.length; i++) {
+                    pack.idle[i] = esm.getU8();
+                }
+                pack.repeat = esm.getU8() != 0;
+            }
+            case "AI_T" -> {
+                pack.kind = AiPackage.Kind.TRAVEL;
+                pack.x = esm.getF32();
+                pack.y = esm.getF32();
+                pack.z = esm.getF32();
+                pack.repeat = esm.getU8() != 0;
+                esm.skip(3);
+            }
+            case "AI_F", "AI_E" -> {
+                pack.kind = "AI_F".equals(sub) ? AiPackage.Kind.FOLLOW : AiPackage.Kind.ESCORT;
+                pack.x = esm.getF32();
+                pack.y = esm.getF32();
+                pack.z = esm.getF32();
+                pack.duration = esm.getI16();
+                pack.targetId = esm.takeString(32);
+                pack.repeat = esm.getU8() != 0;
+                esm.skip(1);
+            }
+            case "AI_A" -> {
+                pack.kind = AiPackage.Kind.ACTIVATE;
+                pack.targetId = esm.takeString(32);
+                pack.repeat = esm.getU8() != 0;
+            }
+            default -> {
+                esm.skipRestOfSub();
+                return null;
+            }
+        }
         esm.skipRestOfSub();
-        return dist < 0 ? 0 : dist;
+        return pack;
     }
+
+    private static void readPackageCell(EsmReader esm, String owner, List<AiPackage> packages) {
+        String cell = esm.getHString();
+        if (packages.isEmpty()) {
+            System.err.println("JVM-MW CNDT with no package on " + owner);
+            return;
+        }
+        packages.get(packages.size() - 1).cellName = cell;
+    }
+
 
     private void readCreature(EsmReader esm) {
         EsmCreature crea = new EsmCreature();
@@ -522,13 +587,17 @@ public final class EsmFile {
                     crea.scale = esm.getF32();
                     esm.skipRestOfSub();
                 }
-                case "AI_W" -> {
-                    int dist = readAiWander(esm);
-                    if (!hasWander) {
-                        crea.wanderDistance = dist;
-                        hasWander = true;
+                case "AI_W", "AI_T", "AI_F", "AI_E", "AI_A" -> {
+                    AiPackage pack = readOnePackage(esm, sub, crea.id);
+                    if (pack != null) {
+                        crea.packages.add(pack);
+                        if (pack.kind == AiPackage.Kind.WANDER && !hasWander) {
+                            crea.wanderDistance = pack.distance;
+                            hasWander = true;
+                        }
                     }
                 }
+                case "CNDT" -> readPackageCell(esm, crea.id, crea.packages);
                 default -> esm.skipHSub();
             }
         }
@@ -630,13 +699,17 @@ public final class EsmFile {
                         npc.inventory.add(item);
                     }
                 }
-                case "AI_W" -> {
-                    int dist = readAiWander(esm);
-                    if (!hasWander) {
-                        npc.wanderDistance = dist;
-                        hasWander = true;
+                case "AI_W", "AI_T", "AI_F", "AI_E", "AI_A" -> {
+                    AiPackage pack = readOnePackage(esm, sub, npc.id);
+                    if (pack != null) {
+                        npc.packages.add(pack);
+                        if (pack.kind == AiPackage.Kind.WANDER && !hasWander) {
+                            npc.wanderDistance = pack.distance;
+                            hasWander = true;
+                        }
                     }
                 }
+                case "CNDT" -> readPackageCell(esm, npc.id, npc.packages);
                 default -> esm.skipHSub();
             }
         }

@@ -1005,7 +1005,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         });
         body.add(dumpButton);
         body.add(copyPosButton).row();
-        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate, scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh, F7 colliders (yellow land, orange kit).", skin))
+        body.add(new Label("WASD walk on land, mouse look (click lock, Esc unlock), Space/Ctrl up-down (ceilings stop you), E activate (closer NPC or creature logs packages), scroll dolly, [ ] hour, Dump/F3 copy perf, F4 overlay, F5 pathgrid, F6 navmesh, F7 colliders (yellow land, orange kit).", skin))
             .width(420).colspan(3).row();
         body.add(meshButton("Chair", TestData.CHAIR));
         body.add(meshButton("Shack", TestData.SHACK));

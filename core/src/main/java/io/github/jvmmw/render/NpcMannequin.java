@@ -7,6 +7,7 @@ package io.github.jvmmw.render;
 
 import io.github.jvmmw.debug.DebugVars;
 import io.github.jvmmw.debug.PerfTrace;
+import io.github.jvmmw.esm.AiPackage;
 import io.github.jvmmw.esm.CellRef;
 import io.github.jvmmw.esm.EsmBodyPart;
 import io.github.jvmmw.esm.EsmCreature;
@@ -25,9 +26,12 @@ import io.github.jvmmw.resource.TestData;
 import io.github.jvmmw.resource.TexturePaths;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Quaternion;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.math.collision.BoundingBox;
+import com.badlogic.gdx.math.collision.Ray;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -151,6 +155,9 @@ public final class NpcMannequin {
     private final Map<String, PartNif> parts = new HashMap<>();
     private final Map<String, KfFile> kfs = new HashMap<>();
     private final List<NpcActor> actors = new ArrayList<>();
+    private final Ray pickRay = new Ray();
+    private final BoundingBox pickBox = new BoundingBox();
+    private final Vector3 pickHit = new Vector3();
     private final Map<Long, PathgridGraph> graphs = new HashMap<>();
     private final Random wanderRng = new Random();
     private String navWorld = "";
@@ -816,6 +823,54 @@ public final class NpcMannequin {
             base = "meshes/base_anim.nif";
         }
         return TexturePaths.correctActorModelPath(base, TestData::vfsExists);
+    }
+
+    /**
+     * Closest NPC or creature within the door use range. Closer than a door,
+     * chest, or item wins; a tie leaves those alone. The text is the package list.
+     */
+    public ActorPick nearestPackages(Vector3 origin, Vector3 direction, EsmFile.LoadedCell cell) {
+        if (cell == null) {
+            return null;
+        }
+        pickRay.set(origin, direction);
+        ActorPick best = null;
+        for (NpcActor actor : actors) {
+            pickBox.inf();
+            actor.placed.collectAabb(pickBox);
+            if (!pickBox.isValid() || !Intersector.intersectRayBounds(pickRay, pickBox, pickHit)) {
+                continue;
+            }
+            float dist = origin.dst(pickHit);
+            if (dist > DoorSwing.MAX_ACTIVATE || (best != null && dist >= best.dist)) {
+                continue;
+            }
+            String id = actor.placed.name == null ? "" : actor.placed.name;
+            String key = id.toLowerCase(Locale.ROOT);
+            String name;
+            List<AiPackage> packages;
+            if (actor.creature) {
+                EsmCreature crea = cell.creatures.get(key);
+                name = crea == null ? "" : crea.name;
+                packages = crea == null ? List.of() : crea.packages;
+            } else {
+                EsmNpc npc = cell.npcs.get(key);
+                name = npc == null ? "" : npc.name;
+                packages = npc == null ? List.of() : npc.packages;
+            }
+            best = new ActorPick(dist, AiPackage.format(id, name, packages));
+        }
+        return best;
+    }
+
+    public static final class ActorPick {
+        public final float dist;
+        public final String text;
+
+        ActorPick(float dist, String text) {
+            this.dist = dist;
+            this.text = text;
+        }
     }
 
     public static String describe(EsmNpc npc, EsmFile.LoadedCell cell) {

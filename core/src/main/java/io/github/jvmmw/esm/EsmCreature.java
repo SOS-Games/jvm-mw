@@ -5,9 +5,13 @@
  */
 package io.github.jvmmw.esm;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * One creature from the ESM: mesh, flags (biped / swim / fly / walk), scale,
- * and the first wander radius. Placed from its own mesh file, not body parts.
+ * the first wander radius, and the full AI package list. Placed from its own
+ * mesh file, not body parts. Only the first wander distance is walked.
  */
 public final class EsmCreature {
     public static final int BIPEDAL = 0x01;
@@ -23,6 +27,8 @@ public final class EsmCreature {
     public float scale = 1f;
     /** First AI_W distance. 0 means stay (no package or radius 0). */
     public int wanderDistance;
+    /** Every AI package in file order. Not executed. */
+    public final List<AiPackage> packages = new ArrayList<>();
 
     public boolean bipedal() {
         return (flags & BIPEDAL) != 0;

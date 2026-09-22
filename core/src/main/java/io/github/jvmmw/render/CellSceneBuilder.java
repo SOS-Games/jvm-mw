@@ -543,9 +543,14 @@ public final class CellSceneBuilder {
         DoorSwing.Hit door = doors.nearest(origin, direction);
         ContainerOpen.Hit cont = containers.nearest(origin, direction);
         ItemTake.Hit item = items.nearest(origin, direction);
+        NpcMannequin.ActorPick actor = mannequin.nearestPackages(origin, direction, cell);
         float doorDist = door == null ? Float.POSITIVE_INFINITY : door.dist;
         float contDist = cont == null ? Float.POSITIVE_INFINITY : cont.dist;
         float itemDist = item == null ? Float.POSITIVE_INFINITY : item.dist;
+        float actorDist = actor == null ? Float.POSITIVE_INFINITY : actor.dist;
+        if (actor != null && actorDist < doorDist && actorDist < contDist && actorDist < itemDist) {
+            return actor.text;
+        }
         if (door == null && cont == null && item == null) {
             return null;
         }
