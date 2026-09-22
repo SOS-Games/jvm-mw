@@ -8,7 +8,7 @@ Align with `components/esm3/aipackage.*` (the five subrecords), `apps/openmw/mwm
 
 ## What Town has now
 
-Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Any other front kind stands, even when a later wander has a distance. A front wander with a duration above 0 ends after that many Clear hours; 0 does not. While they stand, idle2–idle9 can play. The time-of-day byte is stored and unused. Finishing drops the front row and, when repeat is set, puts a copy on the back. Actually walking travel, follow, escort, or activate is not run.
+Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Any other front kind stands, even when a later wander has a distance, except travel. A front travel walks to its point when that point is within 7168, then the package ends. Farther than that, they stay. A front wander with a duration above 0 ends after that many Clear hours; 0 does not. While they stand, idle2–idle9 can play. The time-of-day byte is stored and unused. Finishing drops the front row and, when repeat is set, puts a copy on the back. Follow, escort, and activate are not run.
 
 ## What OpenMW does
 
@@ -74,13 +74,15 @@ Needs (2). Does not need the shared walker.
 
 ### 4. Travel
 
-- [ ] Front `AI_T` walks to that xyz with the shared walker (pathgrid, else Detour, else straight), then the package ends.
-- [ ] Ignore a point farther than 7168 from the actor.
-- [ ] Repeat puts it on the back, same as (2).
+Spec: [phase55-travel.md](phase55-travel.md). **Working.**
+
+- [x] Front `AI_T` walks to that xyz with the shared walker (pathgrid, else Detour, else straight), then the package ends.
+- [x] Ignore a point farther than 7168 from the actor.
+- [x] Repeat puts it on the back, same as (2).
 
 Needs (2) and [nav-paths.md](nav-paths.md) **5**.
 
-**Town test:** an NPC with a travel point inside Seyda Neen walks there and stops. They do not set off for another city.
+**Manor test:** Malsa Ules walks to her point, then the wander behind it. A point farther than 7168 stays put.
 
 ### 5. Follow
 

@@ -47,11 +47,12 @@ import java.util.Random;
  * mesh listed on the NPC record. Faces the yaw of the placement, scaled by
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
  * The front package, when it is wander and its distance is greater than 0,
- * walks them around spawn. Travel, follow, escort, or activate in front
- * leaves them standing. A front wander with a duration above 0 ends after
- * that many Clear hours (0 does not). While they stand, idle2–idle9 can
- * play; walking still uses walkforward. When the cell has
- * a usable pathgrid they follow its edges (the F5 spheres); otherwise they
+ * walks them around spawn. A front travel walks to that point when it is
+ * within 7168, then the package ends; a farther point leaves them standing.
+ * Follow, escort, or activate in front leaves them standing. A front wander
+ * with a duration above 0 ends after that many Clear hours (0 does not).
+ * While they stand, idle2–idle9 can play; walking still uses walkforward.
+ * When the cell has a usable pathgrid they follow its edges (the F5 spheres); otherwise they
  * follow the F6 carpet around shacks when Detour has a path, or a straight
  * line if the mesh is still loading. While they move the same .kf plays
  * walkforward, then idle again when they stop. They turn toward the next
@@ -228,6 +229,8 @@ public final class NpcMannequin {
             dst.destRange = src.destRange;
             dst.onGrid = src.onGrid;
             dst.walking = src.walking;
+            dst.travelWalk = src.travelWalk;
+            dst.travelSettled = src.travelSettled;
             dst.idleLeft = src.idleLeft;
             dst.waypoints.clear();
             dst.waypoints.addAll(src.waypoints);
@@ -389,7 +392,7 @@ public final class NpcMannequin {
         for (NpcActor actor : actors) {
             spendHours(actor, hoursPassed, cell);
             if (BulletWorld.readyAt(actor.tesPos[0], actor.tesPos[1])) {
-                wander(actor, dt, wanderScale(actor));
+                wander(actor, dt, wanderScale(actor), cell);
                 stickLand(actor);
                 EsmTransforms.setActorLocal(actor.placed.local, actor.tesPos, actor.yaw, actor.sx, actor.sy, actor.sz);
             } else {
@@ -443,24 +446,30 @@ public final class NpcMannequin {
         actor.water = water;
         actor.wanderDistance = distance;
         actor.walking = false;
+        actor.travelWalk = false;
+        actor.travelSettled = false;
         actor.waypoints.clear();
-        actor.graph = distance > 0 && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
+        boolean travel = frontTravel(actor);
+        actor.graph = (distance > 0 || travel) && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
         armPackageTimer(actor);
     }
 
     /**
-     * Drop the front package and walk whatever is now in front. A front
-     * wander's duration calls this. Arrival does not yet.
+     * Drop the front package and walk whatever is now in front. A wander's
+     * hours and a travel's arrival both call this.
      */
     private void completeActive(NpcActor actor, EsmFile.LoadedCell cell) {
         AiPackage.finishFront(actor.packages);
         int distance = activeDistance(actor);
         actor.wanderDistance = distance;
         actor.walking = false;
+        actor.travelWalk = false;
+        actor.travelSettled = false;
         actor.waypoints.clear();
         float[] spawn = new float[] { actor.spawnX, actor.spawnY, actor.spawnZ };
-        actor.graph = distance > 0 && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
+        boolean travel = frontTravel(actor);
+        actor.graph = (distance > 0 || travel) && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
         armPackageTimer(actor);
     }
@@ -600,7 +609,11 @@ public final class NpcMannequin {
         return graphs.computeIfAbsent(key, k -> PathgridGraph.of(cell, spawn));
     }
 
-    private void wander(NpcActor actor, float dt, float scale) {
+    private void wander(NpcActor actor, float dt, float scale, EsmFile.LoadedCell cell) {
+        if (frontTravel(actor)) {
+            travel(actor, dt, scale, cell);
+            return;
+        }
         if (actor.wanderDistance <= 0) {
             return;
         }
@@ -614,90 +627,197 @@ public final class NpcMannequin {
             return;
         }
         if (actor.walking) {
-            float range = actor.destRange;
-            float range2 = range * range;
-            float remaining = walkClip(actor) * scale * dt;
-            boolean turned = false;
-            int hops = 0;
-            while (actor.walking && remaining > 0.001f && hops++ < 16) {
-                if (!actor.onGrid) {
-                    float ddx = actor.destX - actor.spawnX;
-                    float ddy = actor.destY - actor.spawnY;
-                    if (ddx * ddx + ddy * ddy > range2) {
-                        actor.waypoints.clear();
-                        pickWanderDest(actor);
-                        if (!actor.walking) {
-                            actor.idleChosen = false;
-                            actor.idleLeft = pause(2f, 3f);
-                            break;
-                        }
-                        range = actor.destRange;
-                        range2 = range * range;
-                        continue;
-                    }
-                }
-                float dx = actor.destX - actor.tesPos[0];
-                float dy = actor.destY - actor.tesPos[1];
-                float dist = (float) Math.sqrt(dx * dx + dy * dy);
-                if (dist <= WANDER_ARRIVE) {
-                    actor.tesPos[0] = actor.destX;
-                    actor.tesPos[1] = actor.destY;
-                    if (!actor.waypoints.isEmpty()) {
-                        float[] next = actor.waypoints.remove(0);
-                        if (!actor.onGrid) {
-                            float ndx = next[0] - actor.spawnX;
-                            float ndy = next[1] - actor.spawnY;
-                            if (ndx * ndx + ndy * ndy > range2) {
-                                actor.waypoints.clear();
-                                pickWanderDest(actor);
-                                if (!actor.walking) {
-                                    actor.idleChosen = false;
-                                    actor.idleLeft = pause(2f, 3f);
-                                    break;
-                                }
-                                range = actor.destRange;
-                                range2 = range * range;
-                                continue;
-                            }
-                        }
-                        actor.destX = next[0];
-                        actor.destY = next[1];
-                        continue;
-                    }
-                    beginStand(actor);
-                    break;
-                }
-                float want = (float) Math.atan2(dx, dy);
-                float diff;
-                if (!turned) {
-                    diff = turnToward(actor, want, dt);
-                    turned = true;
-                } else {
-                    diff = wrapPi(want - actor.yaw);
-                }
-                if (Math.abs(diff) > WALK_ALIGN) {
-                    break;
-                }
-                float step = Math.min(remaining, dist);
-                float nx = actor.tesPos[0] + (float) Math.sin(actor.yaw) * step;
-                float ny = actor.tesPos[1] + (float) Math.cos(actor.yaw) * step;
-                float ndx = actor.destX - nx;
-                float ndy = actor.destY - ny;
-                if (ndx * ndx + ndy * ndy >= dist * dist) {
-                    break;
-                }
-                actor.tesPos[0] = nx;
-                actor.tesPos[1] = ny;
-                remaining -= step;
-                actor.moved += step;
-                actor.moving = true;
-            }
+            stepPath(actor, dt, scale);
         } else if (!actor.specialIdle && actor.idleChosen) {
             actor.idleLeft -= dt;
             if (actor.idleLeft <= 0f) {
                 pickWanderDest(actor);
             }
         }
+    }
+
+    /** Front travel: walk to the point, then drop the package. A far point stays put. */
+    private void travel(NpcActor actor, float dt, float scale, EsmFile.LoadedCell cell) {
+        actor.moving = false;
+        actor.moved = 0f;
+        AiPackage dest = actor.packages.get(0);
+        if (!AiPackage.travelInRange(dest.x, dest.y, dest.z,
+            actor.tesPos[0], actor.tesPos[1], actor.tesPos[2])) {
+            actor.walking = false;
+            actor.travelWalk = false;
+            actor.waypoints.clear();
+            return;
+        }
+        if (actor.travelSettled) {
+            if (travelAlreadyThere(actor)) {
+                return;
+            }
+            actor.travelSettled = false;
+        }
+        if (!actor.walking) {
+            if (travelAlreadyThere(actor)) {
+                finishTravel(actor, cell);
+                return;
+            }
+            armTravel(actor);
+        }
+        if (actor.walking) {
+            stepPath(actor, dt, scale);
+            if (!actor.walking) {
+                finishTravel(actor, cell);
+            }
+        }
+    }
+
+    /** Walk the current polyline. Wander and travel both use this. */
+    private void stepPath(NpcActor actor, float dt, float scale) {
+        float range = actor.destRange;
+        float range2 = range * range;
+        float remaining = walkClip(actor) * scale * dt;
+        boolean turned = false;
+        int hops = 0;
+        while (actor.walking && remaining > 0.001f && hops++ < 16) {
+            if (!actor.onGrid && !actor.travelWalk) {
+                float ddx = actor.destX - actor.spawnX;
+                float ddy = actor.destY - actor.spawnY;
+                if (ddx * ddx + ddy * ddy > range2) {
+                    actor.waypoints.clear();
+                    pickWanderDest(actor);
+                    if (!actor.walking) {
+                        actor.idleChosen = false;
+                        actor.idleLeft = pause(2f, 3f);
+                        break;
+                    }
+                    range = actor.destRange;
+                    range2 = range * range;
+                    continue;
+                }
+            }
+            float dx = actor.destX - actor.tesPos[0];
+            float dy = actor.destY - actor.tesPos[1];
+            float dist = (float) Math.sqrt(dx * dx + dy * dy);
+            if (dist <= WANDER_ARRIVE) {
+                actor.tesPos[0] = actor.destX;
+                actor.tesPos[1] = actor.destY;
+                if (!actor.waypoints.isEmpty()) {
+                    float[] next = actor.waypoints.remove(0);
+                    if (!actor.onGrid && !actor.travelWalk) {
+                        float ndx = next[0] - actor.spawnX;
+                        float ndy = next[1] - actor.spawnY;
+                        if (ndx * ndx + ndy * ndy > range2) {
+                            actor.waypoints.clear();
+                            pickWanderDest(actor);
+                            if (!actor.walking) {
+                                actor.idleChosen = false;
+                                actor.idleLeft = pause(2f, 3f);
+                                break;
+                            }
+                            range = actor.destRange;
+                            range2 = range * range;
+                            continue;
+                        }
+                    }
+                    actor.destX = next[0];
+                    actor.destY = next[1];
+                    continue;
+                }
+                beginStand(actor);
+                break;
+            }
+            float want = (float) Math.atan2(dx, dy);
+            float diff;
+            if (!turned) {
+                diff = turnToward(actor, want, dt);
+                turned = true;
+            } else {
+                diff = wrapPi(want - actor.yaw);
+            }
+            if (Math.abs(diff) > WALK_ALIGN) {
+                break;
+            }
+            float step = Math.min(remaining, dist);
+            float nx = actor.tesPos[0] + (float) Math.sin(actor.yaw) * step;
+            float ny = actor.tesPos[1] + (float) Math.cos(actor.yaw) * step;
+            float ndx = actor.destX - nx;
+            float ndy = actor.destY - ny;
+            if (ndx * ndx + ndy * ndy >= dist * dist) {
+                break;
+            }
+            actor.tesPos[0] = nx;
+            actor.tesPos[1] = ny;
+            remaining -= step;
+            actor.moved += step;
+            actor.moving = true;
+        }
+    }
+
+    private void finishTravel(NpcActor actor, EsmFile.LoadedCell cell) {
+        String id = actor.placed.name == null ? "" : actor.placed.name;
+        completeActive(actor, cell);
+        Gdx.app.log("JVM-MW", "package done id=" + id + " active=" + AiPackage.activeTag(actor.packages));
+        if (!actor.walking) {
+            playIdle(actor);
+        }
+        actor.travelSettled = frontTravel(actor) && travelAlreadyThere(actor);
+    }
+
+    /** Pathgrid to the travel point, else the carpet, else a straight line. */
+    private void armTravel(NpcActor actor) {
+        AiPackage dest = actor.packages.get(0);
+        actor.travelWalk = true;
+        if (!actor.water && actor.graph.usable()) {
+            List<float[]> path = actor.graph.pathTo(
+                actor.tesPos[0], actor.tesPos[1], actor.tesPos[2],
+                dest.x, dest.y, dest.z,
+                actor.tesPos[0], actor.tesPos[1], actor.tesPos[2],
+                Float.POSITIVE_INFINITY);
+            if (!path.isEmpty()) {
+                actor.destX = path.get(0)[0];
+                actor.destY = path.get(0)[1];
+                actor.waypoints.clear();
+                for (int i = 1; i < path.size(); i++) {
+                    actor.waypoints.add(path.get(i));
+                }
+                actor.walking = true;
+                actor.onGrid = true;
+                actor.destRange = AiPackage.TRAVEL_MAX;
+                return;
+            }
+        }
+        actor.destX = dest.x;
+        actor.destY = dest.y;
+        actor.destRange = AiPackage.TRAVEL_MAX;
+        actor.onGrid = false;
+        actor.walking = true;
+        actor.waypoints.clear();
+        followDetour(actor, dest.x, dest.y, dest.z);
+        float endX = actor.destX;
+        float endY = actor.destY;
+        if (!actor.waypoints.isEmpty()) {
+            float[] last = actor.waypoints.get(actor.waypoints.size() - 1);
+            endX = last[0];
+            endY = last[1];
+        }
+        float edx = endX - dest.x;
+        float edy = endY - dest.y;
+        if (edx * edx + edy * edy > 1f) {
+            actor.waypoints.add(new float[] { dest.x, dest.y, dest.z });
+        }
+    }
+
+    private static boolean frontTravel(NpcActor actor) {
+        return !actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.TRAVEL;
+    }
+
+    /** Close enough on the ground that the walk counts as arrived. */
+    private static boolean travelAlreadyThere(NpcActor actor) {
+        if (!frontTravel(actor)) {
+            return false;
+        }
+        AiPackage dest = actor.packages.get(0);
+        float dx = dest.x - actor.tesPos[0];
+        float dy = dest.y - actor.tesPos[1];
+        return dx * dx + dy * dy <= WANDER_ARRIVE * WANDER_ARRIVE;
     }
 
     /** Path finished. Stay put so a standing idle can play before the next walk. */
@@ -868,15 +988,15 @@ public final class NpcMannequin {
             actor.destRange = range;
             actor.onGrid = false;
             actor.walking = true;
-            followDetour(actor, destX, destY);
+            followDetour(actor, destX, destY, actor.tesPos[2]);
             return;
         }
         actor.walking = false;
     }
 
-    private void followDetour(NpcActor actor, float destX, float destY) {
+    private void followDetour(NpcActor actor, float destX, float destY, float destZ) {
         List<float[]> path = NavmeshQuery.wanderPath(
-            navWorld, actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], destX, destY, actor.tesPos[2]);
+            navWorld, actor.tesPos[0], actor.tesPos[1], actor.tesPos[2], destX, destY, destZ);
         if (path.size() < 2) {
             return;
         }
@@ -1343,6 +1463,7 @@ public final class NpcMannequin {
 
     private void playIdle(NpcActor actor) {
         playGroup(actor, "idle");
+        actor.playingWalk = false;
     }
 
     private boolean playGroup(NpcActor actor, String group) {
@@ -1659,6 +1780,10 @@ public final class NpcMannequin {
         String refKey = "";
         float idleLeft;
         boolean walking;
+        /** This path is a travel, so it is not clipped to the wander radius. */
+        boolean travelWalk;
+        /** Already standing on a travel that just repeated. Do not finish every frame. */
+        boolean travelSettled;
         PathgridGraph graph = PathgridGraph.NONE;
         final List<float[]> waypoints = new ArrayList<>();
         boolean playingWalk;

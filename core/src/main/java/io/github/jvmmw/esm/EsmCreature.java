@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * One creature from the ESM: mesh, flags (biped / swim / fly / walk), scale,
  * the first wander radius, and the full AI package list. Placed from its own
- * mesh file, not body parts. Only the first wander distance is walked.
+ * mesh file, not body parts. The placed actor walks the front row.
  */
 public final class EsmCreature {
     public static final int BIPEDAL = 0x01;

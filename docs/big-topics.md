@@ -24,7 +24,7 @@ OpenMW 0.51.0 still does not do general scene occlusion; its “occlusion” is 
 | --- | --- |
 | **Combat** | No hit, health, or weapon groups. |
 | **Dialogue / journal** | NPCs are mannequins. No talk, topics, or journal. |
-| **AI packages** | A front wander ends after its duration and can play idle2–idle9 while standing ([phase 54](phase54-wander-duration.md)). Travel, follow, and escort are not run. Work order: [ai-packages.md](ai-packages.md). |
+| **AI packages** | A front wander ends after its duration and can play idle2–idle9 while standing ([phase 54](phase54-wander-duration.md)). A front travel walks to its point when it is within 7168 ([phase 55](phase55-travel.md)). Follow and escort are not run. Work order: [ai-packages.md](ai-packages.md). |
 | **Navmesh** | Overlay is [phase 42](phase42-navmesh-bake.md). Straight wander dests use Detour ([phase 43](phase43-navmesh-path.md)). Leftover of [nav-paths.md](nav-paths.md) **6**. |
 | **Saves** | No `.ess` / OpenMW save. |
 | **Plugins / Lua / MWScript** | Extra data folders only. No ESP load-order UI, no Lua, no script VM. |

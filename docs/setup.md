@@ -28,7 +28,7 @@ gradlew.bat :core:debugCli --args="help"
 
 ## Morrowind data (required)
 
-Point at the game’s **Data Files** folder — the one that contains `Morrowind.esm` and `Morrowind.bsa`. Tribunal and Bloodmoon are not required for the HUD cells (Census, Cave, Nix, Guild, Town, Zain).
+Point at the game’s **Data Files** folder — the one that contains `Morrowind.esm` and `Morrowind.bsa`. Tribunal and Bloodmoon are not required for the HUD cells (Census, Cave, Nix, Guild, Town, Zain, Manor).
 
 Typical locations:
 
@@ -89,7 +89,7 @@ Env is `JVMMW_DEBUG_wanderSpeed` (dots to underscores). `-Djvmmw.debug.wanderSpe
 ## Viewer keys (short)
 
 - WASD walk (Town land/docks; ceilings stop the camera)
-- HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** / **Zain**, hour slider
+- HUD **Cell** / **Cave** / **Nix** / **Guild** / **Town** / **Zain** / **Manor**, hour slider
 - **E** door / chest / take
 - **F3** Dump (`build/debug-snapshot.txt` + clipboard)
 - **F4** fps overlay

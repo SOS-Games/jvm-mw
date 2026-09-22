@@ -497,7 +497,7 @@ public final class EsmFile {
 
     /**
      * One AI subrecord. A short record is skipped and logged. {@code CNDT} is
-     * handled by the caller. The first wander distance is still what they walk.
+     * handled by the caller. The placed actor walks the front row.
      */
     private static AiPackage readOnePackage(EsmReader esm, String sub, String owner) {
         esm.getSubHeader();

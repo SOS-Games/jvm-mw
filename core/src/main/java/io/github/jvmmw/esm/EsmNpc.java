@@ -11,8 +11,8 @@ import java.util.List;
 /**
  * One NPC from the ESM: race, head, hair, female flag, equipped clothes,
  * the first wander radius, and the full AI package list. The viewer ignores
- * the mesh on this record and builds a dressed skeleton instead. Only the
- * first wander distance is walked.
+ * the mesh on this record and builds a dressed skeleton instead. The placed
+ * actor walks the front row.
  */
 public final class EsmNpc {
     public static final int FLAG_FEMALE = 0x01;

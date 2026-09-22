@@ -1022,6 +1022,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         body.add(meshButton("Guild", CELL_PREFIX + TestData.WOLVERINE_GUILD));
         body.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y));
         body.add(meshButton("Zain", CELL_PREFIX + TestData.ZAINSIPILU)).row();
+        body.add(meshButton("Manor", CELL_PREFIX + TestData.VENIM_MANOR)).row();
         hourLabel = new Label(hourText(), skin);
         hourSlider = new Slider(0f, 24f, 0.05f, false, skin);
         hourSlider.setValue(renderer.cycle.hour);

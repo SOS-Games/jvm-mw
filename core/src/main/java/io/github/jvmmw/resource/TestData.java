@@ -18,7 +18,7 @@ import java.util.Set;
 
 /**
  * Finds the Morrowind data folder, mounts BSA plus extra dirs, and names
- * the HUD cells (Census, Cave, Nix, Guild, Town, Zain). Mesh and texture lookups go through
+ * the HUD cells (Census, Cave, Nix, Guild, Town, Zain, Manor). Mesh and texture lookups go through
  * the VFS; files the GPU needs are extracted to loose paths first.
  */
 public final class TestData {
@@ -34,6 +34,7 @@ public final class TestData {
     public static final String ADDAMASARTUS = "Addamasartus";
     public static final String PUNSABANIT = "Punsabanit";
     public static final String ZAINSIPILU = "Zainsipilu";
+    public static final String VENIM_MANOR = "Ald-ruhn, Venim Manor Right Wing";
     public static final String WOLVERINE_GUILD = "Sadrith Mora, Wolverine Hall: Mage's Guild";
     public static final int TOWN_GRID_X = -2;
     public static final int TOWN_GRID_Y = -9;

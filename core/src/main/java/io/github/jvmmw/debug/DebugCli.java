@@ -48,6 +48,7 @@ public final class DebugCli {
     public static void main(String[] args) throws Exception {
         AiPackage.checkFinishFront();
         AiPackage.checkWanderHours();
+        AiPackage.checkTravelRange();
         if (args.length == 0 || "help".equalsIgnoreCase(args[0]) || "-h".equals(args[0])) {
             System.out.print(help());
             return;

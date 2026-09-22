@@ -11,17 +11,22 @@ import java.util.List;
 /**
  * One row of an NPC or creature’s AI list: wander, travel, follow, escort,
  * or activate, in the order the ESM stored them. Each placement copies that
- * list. The front row is the one that runs. Only a front wander walks, using
- * that row’s distance. Travel, follow, escort, or activate in front leaves
- * them standing. A front wander with a duration above 0 ends after that many
- * Clear hours; 0 does not end. While they stand, idle2 through idle9 can play.
- * Finishing drops the front row; if it repeats, a fresh copy goes on the back.
+ * list. The front row is the one that runs. A front wander walks, using that
+ * row’s distance. A front travel walks to its point when that point is within
+ * one cell (7168), then the package ends. Farther than that, they stay. Follow,
+ * escort, or activate in front leaves them standing. A front wander with a
+ * duration above 0 ends after that many Clear hours; 0 does not end. While they
+ * stand, idle2 through idle9 can play. Finishing drops the front row; if it
+ * repeats, a fresh copy goes on the back.
  * Pressing E, or the actor command, prints the active tag and the list.
  */
 public final class AiPackage {
     public enum Kind {
         WANDER, TRAVEL, FOLLOW, ESCORT, ACTIVATE
     }
+
+    /** A travel point farther than this from the actor is ignored. One cell. */
+    public static final float TRAVEL_MAX = 7168f;
 
     public Kind kind = Kind.WANDER;
     /** Wander radius. Negative ESM values are stored as 0. */
@@ -151,6 +156,33 @@ public final class AiPackage {
         }
         if (ends != 2 || Math.abs(left - 3f) > 0.001f) {
             throw new IllegalStateException("wander duration jump");
+        }
+    }
+
+    /** True when the travel point is within 7168 of the actor, in 3D. */
+    public static boolean travelInRange(float x, float y, float z, float ax, float ay, float az) {
+        float dx = x - ax;
+        float dy = y - ay;
+        float dz = z - az;
+        return dx * dx + dy * dy + dz * dz <= TRAVEL_MAX * TRAVEL_MAX;
+    }
+
+    /**
+     * Headless check: exactly 7168 is in range, 7169 is not. Malsa Ules’s first
+     * point is in range. Tanusea Veloth’s arena point is not.
+     */
+    public static void checkTravelRange() {
+        if (!travelInRange(TRAVEL_MAX, 0f, 0f, 0f, 0f, 0f)) {
+            throw new IllegalStateException("travel 7168");
+        }
+        if (travelInRange(TRAVEL_MAX + 1f, 0f, 0f, 0f, 0f, 0f)) {
+            throw new IllegalStateException("travel 7169");
+        }
+        if (!travelInRange(1375f, 470f, -340f, 706f, 8f, -320f)) {
+            throw new IllegalStateException("travel malsa");
+        }
+        if (travelInRange(29472f, -82112f, 3008f, 731f, 1033f, -85f)) {
+            throw new IllegalStateException("travel tanusea");
         }
     }
 
