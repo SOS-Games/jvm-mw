@@ -117,6 +117,8 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Label perfLabel;
     private Table perfHud;
     private Label posLabel;
+    private Label aimName;
+    private Label aimShadow;
     private final FrameProfiler profiler = new FrameProfiler();
     private boolean perfHudOn = true;
     private float yaw = START_YAW;
@@ -1097,6 +1099,16 @@ public final class JvmMwApp extends ApplicationAdapter {
         perfHud.setTouchable(Touchable.disabled);
         perfHud.add(perfLabel).right();
         stage.addActor(perfHud);
+
+        LabelStyle aimStyle = new LabelStyle(font, Color.WHITE);
+        aimShadow = new Label("", new LabelStyle(font, Color.BLACK));
+        aimName = new Label("", aimStyle);
+        aimShadow.setTouchable(Touchable.disabled);
+        aimName.setTouchable(Touchable.disabled);
+        aimShadow.setVisible(false);
+        aimName.setVisible(false);
+        stage.addActor(aimShadow);
+        stage.addActor(aimName);
     }
 
     private TextButton meshButton(String label, String vfs) {
@@ -1123,6 +1135,33 @@ public final class JvmMwApp extends ApplicationAdapter {
             hudWin.validate();
         }
         hudWin.setPosition(12, Gdx.graphics.getHeight() - hudWin.getHeight() - 12);
+    }
+
+    /** Center the looked-at actor's name on the screen. Empty when the crosshair misses. */
+    private void syncAimName() {
+        if (aimName == null || aimShadow == null) {
+            return;
+        }
+        String name = "";
+        if (cellBuilder != null && !isLoading()) {
+            name = cellBuilder.aimName(eye, lookDir);
+        }
+        if (!name.equals(aimName.getText().toString())) {
+            aimName.setText(name);
+            aimShadow.setText(name);
+            aimName.pack();
+            aimShadow.pack();
+        }
+        boolean show = !name.isEmpty();
+        aimName.setVisible(show);
+        aimShadow.setVisible(show);
+        if (!show) {
+            return;
+        }
+        float x = (stage.getWidth() - aimName.getWidth()) * 0.5f;
+        float y = (stage.getHeight() - aimName.getHeight()) * 0.5f;
+        aimName.setPosition(x, y);
+        aimShadow.setPosition(x + 1f, y - 1f);
     }
 
     private void stepHour(float delta) {
@@ -1214,6 +1253,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         if (posLabel != null) {
             posLabel.setText(posLine());
         }
+        syncAimName();
         if (status != null) {
             String err = lastError.isEmpty() ? "" : " err=" + lastError;
             String shortName = currentVfs.isEmpty() ? "?" : currentVfs.substring(currentVfs.lastIndexOf('/') + 1);

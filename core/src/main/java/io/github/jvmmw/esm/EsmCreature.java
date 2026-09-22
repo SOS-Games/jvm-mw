@@ -25,9 +25,9 @@ public final class EsmCreature {
     public String model = "";
     public int flags;
     public float scale = 1f;
-    /** First AI_W distance. 0 means stay (no package or radius 0). */
+    /** First AI_W distance, printed as wander=. The placed actor walks the front row instead. */
     public int wanderDistance;
-    /** Every AI package in file order. Not executed. */
+    /** Every AI package in file order. Each placement copies this. */
     public final List<AiPackage> packages = new ArrayList<>();
 
     public boolean bipedal() {

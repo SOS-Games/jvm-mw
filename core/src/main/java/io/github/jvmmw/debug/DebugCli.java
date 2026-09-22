@@ -46,6 +46,7 @@ public final class DebugCli {
     }
 
     public static void main(String[] args) throws Exception {
+        AiPackage.checkFinishFront();
         if (args.length == 0 || "help".equalsIgnoreCase(args[0]) || "-h".equals(args[0])) {
             System.out.print(help());
             return;
@@ -97,8 +98,8 @@ public final class DebugCli {
                        Header includes pgrd=N e=M.
             interiors  All interiors: span / fog / spawn. Optional substring filter. CELL-only pass.
             spawn      Inbound DODT for an interior (the OpenMW arrival point).
-            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander= and allowed= pathgrid dests, then the AI package list.
-            crea       One CREA: model, corrected x-path, flags, scale, wander= and allowed=, then the AI package list.
+            npc        One NPC_: race, head, hair, skeleton, equipped CLOT/ARMO parts, wander= and allowed= pathgrid dests, then active= and the AI package list.
+            crea       One CREA: model, corrected x-path, flags, scale, wander= and allowed=, then active= and the AI package list.
             actor      NPC_ or CREA by id or name. NPC wins if both match. Same text as npc or crea, including packages.
             levc       One creature leveled list: flags, chance-none, level/id rows.
             kf         Text-key groups and bone tracks from a Morrowind .kf (BSA or extra data dirs).

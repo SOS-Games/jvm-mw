@@ -567,6 +567,11 @@ public final class CellSceneBuilder {
         return msg;
     }
 
+    /** Name under the crosshair, or empty when it is not on an NPC or creature. */
+    public String aimName(Vector3 origin, Vector3 direction) {
+        return mannequin.lookName(origin, direction, cell);
+    }
+
     public int refCount() {
         return cell == null ? 0 : cell.refs.size();
     }

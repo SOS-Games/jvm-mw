@@ -8,7 +8,7 @@ Align with `components/esm3/aipackage.*` (the five subrecords), `apps/openmw/mwm
 
 ## What Town has now
 
-NPCs and creatures read the **first** `AI_W` distance only. Distance 0 stays. Distance &gt; 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Duration, the eight idle chances, repeat, and every `AI_T` / `AI_F` / `AI_E` / `AI_A` are skipped.
+Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Any other front kind stands, even when a later wander has a distance. Finishing drops the front row and, when repeat is set, puts a copy on the back. Nothing finishes yet. Duration, the eight idle chances, and actually walking travel, follow, escort, or activate are not run.
 
 ## What OpenMW does
 
@@ -54,9 +54,11 @@ Spec: [phase52-ai-package-list.md](phase52-ai-package-list.md). **Working.**
 
 ### 2. One active package
 
-- [ ] Each placed actor keeps the list. The front package is active.
-- [ ] When it finishes, drop it. If repeat is set, put a reset copy on the back.
-- [ ] Front `AI_W` uses today’s wander. Any other front type **stays put** (same as distance 0) until its row below ships.
+Spec: [phase53-active-package.md](phase53-active-package.md). **Working.**
+
+- [x] Each placed actor keeps the list. The front package is active.
+- [x] When it finishes, drop it. If repeat is set, put a reset copy on the back.
+- [x] Front `AI_W` uses today’s wander. Any other front type **stays put** (same as distance 0) until its row below ships.
 
 **Town test:** wander-first NPCs unchanged. An NPC whose first package is travel or follow stands instead of wandering off.
 

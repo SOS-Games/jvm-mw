@@ -24,9 +24,9 @@ public final class EsmNpc {
     public String head = "";
     public String hair = "";
     public int flags;
-    /** First AI_W distance. 0 means stay (no package or radius 0). */
+    /** First AI_W distance, printed as wander=. The placed actor walks the front row instead. */
     public int wanderDistance;
-    /** Every AI package in file order. Not executed. */
+    /** Every AI package in file order. Each placement copies this. */
     public final List<AiPackage> packages = new ArrayList<>();
     public final List<String> inventory = new ArrayList<>();
 

@@ -46,7 +46,9 @@ import java.util.Random;
  * An NPC as a dressed skeleton (head, hair, clothes on base_anim), not the
  * mesh listed on the NPC record. Faces the yaw of the placement, scaled by
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
- * A wander radius greater than 0 walks them around spawn. If that cell has
+ * The front package, when it is wander and its distance is greater than 0,
+ * walks them around spawn. Travel, follow, escort, or activate in front
+ * leaves them standing. When the cell has
  * a usable pathgrid they follow its edges (the F5 spheres); otherwise they
  * follow the F6 carpet around shacks when Detour has a path, or a straight
  * line if the mesh is still loading. While they move the same .kf plays
@@ -158,6 +160,7 @@ public final class NpcMannequin {
     private final Ray pickRay = new Ray();
     private final BoundingBox pickBox = new BoundingBox();
     private final Vector3 pickHit = new Vector3();
+    private final Vector3 aimPoint = new Vector3();
     private final Map<Long, PathgridGraph> graphs = new HashMap<>();
     private final Random wanderRng = new Random();
     private String navWorld = "";
@@ -220,6 +223,12 @@ public final class NpcMannequin {
             dst.idleLeft = src.idleLeft;
             dst.waypoints.clear();
             dst.waypoints.addAll(src.waypoints);
+            dst.packages.clear();
+            for (AiPackage pack : src.packages) {
+                dst.packages.add(pack.copy());
+            }
+            dst.wanderDistance = src.wanderDistance;
+            dst.water = src.water;
             dst.graph = src.graph == PathgridGraph.NONE ? PathgridGraph.NONE : graphFor(cell, dst.tesPos);
             stickLand(dst);
             EsmTransforms.setActorLocal(dst.placed.local, dst.tesPos, dst.yaw, dst.sx, dst.sy, dst.sz);
@@ -319,7 +328,8 @@ public final class NpcMannequin {
         float sy = s * weight;
         float sz = s * height;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], sx, sy, sz);
-        beginWander(actor, ref.pos, ref.rot[2], sx, sy, sz, npc.wanderDistance, cell, false);
+        copyPackages(actor, npc.packages);
+        beginWander(actor, ref.pos, ref.rot[2], sx, sy, sz, activeDistance(actor), cell, false);
         actor.refKey = ref.takeKey();
         return placed;
     }
@@ -355,7 +365,8 @@ public final class NpcMannequin {
         actors.add(actor);
         float s = ref.scale * crea.scale;
         EsmTransforms.setActorLocal(placed.local, ref.pos, ref.rot[2], s, s, s);
-        beginWander(actor, ref.pos, ref.rot[2], s, s, s, crea.wanderDistance, cell, crea.pureWater());
+        copyPackages(actor, crea.packages);
+        beginWander(actor, ref.pos, ref.rot[2], s, s, s, activeDistance(actor), cell, crea.pureWater());
         actor.creature = true;
         actor.refKey = ref.takeKey();
         return placed;
@@ -398,11 +409,46 @@ public final class NpcMannequin {
         actor.sx = sx;
         actor.sy = sy;
         actor.sz = sz;
+        actor.water = water;
         actor.wanderDistance = distance;
         actor.walking = false;
         actor.waypoints.clear();
         actor.graph = distance > 0 && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
+    }
+
+    /**
+     * Drop the front package and walk whatever is now in front. Duration and
+     * arrival call this. Nothing does yet, so the list stays the ESM order.
+     */
+    private void completeActive(NpcActor actor, EsmFile.LoadedCell cell) {
+        AiPackage.finishFront(actor.packages);
+        int distance = activeDistance(actor);
+        actor.wanderDistance = distance;
+        actor.walking = false;
+        actor.waypoints.clear();
+        float[] spawn = new float[] { actor.spawnX, actor.spawnY, actor.spawnZ };
+        actor.graph = distance > 0 && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
+        actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
+    }
+
+    private static void copyPackages(NpcActor actor, List<AiPackage> source) {
+        actor.packages.clear();
+        if (source == null) {
+            return;
+        }
+        for (AiPackage pack : source) {
+            actor.packages.add(pack.copy());
+        }
+    }
+
+    /** Front wander distance, or 0 when the front row is anything else. */
+    private static int activeDistance(NpcActor actor) {
+        if (actor.packages.isEmpty()) {
+            return 0;
+        }
+        AiPackage front = actor.packages.get(0);
+        return front.kind == AiPackage.Kind.WANDER ? front.distance : 0;
     }
 
     private PathgridGraph graphFor(EsmFile.LoadedCell cell, float[] spawn) {
@@ -833,8 +879,41 @@ public final class NpcMannequin {
         if (cell == null) {
             return null;
         }
+        NpcActor actor = closestHit(origin, direction, DoorSwing.MAX_ACTIVATE);
+        if (actor == null) {
+            return null;
+        }
+        String id = actor.placed.name == null ? "" : actor.placed.name;
+        String name = displayName(actor, cell);
+        return new ActorPick(origin.dst(aimPoint), AiPackage.format(id, name, actor.packages));
+    }
+
+    /**
+     * Display name when the look ray hits an NPC or creature and no wall is
+     * in front of them. Empty when the crosshair is on the ground or a building.
+     */
+    public String lookName(Vector3 origin, Vector3 direction, EsmFile.LoadedCell cell) {
+        if (cell == null) {
+            return "";
+        }
+        NpcActor actor = closestHit(origin, direction, Float.POSITIVE_INFINITY);
+        if (actor == null) {
+            return "";
+        }
+        if (BulletWorld.blockedSegment(origin.x, origin.y, origin.z, aimPoint.x, aimPoint.y, aimPoint.z)) {
+            return "";
+        }
+        String name = displayName(actor, cell);
+        if (name.isEmpty()) {
+            name = actor.placed.name == null ? "" : actor.placed.name;
+        }
+        return name;
+    }
+
+    private NpcActor closestHit(Vector3 origin, Vector3 direction, float maxDist) {
         pickRay.set(origin, direction);
-        ActorPick best = null;
+        NpcActor best = null;
+        float bestDist = maxDist;
         for (NpcActor actor : actors) {
             pickBox.inf();
             actor.placed.collectAabb(pickBox);
@@ -842,25 +921,25 @@ public final class NpcMannequin {
                 continue;
             }
             float dist = origin.dst(pickHit);
-            if (dist > DoorSwing.MAX_ACTIVATE || (best != null && dist >= best.dist)) {
+            if (dist > bestDist) {
                 continue;
             }
-            String id = actor.placed.name == null ? "" : actor.placed.name;
-            String key = id.toLowerCase(Locale.ROOT);
-            String name;
-            List<AiPackage> packages;
-            if (actor.creature) {
-                EsmCreature crea = cell.creatures.get(key);
-                name = crea == null ? "" : crea.name;
-                packages = crea == null ? List.of() : crea.packages;
-            } else {
-                EsmNpc npc = cell.npcs.get(key);
-                name = npc == null ? "" : npc.name;
-                packages = npc == null ? List.of() : npc.packages;
-            }
-            best = new ActorPick(dist, AiPackage.format(id, name, packages));
+            best = actor;
+            bestDist = dist;
+            aimPoint.set(pickHit);
         }
         return best;
+    }
+
+    private static String displayName(NpcActor actor, EsmFile.LoadedCell cell) {
+        String id = actor.placed.name == null ? "" : actor.placed.name;
+        String key = id.toLowerCase(Locale.ROOT);
+        if (actor.creature) {
+            EsmCreature crea = cell.creatures.get(key);
+            return crea == null || crea.name == null ? "" : crea.name;
+        }
+        EsmNpc npc = cell.npcs.get(key);
+        return npc == null || npc.name == null ? "" : npc.name;
     }
 
     public static final class ActorPick {
@@ -1421,7 +1500,10 @@ public final class NpcMannequin {
         float sy = 1f;
         float sz = 1f;
         int wanderDistance;
+        boolean water;
         boolean creature;
+        /** This placement's package stack. A copy of the record, front row active. */
+        final List<AiPackage> packages = new ArrayList<>();
         String refKey = "";
         float idleLeft;
         boolean walking;
