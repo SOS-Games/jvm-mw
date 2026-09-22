@@ -8,7 +8,7 @@ Align with `components/esm3/aipackage.*` (the five subrecords), `apps/openmw/mwm
 
 ## What Town has now
 
-Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Any other front kind stands, even when a later wander has a distance. Finishing drops the front row and, when repeat is set, puts a copy on the back. Nothing finishes yet. Duration, the eight idle chances, and actually walking travel, follow, escort, or activate are not run.
+Each placement copies the package list. The **front** row is active. A front `AI_W` uses that distance: 0 stays, and a distance above 0 walks the cell pathgrid when the reachable cluster is big enough ([phase 41](phase41-pathgrid-wander.md)); otherwise a random point near spawn, along Detour when the carpet is ready ([phase 43](phase43-navmesh-path.md)). They play `walkforward` while moving ([phase 39](phase39-walk-cycle.md)). Any other front kind stands, even when a later wander has a distance. A front wander with a duration above 0 ends after that many Clear hours; 0 does not. While they stand, idle2–idle9 can play. The time-of-day byte is stored and unused. Finishing drops the front row and, when repeat is set, puts a copy on the back. Actually walking travel, follow, escort, or activate is not run.
 
 ## What OpenMW does
 
@@ -64,9 +64,11 @@ Spec: [phase53-active-package.md](phase53-active-package.md). **Working.**
 
 ### 3. Wander duration and idles
 
-- [ ] Duration hours (game hour, the Clear slider) end the package. 0 duration does not end.
-- [ ] While standing, roll `idle2`–`idle9` from the eight chances when that kf group exists. Walking still plays `walkforward`.
-- [ ] Store the time-of-day byte. Do not branch on it.
+Spec: [phase54-wander-duration.md](phase54-wander-duration.md). **Working.**
+
+- [x] Duration hours (game hour, the Clear slider) end the package. 0 duration does not end.
+- [x] While standing, roll `idle2`–`idle9` from the eight chances when that kf group exists. Walking still plays `walkforward`.
+- [x] Store the time-of-day byte. Do not branch on it.
 
 Needs (2). Does not need the shared walker.
 

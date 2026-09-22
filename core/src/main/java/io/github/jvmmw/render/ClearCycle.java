@@ -3,7 +3,8 @@ package io.github.jvmmw.render;
 /**
  * Clear-weather hour: sky, fog, sun color, sun in the sky, night flag.
  * No other weathers yet. The HUD slider, [ ], and Play scrub the hour
- * (stars after sunset).
+ * (stars after sunset). hoursPassed counts hours moved forward by Play,
+ * ], or dragging the slider later. Dragging earlier does not add.
  */
 public final class ClearCycle {
     public static final float SUNRISE = 6f;
@@ -21,7 +22,28 @@ public final class ClearCycle {
     public static final float STARS_FADING = 2f;
 
     public float hour = DEFAULT_HOUR;
+    /** Clear hours moved forward. Wander duration spends this, not real seconds. */
+    public float hoursPassed;
     public boolean playing;
+
+    /** Move the clock. Only a positive step counts toward wander duration. */
+    public void advance(float delta) {
+        if (delta > 0f) {
+            hoursPassed += delta;
+        }
+        hour += delta;
+        wrapHour();
+    }
+
+    /** Slider jump. Moving later spends the gap. Moving earlier does not. */
+    public void advanceTo(float next) {
+        float delta = next - hour;
+        if (delta > 0f) {
+            hoursPassed += delta;
+        }
+        hour = next;
+        wrapHour();
+    }
 
     public final float[] sky = new float[3];
     public final float[] fog = new float[3];
@@ -70,8 +92,7 @@ public final class ClearCycle {
         if (!playing) {
             return;
         }
-        hour += dt * PLAY_HOURS_PER_SEC;
-        wrapHour();
+        advance(dt * PLAY_HOURS_PER_SEC);
     }
 
     public void evaluate() {

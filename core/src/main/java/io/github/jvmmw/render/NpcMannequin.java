@@ -48,7 +48,9 @@ import java.util.Random;
  * race. Idle animation moves the bones, then the skin is rebuilt on the CPU.
  * The front package, when it is wander and its distance is greater than 0,
  * walks them around spawn. Travel, follow, escort, or activate in front
- * leaves them standing. When the cell has
+ * leaves them standing. A front wander with a duration above 0 ends after
+ * that many Clear hours (0 does not). While they stand, idle2–idle9 can
+ * play; walking still uses walkforward. When the cell has
  * a usable pathgrid they follow its edges (the F5 spheres); otherwise they
  * follow the F6 carpet around shacks when Detour has a path, or a straight
  * line if the mesh is still loading. While they move the same .kf plays
@@ -151,6 +153,11 @@ public final class NpcMannequin {
     /** Chance a pathgrid dest is anywhere on the connected graph, not nearby. */
     private static final float GRID_FAR = 0.28f;
     private static final float STICK_LIFT = 64f;
+    /** Vanilla GMST fIdleChanceMultiplier. A roll above this keeps the plain idle. */
+    private static final float IDLE_CHANCE_MULT = 0.75f;
+    private static final String[] IDLE_GROUPS = {
+        "idle2", "idle3", "idle4", "idle5", "idle6", "idle7", "idle8", "idle9"
+    };
 
     private final Path testdata;
     private final List<MeshGpu> ownedGpus = new ArrayList<>();
@@ -163,6 +170,7 @@ public final class NpcMannequin {
     private final Vector3 aimPoint = new Vector3();
     private final Map<Long, PathgridGraph> graphs = new HashMap<>();
     private final Random wanderRng = new Random();
+    private final float[] hourUnused = new float[1];
     private String navWorld = "";
     private final Matrix4 id = new Matrix4();
     private final Vector3 tmp = new Vector3();
@@ -229,6 +237,11 @@ public final class NpcMannequin {
             }
             dst.wanderDistance = src.wanderDistance;
             dst.water = src.water;
+            dst.hoursLeft = src.hoursLeft;
+            dst.seenSpent = src.seenSpent;
+            dst.spentReady = src.spentReady;
+            dst.badIdles = src.badIdles;
+            dst.idleChosen = src.idleChosen;
             dst.graph = src.graph == PathgridGraph.NONE ? PathgridGraph.NONE : graphFor(cell, dst.tesPos);
             stickLand(dst);
             EsmTransforms.setActorLocal(dst.placed.local, dst.tesPos, dst.yaw, dst.sx, dst.sy, dst.sz);
@@ -372,8 +385,9 @@ public final class NpcMannequin {
         return placed;
     }
 
-    public void update(float dt) {
+    public void update(float dt, float hoursPassed, EsmFile.LoadedCell cell) {
         for (NpcActor actor : actors) {
+            spendHours(actor, hoursPassed, cell);
             if (BulletWorld.readyAt(actor.tesPos[0], actor.tesPos[1])) {
                 wander(actor, dt, wanderScale(actor));
                 stickLand(actor);
@@ -383,15 +397,32 @@ public final class NpcMannequin {
                 actor.moved = 0f;
             }
             syncWalkAnim(actor);
+            if (actor.specialIdle && (actor.walking || actor.moving)) {
+                actor.specialIdle = false;
+            } else if (actor.specialIdle && idleFinished(actor)) {
+                actor.specialIdle = false;
+                playIdle(actor);
+                actor.idleChosen = true;
+                actor.idleLeft = actor.wanderDistance > 0 ? pause(0.2f, 0.6f) : pause(3f, 6f);
+            }
+            if (actor.wanderDistance <= 0 && actor.idleChosen && !actor.specialIdle && !actor.walking) {
+                actor.idleLeft -= dt;
+                if (actor.idleLeft <= 0f) {
+                    actor.idleChosen = false;
+                }
+            }
+            rollStandingIdle(actor);
             if (actor.idle == null) {
                 continue;
             }
             float animDt = walkAnimDt(actor, dt);
             actor.idle.time += animDt;
-            float span = actor.idle.loopStop - actor.idle.loopStart;
-            if (span > 0f && actor.idle.time >= actor.idle.loopStop) {
-                actor.idle.time = actor.idle.loopStart
-                    + ((actor.idle.time - actor.idle.loopStart) % span);
+            if (!actor.specialIdle) {
+                float span = actor.idle.loopStop - actor.idle.loopStart;
+                if (span > 0f && actor.idle.time >= actor.idle.loopStop) {
+                    actor.idle.time = actor.idle.loopStart
+                        + ((actor.idle.time - actor.idle.loopStart) % span);
+                }
             }
             pose(actor, dt);
         }
@@ -415,11 +446,12 @@ public final class NpcMannequin {
         actor.waypoints.clear();
         actor.graph = distance > 0 && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
+        armPackageTimer(actor);
     }
 
     /**
-     * Drop the front package and walk whatever is now in front. Duration and
-     * arrival call this. Nothing does yet, so the list stays the ESM order.
+     * Drop the front package and walk whatever is now in front. A front
+     * wander's duration calls this. Arrival does not yet.
      */
     private void completeActive(NpcActor actor, EsmFile.LoadedCell cell) {
         AiPackage.finishFront(actor.packages);
@@ -430,6 +462,108 @@ public final class NpcMannequin {
         float[] spawn = new float[] { actor.spawnX, actor.spawnY, actor.spawnZ };
         actor.graph = distance > 0 && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
+        armPackageTimer(actor);
+    }
+
+    private void armPackageTimer(NpcActor actor) {
+        actor.badIdles = 0;
+        actor.specialIdle = false;
+        actor.idleChosen = false;
+        actor.hoursLeft = 0f;
+        if (!actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.WANDER) {
+            actor.hoursLeft = actor.packages.get(0).duration;
+        }
+    }
+
+    private void spendHours(NpcActor actor, float hoursPassed, EsmFile.LoadedCell cell) {
+        if (!actor.spentReady) {
+            actor.seenSpent = hoursPassed;
+            actor.spentReady = true;
+            return;
+        }
+        float delta = hoursPassed - actor.seenSpent;
+        actor.seenSpent = hoursPassed;
+        if (delta < 0f) {
+            return;
+        }
+        float[] unused = hourUnused;
+        int guard = 0;
+        boolean ended = false;
+        while (delta > 0f && guard++ < 48) {
+            if (actor.packages.isEmpty() || actor.packages.get(0).kind != AiPackage.Kind.WANDER) {
+                break;
+            }
+            int duration = actor.packages.get(0).duration;
+            float left = AiPackage.spendWanderHours(duration, actor.hoursLeft, delta, unused);
+            if (left >= 0f) {
+                actor.hoursLeft = left;
+                break;
+            }
+            String id = actor.placed.name == null ? "" : actor.placed.name;
+            completeActive(actor, cell);
+            ended = true;
+            Gdx.app.log("JVM-MW", "package done id=" + id + " active=" + AiPackage.activeTag(actor.packages));
+            delta = unused[0];
+        }
+        if (ended && !actor.walking) {
+            playIdle(actor);
+        }
+    }
+
+    /** The gesture reached its end, or idleDuration seconds when that knob is above 0. */
+    private static boolean idleFinished(NpcActor actor) {
+        if (actor.idle == null || actor.idle.time >= actor.idle.stopTime) {
+            return true;
+        }
+        float cap = DebugVars.idleDuration;
+        return cap > 0f && actor.idle.time >= actor.idle.startTime + cap;
+    }
+
+    /** While a front wander stands, roll idle2–idle9 once. He stays until that clip ends. */
+    private void rollStandingIdle(NpcActor actor) {
+        if (actor.walking || actor.moving || actor.specialIdle || actor.idleChosen) {
+            return;
+        }
+        if (actor.packages.isEmpty() || actor.packages.get(0).kind != AiPackage.Kind.WANDER) {
+            return;
+        }
+        int[] chances = actor.packages.get(0).idle;
+        actor.idleChosen = true;
+        for (int attempt = 0; attempt < 8; attempt++) {
+            int idx = rollIdleIndex(chances);
+            if (idx < 0) {
+                actor.idleLeft = actor.wanderDistance <= 0 ? pause(1.2f, 2.5f) : pause(0.4f, 1.2f);
+                return;
+            }
+            int bit = 1 << idx;
+            if ((actor.badIdles & bit) != 0) {
+                continue;
+            }
+            if (playGroup(actor, IDLE_GROUPS[idx], false)) {
+                actor.specialIdle = true;
+                actor.idleLeft = 0f;
+                return;
+            }
+            actor.badIdles |= bit;
+        }
+        actor.idleLeft = pause(0.4f, 1.2f);
+    }
+
+    /** OpenMW getRandomIdle. -1 is the plain idle. fIdleChanceMultiplier is 0.75. */
+    private int rollIdleIndex(int[] chances) {
+        if (wanderRng.nextFloat() > IDLE_CHANCE_MULT) {
+            return -1;
+        }
+        int best = -1;
+        float maxRoll = 0f;
+        for (int i = 0; i < chances.length && i < IDLE_GROUPS.length; i++) {
+            float roll = wanderRng.nextFloat() * 100f;
+            if (roll <= chances[i] && roll > maxRoll) {
+                best = i;
+                maxRoll = roll;
+            }
+        }
+        return best;
     }
 
     private static void copyPackages(NpcActor actor, List<AiPackage> source) {
@@ -493,6 +627,7 @@ public final class NpcMannequin {
                         actor.waypoints.clear();
                         pickWanderDest(actor);
                         if (!actor.walking) {
+                            actor.idleChosen = false;
                             actor.idleLeft = pause(2f, 3f);
                             break;
                         }
@@ -516,6 +651,7 @@ public final class NpcMannequin {
                                 actor.waypoints.clear();
                                 pickWanderDest(actor);
                                 if (!actor.walking) {
+                                    actor.idleChosen = false;
                                     actor.idleLeft = pause(2f, 3f);
                                     break;
                                 }
@@ -528,14 +664,8 @@ public final class NpcMannequin {
                         actor.destY = next[1];
                         continue;
                     }
-                    pickWanderDest(actor);
-                    if (!actor.walking) {
-                        actor.idleLeft = pause(2f, 3f);
-                        break;
-                    }
-                    range = actor.destRange;
-                    range2 = range * range;
-                    continue;
+                    beginStand(actor);
+                    break;
                 }
                 float want = (float) Math.atan2(dx, dy);
                 float diff;
@@ -562,12 +692,21 @@ public final class NpcMannequin {
                 actor.moved += step;
                 actor.moving = true;
             }
-        } else {
+        } else if (!actor.specialIdle && actor.idleChosen) {
             actor.idleLeft -= dt;
             if (actor.idleLeft <= 0f) {
                 pickWanderDest(actor);
             }
         }
+    }
+
+    /** Path finished. Stay put so a standing idle can play before the next walk. */
+    private void beginStand(NpcActor actor) {
+        actor.walking = false;
+        actor.moving = false;
+        actor.waypoints.clear();
+        actor.idleChosen = false;
+        actor.idleLeft = 0f;
     }
 
     private void pickWanderDest(NpcActor actor) {
@@ -1207,10 +1346,14 @@ public final class NpcMannequin {
     }
 
     private boolean playGroup(NpcActor actor, String group) {
+        return playGroup(actor, group, true);
+    }
+
+    private boolean playGroup(NpcActor actor, String group, boolean looping) {
         KfFile chosen = null;
         KfFile.IdleLoop loop = null;
         if (actor.kf != null) {
-            loop = actor.kf.play(group, "start", "stop", true);
+            loop = actor.kf.play(group, "start", "stop", looping);
             if (loop != null) {
                 chosen = actor.kf;
             }
@@ -1221,7 +1364,7 @@ public final class NpcMannequin {
                 if (kf == actor.kf) {
                     continue;
                 }
-                loop = kf.play(group, "start", "stop", true);
+                loop = kf.play(group, "start", "stop", looping);
                 if (loop != null) {
                     chosen = kf;
                     break;
@@ -1502,6 +1645,15 @@ public final class NpcMannequin {
         int wanderDistance;
         boolean water;
         boolean creature;
+        /** Hours left on the front wander. Duration 0 stays 0 and does not end. */
+        float hoursLeft;
+        float seenSpent;
+        boolean spentReady;
+        /** idle2–idle9 groups this kf does not have. */
+        int badIdles;
+        boolean specialIdle;
+        /** This stand already rolled. A gesture keeps him still until the clip ends. */
+        boolean idleChosen;
         /** This placement's package stack. A copy of the record, front row active. */
         final List<AiPackage> packages = new ArrayList<>();
         String refKey = "";

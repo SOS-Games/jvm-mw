@@ -277,7 +277,7 @@ public final class CellSceneBuilder {
         mannequin.copyWanderFrom(live.mannequin, cell);
     }
 
-    public void update(float dt, Vector3 eye) {
+    public void update(float dt, Vector3 eye, float hoursPassed) {
         syncDebugOverlays();
         PerfTrace.begin("update.col");
         pumpCollision(4_000_000L);
@@ -289,7 +289,7 @@ public final class CellSceneBuilder {
         pumpNavmesh();
         PerfTrace.end();
         PerfTrace.begin("update.npc");
-        mannequin.update(dt);
+        mannequin.update(dt, hoursPassed, cell);
         PerfTrace.end();
         navPath = NavmeshQuery.lastPath(navWorld);
         waterMesh.follow(eye);

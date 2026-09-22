@@ -13,9 +13,10 @@ import java.util.List;
  * or activate, in the order the ESM stored them. Each placement copies that
  * list. The front row is the one that runs. Only a front wander walks, using
  * that row’s distance. Travel, follow, escort, or activate in front leaves
- * them standing. Finishing drops the front row; if it repeats, a fresh copy
- * goes on the back. Nothing finishes yet. Pressing E, or the actor command,
- * prints the active tag and the list.
+ * them standing. A front wander with a duration above 0 ends after that many
+ * Clear hours; 0 does not end. While they stand, idle2 through idle9 can play.
+ * Finishing drops the front row; if it repeats, a fresh copy goes on the back.
+ * Pressing E, or the actor command, prints the active tag and the list.
  */
 public final class AiPackage {
     public enum Kind {
@@ -25,11 +26,11 @@ public final class AiPackage {
     public Kind kind = Kind.WANDER;
     /** Wander radius. Negative ESM values are stored as 0. */
     public int distance;
-    /** Hours. 0 does not end the package. Not applied yet. */
+    /** Hours. 0 does not end the package. A front wander spends Clear hours. */
     public int duration;
     /** Stored. Not used to decide when they wander. */
     public int timeOfDay;
-    /** Chances for idle2 through idle9. Not played yet. */
+    /** Chances for idle2 through idle9. Rolled while a front wander is standing. */
     public final int[] idle = new int[8];
     public boolean repeat;
     public float x;
@@ -105,6 +106,54 @@ public final class AiPackage {
         finishFront(list);
     }
 
+    /**
+     * Spend Clear hours on a wander. Duration 0 does not end.
+     * Returns the hours still left on this package, or -1 when it ends.
+     * unused[0] is the leftover hours to give the next package.
+     */
+    public static float spendWanderHours(int duration, float hoursLeft, float delta, float[] unused) {
+        unused[0] = 0f;
+        if (duration <= 0 || delta <= 0f) {
+            return hoursLeft;
+        }
+        if (hoursLeft > delta) {
+            return hoursLeft - delta;
+        }
+        unused[0] = delta - Math.max(0f, hoursLeft);
+        return -1f;
+    }
+
+    /** Headless check: 0 never ends, and a 5 hour wander ends twice across a 12 hour jump. */
+    public static void checkWanderHours() {
+        float[] unused = new float[1];
+        if (spendWanderHours(0, 0f, 100f, unused) < 0f || unused[0] != 0f) {
+            throw new IllegalStateException("wander duration 0");
+        }
+        float left = spendWanderHours(5, 5f, 4f, unused);
+        if (left < 0f || Math.abs(left - 1f) > 0.001f) {
+            throw new IllegalStateException("wander duration partial");
+        }
+        if (spendWanderHours(5, left, 1f, unused) >= 0f || Math.abs(unused[0]) > 0.001f) {
+            throw new IllegalStateException("wander duration end");
+        }
+        left = 5f;
+        float jump = 12f;
+        int ends = 0;
+        while (jump > 0f && ends < 8) {
+            float next = spendWanderHours(5, left, jump, unused);
+            if (next >= 0f) {
+                left = next;
+                break;
+            }
+            ends++;
+            left = 5f;
+            jump = unused[0];
+        }
+        if (ends != 2 || Math.abs(left - 3f) > 0.001f) {
+            throw new IllegalStateException("wander duration jump");
+        }
+    }
+
     public static String format(String id, String name, List<AiPackage> packages) {
         StringBuilder sb = new StringBuilder();
         int n = packages == null ? 0 : packages.size();
@@ -153,7 +202,7 @@ public final class AiPackage {
         return sb.toString();
     }
 
-    private static String activeTag(List<AiPackage> packages) {
+    public static String activeTag(List<AiPackage> packages) {
         if (packages == null || packages.isEmpty()) {
             return "none";
         }

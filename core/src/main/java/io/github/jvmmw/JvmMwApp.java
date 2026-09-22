@@ -97,6 +97,7 @@ public final class JvmMwApp extends ApplicationAdapter {
     private Skin skin;
     private Window hudWin;
     private ScrollPane hudScroll;
+    private Table hourRow;
     private Label status;
     private Label hourLabel;
     private Slider hourSlider;
@@ -1022,7 +1023,6 @@ public final class JvmMwApp extends ApplicationAdapter {
         body.add(meshButton("Town", EXT_PREFIX + TestData.TOWN_GRID_X + "," + TestData.TOWN_GRID_Y));
         body.add(meshButton("Zain", CELL_PREFIX + TestData.ZAINSIPILU)).row();
         hourLabel = new Label(hourText(), skin);
-        body.add(hourLabel).width(80);
         hourSlider = new Slider(0f, 24f, 0.05f, false, skin);
         hourSlider.setValue(renderer.cycle.hour);
         hourSlider.addListener(new ChangeListener() {
@@ -1031,7 +1031,7 @@ public final class JvmMwApp extends ApplicationAdapter {
                 if (settingHour) {
                     return;
                 }
-                renderer.cycle.hour = hourSlider.getValue();
+                renderer.cycle.advanceTo(hourSlider.getValue());
                 renderer.cycle.playing = false;
                 if (playClock != null) {
                     playClock.setText("Play");
@@ -1039,7 +1039,6 @@ public final class JvmMwApp extends ApplicationAdapter {
                 hourLabel.setText(hourText());
             }
         });
-        body.add(hourSlider).width(250).padRight(6);
         playClock = new TextButton("Play", skin);
         playClock.addListener(new ClickListener() {
             @Override
@@ -1048,12 +1047,17 @@ public final class JvmMwApp extends ApplicationAdapter {
                 playClock.setText(renderer.cycle.playing ? "Pause" : "Play");
             }
         });
-        body.add(playClock).row();
+        hourRow = new Table();
+        hourRow.pad(4, 6, 8, 6);
+        hourRow.add(hourLabel).width(80);
+        hourRow.add(hourSlider).width(250).height(20).padRight(6);
+        hourRow.add(playClock);
         hudScroll = new ScrollPane(body, skin);
         hudScroll.setFadeScrollBars(false);
         hudScroll.setScrollingDisabled(true, false);
         hudWin = win;
-        win.add(hudScroll);
+        win.add(hudScroll).growX().row();
+        win.add(hourRow).growX();
         layoutHud();
         stage.addActor(win);
 
@@ -1123,18 +1127,26 @@ public final class JvmMwApp extends ApplicationAdapter {
     }
 
     private void layoutHud() {
-        if (hudWin == null || hudScroll == null) {
+        if (hudWin == null || hudScroll == null || hourRow == null) {
             return;
         }
-        float maxH = Math.max(160f, Gdx.graphics.getHeight() - 24f);
         hudScroll.getColor().a = 1f;
+        var scrollCell = hudWin.getCell(hudScroll);
+        var clockCell = hudWin.getCell(hourRow);
+        scrollCell.maxHeight(Float.MAX_VALUE).minHeight(0);
+        clockCell.maxHeight(Float.MAX_VALUE).minHeight(0);
         hudWin.pack();
-        if (hudWin.getHeight() > maxH) {
-            hudScroll.setSize(hudScroll.getPrefWidth(), maxH - 40f);
-            hudWin.setSize(hudWin.getPrefWidth(), maxH);
-            hudWin.validate();
-        }
-        hudWin.setPosition(12, Gdx.graphics.getHeight() - hudWin.getHeight() - 12);
+        float available = Math.max(160f, Gdx.graphics.getHeight() - 24f);
+        float clockH = hourRow.getPrefHeight();
+        float chrome = hudWin.getPadTop() + hudWin.getPadBottom();
+        float height = Math.min(hudWin.getPrefHeight(), available);
+        float scrollH = Math.max(48f, height - chrome - clockH);
+        height = Math.min(available, chrome + clockH + scrollH);
+        scrollCell.height(scrollH).minHeight(scrollH).maxHeight(scrollH);
+        clockCell.height(clockH).minHeight(clockH).maxHeight(clockH);
+        hudWin.setSize(hudWin.getPrefWidth(), height);
+        hudWin.validate();
+        hudWin.setPosition(12, Gdx.graphics.getHeight() - height - 12);
     }
 
     /** Center the looked-at actor's name on the screen. Empty when the crosshair misses. */
@@ -1169,8 +1181,7 @@ public final class JvmMwApp extends ApplicationAdapter {
         if (playClock != null) {
             playClock.setText("Play");
         }
-        renderer.cycle.hour += delta;
-        renderer.cycle.wrapHour();
+        renderer.cycle.advance(delta);
         syncHourHud();
     }
 
@@ -1217,7 +1228,7 @@ public final class JvmMwApp extends ApplicationAdapter {
             applyExteriorCycle(mood);
             mood.updateFlicker(Gdx.graphics.getDeltaTime());
             profiler.begin(FrameProfiler.UPDATE);
-            cellBuilder.update(Gdx.graphics.getDeltaTime(), eye);
+            cellBuilder.update(Gdx.graphics.getDeltaTime(), eye, renderer.cycle.hoursPassed);
             profiler.end(FrameProfiler.UPDATE);
             Gdx.gl.glClearColor(mood.fogColor[0], mood.fogColor[1], mood.fogColor[2], 1f);
         } else {

@@ -81,6 +81,7 @@ jvmmw.debug.wanderTurn=270
 jvmmw.debug.wanderRadius=900
 jvmmw.debug.nodeWanderRadius=900
 jvmmw.debug.wanderFrequency=5
+jvmmw.debug.idleDuration=0
 ```
 
 Env is `JVMMW_DEBUG_wanderSpeed` (dots to underscores). `-Djvmmw.debug.wanderSpeed=...` also works. Dump / F4 print the live values. Vanilla-ish wander is speed 1, turn 900, both radii 0 (ESM `AI_W`), frequency 1.

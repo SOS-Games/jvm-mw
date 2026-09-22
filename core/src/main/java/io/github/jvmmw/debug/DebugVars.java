@@ -43,6 +43,11 @@ public final class DebugVars {
     /** How often they pick a new point. 1 is a 2–5 s pause; 2 is twice as often. */
     public static final float wanderFrequency = f("wanderFrequency", 5f);
 
+    /**
+     * Seconds an idle2–idle9 clip may play. 0 plays it through to the end.
+     */
+    public static final float idleDuration = f("idleDuration", 2f);
+
     private static Properties localProps;
 
     private DebugVars() {
@@ -55,12 +60,14 @@ public final class DebugVars {
             .append(" wanderRadius=").append(wanderRadius)
             .append(" nodeWanderRadius=").append(nodeWanderRadius)
             .append(" wanderFrequency=").append(wanderFrequency)
+            .append(" idleDuration=").append(idleDuration)
             .append('\n');
     }
 
     public static String hudLine() {
-        return String.format(Locale.US, "debug spd=%.2g crea=%.2g turn=%.2g r=%.0f node=%.0f freq=%.2g",
-            wanderSpeed, creaWanderSpeed, wanderTurn, wanderRadius, nodeWanderRadius, wanderFrequency);
+        return String.format(Locale.US, "debug spd=%.2g crea=%.2g turn=%.2g r=%.0f node=%.0f freq=%.2g idle=%.2g",
+            wanderSpeed, creaWanderSpeed, wanderTurn, wanderRadius, nodeWanderRadius, wanderFrequency,
+            idleDuration);
     }
 
     private static float f(String name, float fallback) {
