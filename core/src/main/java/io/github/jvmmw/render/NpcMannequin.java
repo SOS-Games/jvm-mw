@@ -49,7 +49,8 @@ import java.util.Random;
  * The front package, when it is wander and its distance is greater than 0,
  * walks them around spawn. A front travel walks to that point when it is
  * within 7168, then the package ends; a farther point leaves them standing.
- * Follow, escort, or activate in front leaves them standing. A front wander
+ * A front follow walks toward that person when farther than 256 and stands
+ * when closer. Escort or activate in front leaves them standing. A front wander
  * with a duration above 0 ends after that many Clear hours (0 does not).
  * While they stand, idle2–idle9 can play; walking still uses walkforward.
  * When the cell has a usable pathgrid they follow its edges (the F5 spheres); otherwise they
@@ -231,6 +232,9 @@ public final class NpcMannequin {
             dst.walking = src.walking;
             dst.travelWalk = src.travelWalk;
             dst.travelSettled = src.travelSettled;
+            dst.followHeld = src.followHeld;
+            dst.followAimX = src.followAimX;
+            dst.followAimY = src.followAimY;
             dst.idleLeft = src.idleLeft;
             dst.waypoints.clear();
             dst.waypoints.addAll(src.waypoints);
@@ -448,9 +452,9 @@ public final class NpcMannequin {
         actor.walking = false;
         actor.travelWalk = false;
         actor.travelSettled = false;
+        actor.followHeld = false;
         actor.waypoints.clear();
-        boolean travel = frontTravel(actor);
-        actor.graph = (distance > 0 || travel) && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
+        actor.graph = needsWalkGraph(actor, distance) && !water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
         armPackageTimer(actor);
     }
@@ -466,10 +470,10 @@ public final class NpcMannequin {
         actor.walking = false;
         actor.travelWalk = false;
         actor.travelSettled = false;
+        actor.followHeld = false;
         actor.waypoints.clear();
         float[] spawn = new float[] { actor.spawnX, actor.spawnY, actor.spawnZ };
-        boolean travel = frontTravel(actor);
-        actor.graph = (distance > 0 || travel) && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
+        actor.graph = needsWalkGraph(actor, distance) && !actor.water ? graphFor(cell, spawn) : PathgridGraph.NONE;
         actor.idleLeft = distance > 0 ? pause(0.5f, 1.5f) : 0f;
         armPackageTimer(actor);
     }
@@ -479,8 +483,11 @@ public final class NpcMannequin {
         actor.specialIdle = false;
         actor.idleChosen = false;
         actor.hoursLeft = 0f;
-        if (!actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.WANDER) {
-            actor.hoursLeft = actor.packages.get(0).duration;
+        if (!actor.packages.isEmpty()) {
+            AiPackage front = actor.packages.get(0);
+            if (front.kind == AiPackage.Kind.WANDER || front.kind == AiPackage.Kind.FOLLOW) {
+                actor.hoursLeft = front.duration;
+            }
         }
     }
 
@@ -499,10 +506,18 @@ public final class NpcMannequin {
         int guard = 0;
         boolean ended = false;
         while (delta > 0f && guard++ < 48) {
-            if (actor.packages.isEmpty() || actor.packages.get(0).kind != AiPackage.Kind.WANDER) {
+            if (actor.packages.isEmpty()) {
                 break;
             }
-            int duration = actor.packages.get(0).duration;
+            AiPackage front = actor.packages.get(0);
+            if (front.kind != AiPackage.Kind.WANDER && front.kind != AiPackage.Kind.FOLLOW) {
+                break;
+            }
+            if (front.kind == AiPackage.Kind.FOLLOW
+                && AiPackage.followPaused(front.cellName, cell == null ? "" : cell.name)) {
+                break;
+            }
+            int duration = front.duration;
             float left = AiPackage.spendWanderHours(duration, actor.hoursLeft, delta, unused);
             if (left >= 0f) {
                 actor.hoursLeft = left;
@@ -612,6 +627,10 @@ public final class NpcMannequin {
     private void wander(NpcActor actor, float dt, float scale, EsmFile.LoadedCell cell) {
         if (frontTravel(actor)) {
             travel(actor, dt, scale, cell);
+            return;
+        }
+        if (frontFollow(actor)) {
+            follow(actor, dt, scale, cell);
             return;
         }
         if (actor.wanderDistance <= 0) {
@@ -761,14 +780,90 @@ public final class NpcMannequin {
         actor.travelSettled = frontTravel(actor) && travelAlreadyThere(actor);
     }
 
+    /** Front follow: walk toward the named actor, and stand once close. */
+    private void follow(NpcActor actor, float dt, float scale, EsmFile.LoadedCell cell) {
+        actor.moving = false;
+        actor.moved = 0f;
+        AiPackage pack = actor.packages.get(0);
+        String here = cell == null ? "" : cell.name;
+        if (AiPackage.followPaused(pack.cellName, here)) {
+            if (actor.walking) {
+                beginStand(actor);
+            }
+            return;
+        }
+        NpcActor target = findFollowTarget(actor, pack.targetId);
+        if (target == null) {
+            if (!actor.followHeld) {
+                finishTravel(actor, cell);
+                if (frontFollow(actor) && findFollowTarget(actor, actor.packages.get(0).targetId) == null) {
+                    actor.followHeld = true;
+                }
+            }
+            return;
+        }
+        actor.followHeld = false;
+        float dx = target.tesPos[0] - actor.tesPos[0];
+        float dy = target.tesPos[1] - actor.tesPos[1];
+        float near = AiPackage.FOLLOW_NEAR;
+        if (dx * dx + dy * dy <= near * near) {
+            if (actor.walking) {
+                beginStand(actor);
+            }
+            turnToward(actor, (float) Math.atan2(dx, dy), dt);
+            return;
+        }
+        float adx = target.tesPos[0] - actor.followAimX;
+        float ady = target.tesPos[1] - actor.followAimY;
+        if (!actor.walking || adx * adx + ady * ady > 128f * 128f) {
+            actor.followAimX = target.tesPos[0];
+            actor.followAimY = target.tesPos[1];
+            armWalkTo(actor, target.tesPos[0], target.tesPos[1], target.tesPos[2]);
+        }
+        if (actor.walking) {
+            stepPath(actor, dt, scale);
+        }
+    }
+
+    /** Another placed actor with this id. Not this one. */
+    private NpcActor findFollowTarget(NpcActor self, String id) {
+        if (id == null || id.isEmpty()) {
+            return null;
+        }
+        NpcActor best = null;
+        float bestD = Float.POSITIVE_INFINITY;
+        for (NpcActor other : actors) {
+            if (other == self || other.placed.name == null || !other.placed.name.equalsIgnoreCase(id)) {
+                continue;
+            }
+            float dx = other.tesPos[0] - self.tesPos[0];
+            float dy = other.tesPos[1] - self.tesPos[1];
+            float d = dx * dx + dy * dy;
+            if (d < bestD) {
+                bestD = d;
+                best = other;
+            }
+        }
+        return best;
+    }
+
+    private static boolean needsWalkGraph(NpcActor actor, int distance) {
+        return distance > 0 || frontTravel(actor) || frontFollow(actor);
+    }
+
     /** Pathgrid to the travel point, else the carpet, else a straight line. */
     private void armTravel(NpcActor actor) {
         AiPackage dest = actor.packages.get(0);
+        armWalkTo(actor, dest.x, dest.y, dest.z);
+    }
+
+    /** Pathgrid to a point, else the carpet, else a straight line. Not clipped to the wander radius. */
+    private void armWalkTo(NpcActor actor, float x, float y, float z) {
         actor.travelWalk = true;
         if (!actor.water && actor.graph.usable()) {
             List<float[]> path = actor.graph.pathTo(
                 actor.tesPos[0], actor.tesPos[1], actor.tesPos[2],
-                dest.x, dest.y, dest.z,
+                x, y, z,
                 actor.tesPos[0], actor.tesPos[1], actor.tesPos[2],
                 Float.POSITIVE_INFINITY);
             if (!path.isEmpty()) {
@@ -784,13 +879,13 @@ public final class NpcMannequin {
                 return;
             }
         }
-        actor.destX = dest.x;
-        actor.destY = dest.y;
+        actor.destX = x;
+        actor.destY = y;
         actor.destRange = AiPackage.TRAVEL_MAX;
         actor.onGrid = false;
         actor.walking = true;
         actor.waypoints.clear();
-        followDetour(actor, dest.x, dest.y, dest.z);
+        followDetour(actor, x, y, z);
         float endX = actor.destX;
         float endY = actor.destY;
         if (!actor.waypoints.isEmpty()) {
@@ -798,15 +893,19 @@ public final class NpcMannequin {
             endX = last[0];
             endY = last[1];
         }
-        float edx = endX - dest.x;
-        float edy = endY - dest.y;
+        float edx = endX - x;
+        float edy = endY - y;
         if (edx * edx + edy * edy > 1f) {
-            actor.waypoints.add(new float[] { dest.x, dest.y, dest.z });
+            actor.waypoints.add(new float[] { x, y, z });
         }
     }
 
     private static boolean frontTravel(NpcActor actor) {
         return !actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.TRAVEL;
+    }
+
+    private static boolean frontFollow(NpcActor actor) {
+        return !actor.packages.isEmpty() && actor.packages.get(0).kind == AiPackage.Kind.FOLLOW;
     }
 
     /** Close enough on the ground that the walk counts as arrived. */
@@ -824,6 +923,7 @@ public final class NpcMannequin {
     private void beginStand(NpcActor actor) {
         actor.walking = false;
         actor.moving = false;
+        actor.travelWalk = false;
         actor.waypoints.clear();
         actor.idleChosen = false;
         actor.idleLeft = 0f;
@@ -1766,7 +1866,7 @@ public final class NpcMannequin {
         int wanderDistance;
         boolean water;
         boolean creature;
-        /** Hours left on the front wander. Duration 0 stays 0 and does not end. */
+        /** Hours left on the front wander or follow. Duration 0 stays 0 and does not end. */
         float hoursLeft;
         float seenSpent;
         boolean spentReady;
@@ -1784,6 +1884,11 @@ public final class NpcMannequin {
         boolean travelWalk;
         /** Already standing on a travel that just repeated. Do not finish every frame. */
         boolean travelSettled;
+        /** A follow whose target is not loaded. Do not finish every frame. */
+        boolean followHeld;
+        /** Last point the follow path aimed at. */
+        float followAimX;
+        float followAimY;
         PathgridGraph graph = PathgridGraph.NONE;
         final List<float[]> waypoints = new ArrayList<>();
         boolean playingWalk;

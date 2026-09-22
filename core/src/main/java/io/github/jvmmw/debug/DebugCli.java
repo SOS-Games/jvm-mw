@@ -49,6 +49,7 @@ public final class DebugCli {
         AiPackage.checkFinishFront();
         AiPackage.checkWanderHours();
         AiPackage.checkTravelRange();
+        AiPackage.checkFollow();
         if (args.length == 0 || "help".equalsIgnoreCase(args[0]) || "-h".equals(args[0])) {
             System.out.print(help());
             return;

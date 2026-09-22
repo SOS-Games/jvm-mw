@@ -77,6 +77,7 @@ Status: `same` = keep the C++ name, `rewrite` = new Java type (no OSG/MyGUI 1:1)
 | `apps/openmw/mwmechanics/aisequence.cpp` | `AiSequence::fill` / front package | placed actor’s copied list; only a front wander walks | rewrite |
 | `apps/openmw/mwmechanics/aiwander.cpp` | `AiWander` duration + `getRandomIdle` | Clear hours end a front wander; idle2–idle9 while standing | rewrite |
 | `apps/openmw/mwmechanics/aitravel.cpp` | `AiTravel` + 7168 cap | front travel walks to the point, then the package ends | rewrite |
+| `apps/openmw/mwmechanics/aifollow.cpp` | `AiFollow` | front follow walks toward the target and stands when close | rewrite |
 | `apps/openmw/mwmechanics/aiwander.cpp` | `wanderNearStart` / `getRandomPointAround` | `NpcMannequin` slide near spawn | rewrite |
 | `apps/openmw/mwmechanics/steering.cpp` | `zTurn` / `getAngularVelocity` | wander yaw toward dest | rewrite |
 | `components/esm3/loadpgrd.hpp` | `ESM::Pathgrid` / `REC_PGRD` | `esm.EsmPathgrid` | same |
