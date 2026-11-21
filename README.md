@@ -20,7 +20,7 @@ gradlew.bat lwjgl3:run
 gradlew.bat :core:debugCli --args="help"
 ```
 
-In the viewer, **F3** writes `build/debug-snapshot.txt`. Coding-agent notes: [AGENTS.md](AGENTS.md).
+In the viewer, **F3** writes `build/debug-snapshot.txt`. Coding-agent notes: [AGENTS.md](AGENTS.md). Renderer map: [docs/rendering.md](docs/rendering.md).
 
 ## License
 
