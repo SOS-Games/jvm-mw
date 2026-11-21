@@ -6,6 +6,8 @@ Instructions for AI coding agents working in **jvm-mw**.
 
 Unofficial GPLv3 Java port of OpenMW **0.51.0** (`f4bec41444214a7903bebd178389ca22ca13f646`). libGDX window/input/Scene2D only — never `ModelBatch`. Package `io.github.jvmmw`.
 
+- Codebase map: [docs/architecture.md](docs/architecture.md). Read it before hunting for a class.
+- When a change alters behavior a doc in `docs/` describes, update that doc in the same commit.
 - OpenMW source is local: `D:\coding\morrowind\openmw` at pin `f4bec41444214a7903bebd178389ca22ca13f646`. **Read that tree.** Do not fetch OpenMW from GitHub.
 - You **may read** `D:\morrowind_mods` (modlist, meshes, `.kf`). **Do not** edit, move, or write anything there.
 - **Do not** port OpenMW tools.
@@ -43,7 +45,7 @@ enough pseudocode
 
 Does the claim hold? If it fails, say exactly which sentence is wrong.
 ```
-- Possible next **small** slices live in [docs/next-topics.md](docs/next-topics.md). Spec one only after the user picks it (or says **proceed** naming it). Large holes live in [docs/big-topics.md](docs/big-topics.md). Do not spec those as a small phase. A breakdown of a large hole (todo order, not a phase) may live as a linked doc; split one row into next-topics before writing Java. Distant land: [docs/distant-land.md](docs/distant-land.md). Nav paths: [docs/nav-paths.md](docs/nav-paths.md). Physics: [docs/physics.md](docs/physics.md). AI packages: [docs/ai-packages.md](docs/ai-packages.md). Rendering: [docs/rendering.md](docs/rendering.md).
+- Possible next **small** slices live in [docs/next-topics.md](docs/next-topics.md). Spec one only after the user picks it (or says **proceed** naming it). Large holes live in [docs/big-topics.md](docs/big-topics.md). Do not spec those as a small phase. A breakdown of a large hole (todo order, not a phase) may live as a linked doc; split one row into next-topics before writing Java. Code map: [docs/architecture.md](docs/architecture.md). Distant land: [docs/distant-land.md](docs/distant-land.md). Nav paths: [docs/nav-paths.md](docs/nav-paths.md). Physics: [docs/physics.md](docs/physics.md). AI packages: [docs/ai-packages.md](docs/ai-packages.md). Rendering: [docs/rendering.md](docs/rendering.md).
 
 Data path: gitignored `local.properties` `jvmmw.data=...` (or `JVMMW_DATA` / `-Djvmmw.data`). Extra data folders: `jvmmw.data.extra=...` (`;` separated; or `JVMMW_DATA_EXTRA` / `-Djvmmw.data.extra`). OpenMW `navmesh.db` (umo / navmeshtool) is read from `Documents\My Games\OpenMW\navmesh.db`, or `jvmmw.navmesh` / `JVMMW_NAVMESH`. Do not commit it. How to install and run: [docs/setup.md](docs/setup.md).
 
